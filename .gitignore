@@ -29,3 +29,8 @@ replay_pid*
 app/build
 build/reports
 .gradle
+alice-core-planner/build
+alice-guardrail/build
+alice-memory-vault/build
+alice-tool-gateway/build
+alice-env-adapter/build
