@@ -1,4 +1,4 @@
-package org.cland.alice.core;
+package org.cland.alice.core.agent;
 
 import java.util.HashMap;
 

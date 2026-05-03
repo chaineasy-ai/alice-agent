@@ -5,10 +5,13 @@
 
 rootProject.name = 'alice-agent'
 include('app')
+include('alice-core-agent')
 include('alice-core-planner')
 include('alice-env-adapter')
 include('alice-memory-vault')
 include('alice-tool-gateway')
 include('alice-guardrail')
+include('alice-model')
+
 
 

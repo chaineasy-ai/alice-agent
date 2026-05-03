@@ -34,3 +34,5 @@ alice-guardrail/build
 alice-memory-vault/build
 alice-tool-gateway/build
 alice-env-adapter/build
+alice-core-agent/build
+alice-model/build

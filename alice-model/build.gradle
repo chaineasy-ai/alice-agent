@@ -6,9 +6,6 @@
 plugins {
     // Apply the groovy plugin to also add support for Groovy (needed for Spock)
     id 'groovy'
-
-    // Apply the application plugin to add support for building a CLI application in Java.
-    id 'application'
 }
 
 // group and version used for application 
@@ -22,11 +19,6 @@ repositories {
 }
 
 dependencies {
-
-    // 本地子模块依赖
-    implementation project(':alice-core-agent')
-    implementation project(':alice-model')
-
     // Guava：升级到兼容 Java 21+ 的最新稳定版（33.6.0-jre 适配高版本 Java）
     implementation 'com.google.guava:guava:33.6.0-jre'
 
@@ -77,15 +69,9 @@ tasks.withType(GroovyCompile).configureEach {
 
 jar {
     // archive name before version
-    archiveBaseName = 'alice-agent'
+    archiveBaseName = 'alice-core-planner'
 }
 
-application {
-    // Define the main class for the application.
-    mainClass = 'org.cland.alice.agent.AliceAgent'
-    // Define the application command name
-    applicationName = 'alice-agent'
-}
 
 tasks.named('test') {
     // Use JUnit Platform for unit tests.

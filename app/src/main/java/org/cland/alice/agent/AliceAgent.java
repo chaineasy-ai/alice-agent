@@ -4,17 +4,44 @@
  */
 package org.cland.alice.agent;
 
-import org.cland.alice.core.Agent;
+import org.cland.alice.core.agent.Agent;
+import org.cland.alice.core.agent.AgentContext;
+import org.cland.alice.model.ModelProvider;
+import org.cland.alice.model.supplier.OpenAiSupplier;
 
 public class AliceAgent {
 
-    public String getGreeting() {
+    private static final System.Logger logger = System.getLogger(AliceAgent.class.getName());
+
+    String getGreeting() {
         return "Hello World!";
     }
 
-    public static void main(String[] args) {
-        Agent agent=new Agent();
-        agent.run();
+    static void main(String[] args) {
+        // 1. 初始化 ModelProvider（注册内置模型 + OpenAI 供应商）
+        ModelProvider provider = ModelProvider.getInstance();
+        provider.registerBuiltinModels();
+
+        // 如果设置了 API Key，注册 OpenAI 供应商
+        String apiKey = System.getenv("OPENAI_API_KEY");
+        if (apiKey != null && !apiKey.isEmpty()) {
+            provider.registerSupplier(new OpenAiSupplier(apiKey));
+            logger.log(System.Logger.Level.INFO, "OpenAI supplier registered");
+        } else {
+            logger.log(System.Logger.Level.WARNING,
+                "OPENAI_API_KEY not set, OpenAI supplier not registered. " +
+                "Set it via environment variable to enable LLM calls.");
+        }
+
+        // 2. 创建 Agent 并运行
+        Agent agent = new Agent();
+        logger.log(System.Logger.Level.INFO, "Agent {0} created", agent.agentId());
+
+        AgentContext context = new AgentContext();
+        context.put("prompt", "What is the capital of France?");
+        agent.run(context);
+
+        logger.log(System.Logger.Level.INFO, "Result: {0}", context.get("result"));
         System.out.println(new AliceAgent().getGreeting());
     }
 }
