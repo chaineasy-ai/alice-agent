@@ -1,33 +1,8 @@
-# Simple Java Spock Gradle Application Project
+# Alice Agent
 
-You have just created a simple Java application.
-It provides a standard project structure for source code and tests. It uses Spock for writing test specifications and uses the Gradle build tool.
+A modular Java agent framework built with Gradle and Spock.
 
-The project starts as simple Hello World application.
-
-```
-alice-agent
-|
-|-- app
-|   |-- src
-|   |   |-- main
-|   |   |   |-- java
-|   |   |   |   `-- org/cland/aliceagent
-|   |   |   |       `-- AliceAgent.java
-|   |   |   `-- resources
-|   |   `-- test
-|   |       |-- groovy
-|   |       |   `-- org/cland/aliceagent
-|   |       |       `-- AliceAgentSpec.groovy
-|   |       `-- resources
-|   `-- build.gradle
-|
-|-- .gitattributes
-|-- .gitignore
-|-- gradlew
-|-- gradlew.bat
-`-- settings.gradle
-```
+See [project.tree](./project.tree) for the full project structure (sourced from Git history).
 
 ## Using the project: 
 1. Add any dependencies to build.gradle.

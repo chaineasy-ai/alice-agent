@@ -16,6 +16,7 @@ description: record your changes
 - build/配置：在 `alice-core-agent` 和 `app` 模块中添加 `alice-model` 子模块依赖。
 - build/测试：修复 JUnit Platform Launcher 缺失问题，确保 Spock 测试正常执行。
 - docs: 新增 `docs/alice-model/README.md`，更新模块文档与架构描述。
+- docs: 更新 README.md，用 `project.tree` 替代内联项目结构；新增 `project.tree` 文件。
 
 ### Fixes
 

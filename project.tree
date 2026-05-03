@@ -1,0 +1,198 @@
+├── .gitignore
+├── alice-core-agent
+│  ├── build.gradle
+│  └── src
+│    ├── main
+│    │  ├── java
+│    │  │  ├── module-info.java
+│    │  │  └── org
+│    │  │    └── cland
+│    │  │      └── alice
+│    │  │        └── core
+│    │  │          └── agent
+│    │  │            ├── Agent.java
+│    │  │            └── AgentContext.java
+│    │  └── resources
+│    └── test
+│      ├── groovy
+│      │  └── org
+│      │    └── cland
+│      │      └── alice
+│      │        └── memory
+│      └── resources
+├── alice-core-planner
+│  ├── build.gradle
+│  └── src
+│    ├── main
+│    │  ├── java
+│    │  │  ├── module-info.java
+│    │  │  └── org
+│    │  │    └── cland
+│    │  │      └── alice
+│    │  │        └── core
+│    │  │          └── planner
+│    │  │            ├── package-info.java
+│    │  │            └── ReAct.java
+│    │  └── resources
+│    └── test
+│      ├── groovy
+│      │  └── org
+│      │    └── cland
+│      │      └── alice
+│      │        └── memory
+│      └── resources
+├── alice-env-adapter
+│  ├── build.gradle
+│  └── src
+│    ├── main
+│    │  ├── java
+│    │  │  ├── module-info.java
+│    │  │  └── org
+│    │  │    └── cland
+│    │  │      └── alice
+│    │  │        └── env
+│    │  │          └── adapter
+│    │  │            ├── EnvEvent.java
+│    │  │            ├── package-info.java
+│    │  │            └── sendbox
+│    │  └── resources
+│    └── test
+│      ├── groovy
+│      │  └── org
+│      │    └── cland
+│      │      └── alice
+│      │        └── adapter
+│      └── resources
+├── alice-guardrail
+│  ├── build.gradle
+│  └── src
+│    ├── main
+│    │  ├── java
+│    │  │  ├── module-info.java
+│    │  │  └── org
+│    │  │    └── cland
+│    │  │      └── alice
+│    │  │        └── guardrail
+│    │  │          └── Verificator.java
+│    │  └── resources
+│    └── test
+│      ├── groovy
+│      │  └── org
+│      │    └── cland
+│      │      └── alice
+│      │        └── guardrail
+│      └── resources
+├── alice-memory-vault
+│  ├── build.gradle
+│  └── src
+│    ├── main
+│    │  ├── java
+│    │  │  ├── module-info.java
+│    │  │  └── org
+│    │  │    └── cland
+│    │  │      └── alice
+│    │  │        └── memory
+│    │  │          └── AgentSession.java
+│    │  └── resources
+│    └── test
+│      ├── groovy
+│      │  └── org
+│      │    └── cland
+│      │      └── alice
+│      │        └── memory
+│      └── resources
+├── alice-model
+│  ├── build.gradle
+│  └── src
+│    ├── main
+│    │  ├── java
+│    │  │  ├── module-info.java
+│    │  │  └── org
+│    │  │    └── cland
+│    │  │      └── alice
+│    │  │        └── model
+│    │  │          ├── Call.java
+│    │  │          ├── CallStatus.java
+│    │  │          ├── common
+│    │  │          │  └── ModelEnum.java
+│    │  │          ├── Model.java
+│    │  │          ├── ModelProvider.java
+│    │  │          ├── ModelSupplier.java
+│    │  │          └── supplier
+│    │  │            └── OpenAiSupplier.java
+│    │  └── resources
+│    └── test
+│      ├── groovy
+│      │  └── org
+│      │    └── cland
+│      │      └── alice
+│      │        └── model
+│      │          ├── CallSpec.groovy
+│      │          ├── CallStatusSpec.groovy
+│      │          ├── common
+│      │          │  └── ModelEnumSpec.groovy
+│      │          ├── ModelProviderSpec.groovy
+│      │          └── ModelSpec.groovy
+│      └── resources
+├── alice-tool-gateway
+│  ├── build.gradle
+│  └── src
+│    ├── main
+│    │  ├── java
+│    │  │  ├── module-info.java
+│    │  │  └── org
+│    │  │    └── cland
+│    │  │      └── alice
+│    │  │        └── tool
+│    │  │          └── gateway
+│    │  │            ├── Constants.java
+│    │  │            └── ToolRegistry.java
+│    │  └── resources
+│    └── test
+│      ├── groovy
+│      │  └── org
+│      │    └── cland
+│      │      └── alice
+│      │        └── tool
+│      │          └── gateway
+│      └── resources
+├── app
+│  ├── build.gradle
+│  └── src
+│    ├── main
+│    │  ├── java
+│    │  │  ├── module-info.java
+│    │  │  └── org
+│    │  │    └── cland
+│    │  │      └── alice
+│    │  │        └── agent
+│    │  │          ├── AliceAgent.java
+│    │  │          ├── cmd
+│    │  │          └── tui
+│    │  └── resources
+│    └── test
+│      ├── groovy
+│      │  └── org
+│      │    └── cland
+│      │      └── alice
+│      │        └── agent
+│      │          └── AliceAgentSpec.groovy
+│      └── resources
+├── CHANAGELOG.md
+├── docs
+│  ├── alice-model
+│  │  ├── DESIGN.md
+│  │  └── README.md
+│  ├── CHANGELOG规范.md
+│  └── README.md
+├── dtcw
+├── gradle
+│  └── wrapper
+│    └── gradle-wrapper.properties
+├── gradlew
+├── gradlew.bat
+├── LICENSE
+├── nul
+├── project.tree
+├── README.md
+└── settings.gradle
