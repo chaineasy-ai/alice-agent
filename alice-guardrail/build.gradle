@@ -19,6 +19,9 @@ repositories {
 }
 
 dependencies {
+    // 本地子模块依赖 — 用于 PreValidator 接口中的 Plan 类型
+    implementation project(':alice-core-planner')
+
     // Guava：升级到兼容 Java 21+ 的最新稳定版（33.6.0-jre 适配高版本 Java）
     implementation 'com.google.guava:guava:33.6.0-jre'
 

@@ -1,3 +1,10 @@
 module alice.agent.alice.env.adapter.main {
     exports org.cland.alice.env.adapter;
+    exports org.cland.alice.env.adapter.model;
+    exports org.cland.alice.env.adapter.snapshot;
+    exports org.cland.alice.env.adapter.state;
+    exports org.cland.alice.env.adapter.transport;
+
+    requires com.google.gson;
+    requires com.google.common;
 }

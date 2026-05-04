@@ -28,6 +28,9 @@ dependencies {
     // Spock：替换非稳定版为最新稳定版（2.4 正式版，适配 Groovy 4.0 + Java 21+）
     testImplementation 'org.spockframework:spock-core:2.4-groovy-4.0'
 
+    // Mockito Core for mocking final classes in Spock
+    testImplementation 'org.mockito:mockito-core:5.17.0'
+
     // Logback：升级到最新稳定版，适配 Java 25
     testImplementation 'ch.qos.logback:logback-classic:1.5.22'
 
@@ -40,6 +43,9 @@ dependencies {
     testImplementation "org.apache.groovy:groovy-xml:4.0.30"
     testImplementation "org.apache.groovy:groovy-json:4.0.30"
     testImplementation "org.apache.groovy:groovy-templates:4.0.30"
+
+    // JUnit Platform launcher（Gradle 需要它来运行 Spock/JUnit 5）
+    testImplementation 'org.junit.platform:junit-platform-launcher:1.12.2'
 
     // 可选：若遇到 Java 模块系统兼容问题，添加 SLF4J 桥接（Java 25 强化了模块检查）
     testImplementation 'org.slf4j:slf4j-api:2.0.16'
