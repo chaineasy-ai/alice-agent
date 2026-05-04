@@ -11,15 +11,32 @@
 │    │  │        └── core
 │    │  │          └── agent
 │    │  │            ├── Agent.java
-│    │  │            └── AgentContext.java
+│    │  │            ├── AgentConfig.java
+│    │  │            ├── AgentContext.java
+│    │  │            ├── AgentCore.java
+│    │  │            ├── executor
+│    │  │            │  └── AgentExecutor.java
+│    │  │            ├── lifecycle
+│    │  │            │  ├── Action.java
+│    │  │            │  ├── Lifecycle.java
+│    │  │            │  └── Observation.java
+│    │  │            └── result
+│    │  │              └── StepResult.java
 │    │  └── resources
 │    └── test
 │      ├── groovy
 │      │  └── org
 │      │    └── cland
 │      │      └── alice
-│      │        └── memory
+│      │        └── core
+│      │          └── agent
+│      │            ├── ActionSpec.groovy
+│      │            ├── AgentConfigSpec.groovy
+│      │            ├── AgentContextSpec.groovy
+│      │            ├── ObservationSpec.groovy
+│      │            └── StepResultSpec.groovy
 │      └── resources
+│        └── logback-test.xml
 ├── alice-core-planner
 │  ├── build.gradle
 │  └── src
@@ -180,9 +197,21 @@
 │      └── resources
 ├── CHANAGELOG.md
 ├── docs
+│  ├── alice-core-agent
+│  │  └── DESIGN.md
+│  ├── alice-core-planner
+│  │  └── DESIGN.md
+│  ├── alice-env-adapter
+│  │  └── DESIGN.md
+│  ├── alice-guardrail
+│  │  └── DESIGN.md
+│  ├── alice-memory-vault
+│  │  └── DESIGN.md
 │  ├── alice-model
 │  │  ├── DESIGN.md
 │  │  └── README.md
+│  ├── alice-tool-gateway
+│  │  └── DESIGN.md
 │  ├── CHANGELOG规范.md
 │  └── README.md
 ├── dtcw
