@@ -21,6 +21,14 @@ repositories {
 dependencies {
     // 本地子模块依赖
     implementation project(':alice-model')
+    implementation project(':alice-core-planner')
+    implementation project(':alice-guardrail')
+    implementation project(':alice-tool-gateway')
+    implementation project(':alice-memory-vault')
+    implementation project(':alice-env-adapter')
+
+    // vert.x
+    implementation 'io.vertx:vertx-core:5.0.8'
 
     // Guava：升级到兼容 Java 21+ 的最新稳定版（33.6.0-jre 适配高版本 Java）
     implementation 'com.google.guava:guava:33.6.0-jre'
@@ -43,6 +51,9 @@ dependencies {
     testImplementation "org.apache.groovy:groovy-xml:4.0.30"
     testImplementation "org.apache.groovy:groovy-json:4.0.30"
     testImplementation "org.apache.groovy:groovy-templates:4.0.30"
+
+    // JUnit Platform launcher（Gradle 需要它来运行 Spock/JUnit 5）
+    testImplementation 'org.junit.platform:junit-platform-launcher:1.12.2'
 
     // 可选：若遇到 Java 模块系统兼容问题，添加 SLF4J 桥接（Java 25 强化了模块检查）
     testImplementation 'org.slf4j:slf4j-api:2.0.16'
@@ -69,7 +80,7 @@ tasks.withType(GroovyCompile).configureEach {
 
 jar {
     // archive name before version
-    archiveBaseName = 'alice-core-planner'
+    archiveBaseName = 'alice-core-agent'
 }
 
 

@@ -192,7 +192,6 @@
 ├── gradlew
 ├── gradlew.bat
 ├── LICENSE
-├── nul
 ├── project.tree
 ├── README.md
 └── settings.gradle
