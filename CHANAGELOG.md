@@ -8,6 +8,18 @@ description: record your changes
 
 ### Changes
 
+- alice-facade-tui/TUI 外观模块：基于设计文档(`docs/alice-facade-tui/DESIGN.md`) 实现完整终端用户界面模块，提供富交互、可视化的 Agent 任务监控面板。
+- alice-facade-tui/AliceTuiLauncher：新增主入口启动器，初始化 Agent → EventBridge → ScreenManager 链路，进入主事件循环。
+- alice-facade-tui/ScreenManager：新增屏幕管理器（对应 §2 ScreenManager），管理 Lanterna 终端渲染循环、键盘输入处理、组件生命周期、终端 resize 响应。
+- alice-facade-tui/EventBridge + TuiEvent：新增事件桥接系统（对应 §3/§5），密封类事件体系含 StartThinking/NewThought/ActionExecuting/ChatMessage/ObservationResult/TaskComplete/TaskError/TokenUpdate 等，支持异步多监听器分发。
+- alice-facade-tui/TuiState：新增界面状态机（对应 §6），实现 IDLE→INPUTING→RUNNING→INTERVENE→ERROR 状态转换规则。
+- alice-facade-tui/SlashCommand + CommandHandler：新增斜杠命令系统（对应 §7.3），支持 /new /clear /exit /help /prompt /history /exec /model /tools 九条命令，Type A/B/C/D 分类处理，/exec 通过 ProcessBuilder 执行 shell，/prompt 读取外部文件。
+- alice-facade-tui/UI 组件：新增 7 个 Lanterna 组件（对应 §7.1 布局）— HeaderComponent（标题栏）、ChatComponent（左侧聊天历史）、ThoughtComponent（右侧思考流，彩色标识）、StatusComponent（Token/状态栏）、InputComponent（输入框含光标）、FooterComponent（快捷键提示）、Component（抽象基类）。
+- alice-facade-tui/TuiLayout：新增布局管理器，响应终端 resize，按 §7.1 设计排布 Header/Chat+Thought/Status/Input/Footer 区域。
+- alice-facade-tui/快捷键支持：实现 F1 帮助 / F5 停止 / F10 退出 / Tab 焦点切换 / PgUp/PgDn 翻页 / 方向键滚动/光标 / Enter 提交 / Ctrl+Q 退出（对应 §7.2 快捷键映射表）。
+- alice-facade-tui/测试：新增 15 个 Spock 测试用例，覆盖 TuiState 状态转换、SlashCommand 解析、TuiEvent 构造、EventBridge 异步事件分发。
+- alice-facade-tui/构建：添加 Lanterna 3.1.3 / JLine3 3.27.1 终端库依赖，更新 module-info.java 导出 6 个公开包，编译与测试全部通过 (15/15)。
+
 - alice-memory-vault/三段式记忆系统：基于设计文档(`docs/alice-memory-vault/DESIGN.md`) 实现完整模块，将记忆从简单会话存储升级为人类记忆分类学驱动的分层检索与生命周期管理系统。
 - alice-memory-vault/VaultController：新增统一入口，以组合模式管理 EpisodicVault / SemanticVault / ProceduralVault，通过 MemoryRouter 进行查询路由，支持 `recall(Context)` / `memorize(Experience)` / `finalizeSession(sessionId)` 核心 API。
 - alice-memory-vault/MemoryRouter：新增记忆路由器，根据上下文关键词自动分流：Episodic（"刚才/之前/recent"）→ EpisodicVault、Semantic（"什么是/explain/concept"）→ SemanticVault、Procedural（"如何/how to/step"）→ ProceduralVault；无明确倾向时触发全检索融合。
@@ -21,6 +33,15 @@ description: record your changes
 - alice-memory-vault/数据模型：新增 Experience/Step/Summary/Knowledge/SOP 五个不可变值对象，全量使用 Builder 模式。
 - alice-memory-vault/异步 Consolidation：VaultController.finalizeSession() 通过 CompletableFuture 异步执行 Trace → 提炼 Facts → 存入 SemanticVault + 提炼 Success Patterns → 存入 ProceduralVault。
 - alice-memory-vault/测试：新增 85 个 Spock 测试用例，覆盖三段式记忆核心路径、遗忘策略边界、路由逻辑、Consolidation 全链路、纠错机制、Collection 隔离、null/空/边界场景。
+
+- alice-facade-cmd/CLI 命令行外观模块：基于设计文档(`docs/alice-facade-cmd/DESIGN.md`) 实现完整模块，提供 Alice Agent 的命令行界面入口。
+- alice-facade-cmd/AliceCliLauncher：主入口，解析参数 → 初始化 ModelProvider → 驱动 ExecutionCoordinator → 退出码映射（0/1/2/130），支持 JVM 关闭钩子。
+- alice-facade-cmd/CommandParser：基于 picocli 4.7 的子命令解析器，支持 `alice run`（完整实现）、`alice chat/tools/config`（预留），抛出 `ParseException` 而非 `System.exit()`。
+- alice-facade-cmd/RunConfig：封装 CLI 参数的不可变配置对象，含 task/model/jsonOutput/verbose/timeoutSeconds/envVars。
+- alice-facade-cmd/ExecutionCoordinator：协调 Agent 核心执行，支持 stdin 管道输入读取、Agent 超时控制、StepResult 实时渲染。
+- alice-facade-cmd/OutputRenderer：渲染器接口 + 工厂方法，支持文本增强（`TextOutputRenderer`，带 emoji 标记/时间戳）和 JSON Lines（`JsonOutputRenderer`，紧凑结构）双模式。
+- alice-facade-cmd/构建：添加 picocli 4.7.6、vert.x 5.0.8 依赖，配置 `application` 插件，mainClass 为 `AliceCliLauncher`，应用名 `alice`。
+- alice-facade-cmd/测试：新增 47 个 Spock 测试用例，覆盖 RunConfig/CommandParser/TextOutputRenderer/JsonOutputRenderer/AliceCliLauncher 全链路，包括 stdout/stderr 重定向验证、JSON 格式校验、异常退出码断言。
 - alice-memory-vault/build：修复模块构建配置（jar archiveBaseName），添加 JUnit Platform Launcher 依赖。
 
 - alice-guardrail/审校委员会：基于设计文档(`docs/alice-guardrail/DESIGN.md`) 实现完整模块，将安全与正确性从执行链路中剥离为独立验证层。

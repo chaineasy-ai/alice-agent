@@ -48,14 +48,36 @@
 │    │  │      └── alice
 │    │  │        └── core
 │    │  │          └── planner
+│    │  │            ├── budget
+│    │  │            │  └── TokenBudget.java
+│    │  │            ├── model
+│    │  │            │  ├── ModelCapabilities.java
+│    │  │            │  ├── ModelSession.java
+│    │  │            │  └── ModelSupplier.java
 │    │  │            ├── package-info.java
-│    │  │            └── ReAct.java
+│    │  │            ├── Plan.java
+│    │  │            ├── PlannerService.java
+│    │  │            ├── ReAct.java
+│    │  │            ├── sop
+│    │  │            │  ├── SopRegistry.java
+│    │  │            │  └── StaticPlanner.java
+│    │  │            ├── strategy
+│    │  │            │  ├── DecisionStrategy.java
+│    │  │            │  ├── FastPathStrategy.java
+│    │  │            │  ├── SlowPathStrategy.java
+│    │  │            │  └── StrategySelector.java
+│    │  │            └── tree
+│    │  │              ├── ThinkingNode.java
+│    │  │              └── ThinkingTree.java
 │    │  └── resources
 │    └── test
 │      ├── groovy
 │      │  └── org
 │      │    └── cland
 │      │      └── alice
+│      │        ├── core
+│      │        │  └── planner
+│      │        │    └── PlannerServiceSpec.groovy
 │      │        └── memory
 │      └── resources
 ├── alice-env-adapter
@@ -70,8 +92,24 @@
 │    │  │        └── env
 │    │  │          └── adapter
 │    │  │            ├── EnvEvent.java
+│    │  │            ├── EnvManager.java
+│    │  │            ├── McpClient.java
+│    │  │            ├── model
+│    │  │            │  ├── Resource.java
+│    │  │            │  ├── ResourceResult.java
+│    │  │            │  ├── Tool.java
+│    │  │            │  └── ToolResult.java
 │    │  │            ├── package-info.java
-│    │  │            └── sendbox
+│    │  │            ├── sendbox
+│    │  │            ├── snapshot
+│    │  │            │  ├── EnvSnapshot.java
+│    │  │            │  └── SnapshotManager.java
+│    │  │            ├── state
+│    │  │            │  └── EnvState.java
+│    │  │            └── transport
+│    │  │              ├── McpTransport.java
+│    │  │              ├── SseMcpTransport.java
+│    │  │              └── StdioMcpTransport.java
 │    │  └── resources
 │    └── test
 │      ├── groovy
@@ -79,6 +117,89 @@
 │      │    └── cland
 │      │      └── alice
 │      │        └── adapter
+│      ├── java
+│      │  └── org
+│      │    └── cland
+│      │      └── alice
+│      │        └── env
+│      │          └── adapter
+│      └── resources
+├── alice-facade-cmd
+│  ├── build.gradle
+│  └── src
+│    ├── main
+│    │  ├── java
+│    │  │  ├── module-info.java
+│    │  │  └── org
+│    │  │    └── cland
+│    │  │      └── alice
+│    │  │        └── facade
+│    │  │          └── cmd
+│    │  │            ├── AliceCliLauncher.java
+│    │  │            ├── config
+│    │  │            │  ├── CommandParser.java
+│    │  │            │  └── RunConfig.java
+│    │  │            ├── ExecutionCoordinator.java
+│    │  │            └── render
+│    │  │              ├── JsonOutputRenderer.java
+│    │  │              ├── OutputRenderer.java
+│    │  │              └── TextOutputRenderer.java
+│    │  └── resources
+│    └── test
+│      ├── groovy
+│      │  └── org
+│      │    └── cland
+│      │      └── alice
+│      │        └── facade
+│      │          └── cmd
+│      │            ├── AliceCliLauncherSpec.groovy
+│      │            ├── config
+│      │            │  ├── CommandParserSpec.groovy
+│      │            │  └── RunConfigSpec.groovy
+│      │            └── render
+│      │              ├── JsonOutputRendererSpec.groovy
+│      │              └── TextOutputRendererSpec.groovy
+│      └── resources
+├── alice-facade-tui
+│  ├── build.gradle
+│  └── src
+│    ├── main
+│    │  ├── java
+│    │  │  ├── module-info.java
+│    │  │  └── org
+│    │  │    └── cland
+│    │  │      └── alice
+│    │  │        └── facade
+│    │  │          └── tui
+│    │  │            ├── AliceTuiLauncher.java
+│    │  │            ├── bridge
+│    │  │            │  ├── EventBridge.java
+│    │  │            │  └── TuiEvent.java
+│    │  │            ├── command
+│    │  │            │  ├── CommandHandler.java
+│    │  │            │  └── SlashCommand.java
+│    │  │            ├── component
+│    │  │            │  ├── ChatComponent.java
+│    │  │            │  ├── Component.java
+│    │  │            │  ├── FooterComponent.java
+│    │  │            │  ├── HeaderComponent.java
+│    │  │            │  ├── InputComponent.java
+│    │  │            │  ├── StatusComponent.java
+│    │  │            │  └── ThoughtComponent.java
+│    │  │            ├── layout
+│    │  │            │  └── TuiLayout.java
+│    │  │            ├── ScreenManager.java
+│    │  │            └── state
+│    │  │              └── TuiState.java
+│    │  └── resources
+│    └── test
+│      ├── groovy
+│      │  └── org
+│      │    └── cland
+│      │      └── alice
+│      │        └── facade
+│      │          └── tui
+│      │            └── TuiSpec.groovy
 │      └── resources
 ├── alice-guardrail
 │  ├── build.gradle
@@ -90,6 +211,17 @@
 │    │  │    └── cland
 │    │  │      └── alice
 │    │  │        └── guardrail
+│    │  │          ├── AuditResult.java
+│    │  │          ├── CorrectionSuggestion.java
+│    │  │          ├── GuardrailService.java
+│    │  │          ├── PolicyEngine.java
+│    │  │          ├── PostValidator.java
+│    │  │          ├── PreValidator.java
+│    │  │          ├── RiskLevel.java
+│    │  │          ├── validators
+│    │  │          │  ├── HallucinationDetector.java
+│    │  │          │  ├── LogicSanityValidator.java
+│    │  │          │  └── PermissionSandboxValidator.java
 │    │  │          └── Verificator.java
 │    │  └── resources
 │    └── test
@@ -109,7 +241,23 @@
 │    │  │    └── cland
 │    │  │      └── alice
 │    │  │        └── memory
-│    │  │          └── AgentSession.java
+│    │  │          ├── AgentSession.java
+│    │  │          ├── Context.java
+│    │  │          ├── DefaultMemorySummarizer.java
+│    │  │          ├── EpisodicVault.java
+│    │  │          ├── Experience.java
+│    │  │          ├── InMemoryStorageBackend.java
+│    │  │          ├── Knowledge.java
+│    │  │          ├── MemoryRouter.java
+│    │  │          ├── MemorySet.java
+│    │  │          ├── MemorySummarizer.java
+│    │  │          ├── ProceduralVault.java
+│    │  │          ├── SemanticVault.java
+│    │  │          ├── SOP.java
+│    │  │          ├── Step.java
+│    │  │          ├── StorageBackend.java
+│    │  │          ├── Summary.java
+│    │  │          └── VaultController.java
 │    │  └── resources
 │    └── test
 │      ├── groovy
@@ -117,6 +265,8 @@
 │      │    └── cland
 │      │      └── alice
 │      │        └── memory
+│      │          ├── MemoryVaultEdgeCaseSpec.groovy
+│      │          └── MemoryVaultSpec.groovy
 │      └── resources
 ├── alice-model
 │  ├── build.gradle
@@ -162,7 +312,23 @@
 │    │  │      └── alice
 │    │  │        └── tool
 │    │  │          └── gateway
+│    │  │            ├── annotation
+│    │  │            │  ├── AgentTool.java
+│    │  │            │  ├── RiskLevel.java
+│    │  │            │  └── ToolParam.java
 │    │  │            ├── Constants.java
+│    │  │            ├── engine
+│    │  │            │  ├── ExecutionEngine.java
+│    │  │            │  ├── ToolDiscovery.java
+│    │  │            │  └── ToolResult.java
+│    │  │            ├── metadata
+│    │  │            │  └── ToolMetadata.java
+│    │  │            ├── sandbox
+│    │  │            │  ├── DirectSandboxProvider.java
+│    │  │            │  ├── PolicySandboxProvider.java
+│    │  │            │  └── SandboxProvider.java
+│    │  │            ├── schema
+│    │  │            │  └── SchemaGenerator.java
 │    │  │            └── ToolRegistry.java
 │    │  └── resources
 │    └── test
@@ -172,6 +338,30 @@
 │      │      └── alice
 │      │        └── tool
 │      │          └── gateway
+│      │            ├── annotation
+│      │            │  └── AnnotationSpec.groovy
+│      │            ├── engine
+│      │            │  ├── ExecutionEngineSpec.groovy
+│      │            │  ├── ToolDiscoverySpec.groovy
+│      │            │  └── ToolResultSpec.groovy
+│      │            ├── metadata
+│      │            │  └── ToolMetadataSpec.groovy
+│      │            ├── sandbox
+│      │            │  └── SandboxProviderSpec.groovy
+│      │            ├── schema
+│      │            │  └── SchemaGeneratorSpec.groovy
+│      │            └── ToolRegistrySpec.groovy
+│      ├── java
+│      │  └── org
+│      │    └── cland
+│      │      └── alice
+│      │        └── tool
+│      │          └── gateway
+│      │            ├── annotation
+│      │            │  └── AnnotationTestBeans.java
+│      │            └── engine
+│      │              ├── ExecutionEngineTestBeans.java
+│      │              └── ToolDiscoveryTestBeans.java
 │      └── resources
 ├── app
 │  ├── build.gradle
@@ -183,9 +373,7 @@
 │    │  │    └── cland
 │    │  │      └── alice
 │    │  │        └── agent
-│    │  │          ├── AliceAgent.java
-│    │  │          ├── cmd
-│    │  │          └── tui
+│    │  │          └── AliceAgent.java
 │    │  └── resources
 │    └── test
 │      ├── groovy
@@ -203,6 +391,10 @@
 │  │  └── DESIGN.md
 │  ├── alice-env-adapter
 │  │  └── DESIGN.md
+│  ├── alice-facade-cmd
+│  │  └── DESIGN.md
+│  ├── alice-facade-tui
+│  │  └── DESIGN.md
 │  ├── alice-guardrail
 │  │  └── DESIGN.md
 │  ├── alice-memory-vault
@@ -211,6 +403,8 @@
 │  │  ├── DESIGN.md
 │  │  └── README.md
 │  ├── alice-tool-gateway
+│  │  └── DESIGN.md
+│  ├── app
 │  │  └── DESIGN.md
 │  ├── CHANGELOG规范.md
 │  └── README.md

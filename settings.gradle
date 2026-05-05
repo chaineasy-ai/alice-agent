@@ -5,6 +5,8 @@
 
 rootProject.name = 'alice-agent'
 include('app')
+include('alice-facade-tui')
+include('alice-facade-cmd')
 include('alice-core-agent')
 include('alice-core-planner')
 include('alice-env-adapter')

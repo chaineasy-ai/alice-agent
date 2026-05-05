@@ -36,3 +36,5 @@ alice-tool-gateway/build
 alice-env-adapter/build
 alice-core-agent/build
 alice-model/build
+alice-facade-cmd/build
+alice-facade-tui/build
