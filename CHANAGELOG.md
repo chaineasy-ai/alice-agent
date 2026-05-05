@@ -122,6 +122,21 @@ description: record your changes
 ### Fixes
 
 - alice-model/模块系统：修复 `module-info.java` 中 facade 导出包为空的问题，移除冗余 facade 层。
+- alice-facade-cmd/AliceCliLauncher：将 `run(String[])` 访问级别从 package-private 改为 `public`，允许 app 模块 Orchestrator 调用。
+
+## 20260505
+
+### Changes
+
+- app/App 模块（Bootstrapper & Orchestrator）：基于设计文档(`docs/app/DESIGN.md`) 完整实现引导程序与外观选择器架构。
+- app/AliceApp：新增 JVM 入口点（对应 §2.2 AliceApp），负责 JVM 级初始化（日志、ShutdownHook、环境变量检查），委托 `AliceAgent.bootstrap()` 启动完整生命周期，退出码约定：0 正常 / 1 运行时错误 / 2 参数错误 / 130 中断。
+- app/AliceAgent：重写为应用层 Orchestrator（对应 §2.2 AliceAgent），实现四阶段引导：Phase 1 ModelProvider 初始化 → Phase 2 Facade 选择 → Phase 3 AgentConfig 构建 → Phase 4 launch 阻塞执行；实现 `AutoCloseable` 生命周期管理。
+- app/FacadeSelector：新增 Facade 决策逻辑（对应 §2.2 FacadeSelector），`detect(args)` 通过 `--tui`/`-t` 或 `--cli`/`-c` 标志检测模式（默认 CLI），`launch()` 委托 `AliceCliLauncher.run()` 或 `AliceTuiLauncher`。
+- app/参数解析：`buildConfig()` 支持 `--model`/`--max-iterations`/`--timeout`/`--verbose`/`--debug`/`--no-pre-verify`/`--no-post-verify` 参数。
+- app/参数过滤：`filterAppArgs()` 剥离 app 级参数后传递剩余参数给 CLI facade。
+- app/module-info：新增 `exports org.cland.alice.agent`，添加 `requires alice.agent.facade.cmd.main` 和 `alice.agent.facade.tui.main`。
+- app/build.gradle：新增 `implementation project(':alice-facade-cmd')` 和 `alice-facade-tui` 子模块依赖；`mainClass` 改为 `org.cland.alice.agent.AliceApp`。
+- app/测试：更新 `AliceAgentSpec` 为 7 个 Spock 测试用例，覆盖版本号、实例化、Facade 检测模式（`--tui`/`-t`/`--cli`/默认）、退出码常量。
 
 ## 20260503
 

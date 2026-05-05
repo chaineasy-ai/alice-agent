@@ -62,7 +62,7 @@ public final class AliceCliLauncher {
      * @param args 命令行参数
      * @return 退出码
      */
-    static int run(String[] args) {
+    public static int run(String[] args) {
         try {
             // 1. 解析参数
             CommandParser parser = new CommandParser();
