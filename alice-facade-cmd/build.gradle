@@ -34,7 +34,6 @@ dependencies {
     // Jackson 用于 JSON 序列化
     implementation 'com.fasterxml.jackson.core:jackson-core:2.18.3'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.3'
-    implementation 'com.fasterxml.jackson.module:jackson-module-jsonSchema:2.18.3'
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.18.3'
 
     // Guava

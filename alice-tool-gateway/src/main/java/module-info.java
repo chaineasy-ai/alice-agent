@@ -1,6 +1,5 @@
 module alice.agent.alice.tool.gateway.main {
     requires com.fasterxml.jackson.databind;
-    requires com.fasterxml.jackson.module.jsonSchema;
     requires com.google.common;
 
     exports org.cland.alice.tool.gateway;
