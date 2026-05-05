@@ -1,5 +1,7 @@
 package org.cland.alice.env.adapter.snapshot;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Optional;
@@ -23,8 +25,7 @@ import java.util.Optional;
  */
 public final class SnapshotManager {
 
-    private static final System.Logger logger =
-        System.getLogger(SnapshotManager.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(SnapshotManager.class);
 
     /** Maximum number of snapshots to retain in history */
     private final int maxHistorySize;
@@ -68,12 +69,9 @@ public final class SnapshotManager {
         history.addLast(snapshot);
         if (history.size() > maxHistorySize) {
             EnvSnapshot evicted = history.removeFirst();
-            logger.log(System.Logger.Level.DEBUG,
-                "Evicted oldest snapshot: {0}", evicted.snapshotId());
+                logger.debug("Evicted oldest snapshot: {}", evicted.snapshotId());
         }
-        logger.log(System.Logger.Level.DEBUG,
-            "Snapshot saved: {0} (history size: {1})",
-            snapshot.snapshotId(), history.size());
+            logger.debug("Snapshot saved: {} (history size: {})", snapshot.snapshotId(), history.size());
     }
 
     /**
@@ -86,19 +84,15 @@ public final class SnapshotManager {
      */
     public Optional<EnvSnapshot> rollback() {
         if (history.isEmpty()) {
-            logger.log(System.Logger.Level.WARNING,
-                "Rollback requested but no snapshots available");
+            logger.warn("Rollback requested but no snapshots available");
             return Optional.empty();
         }
 
         EnvSnapshot target = history.peekLast();
-        logger.log(System.Logger.Level.INFO,
-            "Rolling back to snapshot: {0} (timestamp: {1})",
-            target.snapshotId(), target.timestamp());
+            logger.info("Rolling back to snapshot: {} (timestamp: {})", target.snapshotId(), target.timestamp());
 
         if (target.hasIrreversibleEffects()) {
-            logger.log(System.Logger.Level.WARNING,
-                "Snapshot {0} has irreversible side-effects: {1}. "
+            logger.warn("Snapshot {} has irreversible side-effects: {}. "
                 + "Physical rollback is not possible. "
                 + "Consider logical compensation actions.",
                 target.snapshotId(), target.irreversibleEffects());
@@ -131,13 +125,11 @@ public final class SnapshotManager {
      */
     public void commit() {
         if (history.isEmpty()) {
-            logger.log(System.Logger.Level.WARNING,
-                "Commit requested but no snapshots available");
+            logger.warn("Commit requested but no snapshots available");
             return;
         }
         this.committedSnapshot = history.peekLast();
-        logger.log(System.Logger.Level.DEBUG,
-            "Committed snapshot: {0}", committedSnapshot.snapshotId());
+            logger.debug("Committed snapshot: {}", committedSnapshot.snapshotId());
     }
 
     /**
@@ -174,7 +166,7 @@ public final class SnapshotManager {
     public void clear() {
         history.clear();
         committedSnapshot = null;
-        logger.log(System.Logger.Level.DEBUG, "Snapshot history cleared");
+        logger.debug("Snapshot history cleared");
     }
 
     /**

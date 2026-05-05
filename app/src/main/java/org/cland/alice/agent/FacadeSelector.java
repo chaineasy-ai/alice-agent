@@ -7,9 +7,9 @@
  */
 package org.cland.alice.agent;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.cland.alice.core.agent.Agent;
-
-import java.lang.System.Logger;
 
 /**
  * 外观选择器，根据运行配置决定启动 CLI 还是 TUI 模式。
@@ -23,7 +23,7 @@ import java.lang.System.Logger;
  */
 public final class FacadeSelector {
 
-    private static final Logger logger = System.getLogger(FacadeSelector.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(FacadeSelector.class);
 
     /** 支持的 Facade 类型 */
     public enum FacadeType {
@@ -91,7 +91,7 @@ public final class FacadeSelector {
      * @return 退出码（0 成功，非 0 失败）
      */
     public static int launch(FacadeType type, Agent agent, String[] args) {
-        logger.log(System.Logger.Level.INFO, "Launching {0} facade...", type);
+                logger.info("Launching {} facade...", type);
 
         return switch (type) {
             case CLI -> launchCli(agent, args);
@@ -137,7 +137,7 @@ public final class FacadeSelector {
 
             return org.cland.alice.facade.cmd.AliceCliLauncher.run(filteredArgs);
         } catch (Exception e) {
-            logger.log(System.Logger.Level.ERROR, "CLI launch failed", e);
+        logger.error("CLI launch failed", e);
             return AliceApp.EXIT_RUNTIME_ERROR;
         }
     }
@@ -153,7 +153,7 @@ public final class FacadeSelector {
             launcher.run();
             return AliceApp.EXIT_SUCCESS;
         } catch (Exception e) {
-            logger.log(System.Logger.Level.ERROR, "TUI launch failed", e);
+        logger.error("TUI launch failed", e);
             return AliceApp.EXIT_RUNTIME_ERROR;
         }
     }

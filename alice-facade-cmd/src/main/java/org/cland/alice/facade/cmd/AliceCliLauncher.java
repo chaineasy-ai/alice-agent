@@ -1,5 +1,7 @@
 package org.cland.alice.facade.cmd;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.cland.alice.facade.cmd.config.CommandParser;
 import org.cland.alice.facade.cmd.config.CommandParser.ParseException;
 import org.cland.alice.facade.cmd.config.RunConfig;
@@ -29,7 +31,7 @@ import org.cland.alice.model.supplier.OpenAiSupplier;
  */
 public final class AliceCliLauncher {
 
-    private static final System.Logger logger = System.getLogger(AliceCliLauncher.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(AliceCliLauncher.class);
 
     // 退出码常量
     public static final int EXIT_SUCCESS = 0;
@@ -73,7 +75,7 @@ public final class AliceCliLauncher {
                 return EXIT_PARAM_ERROR;
             }
 
-            logger.log(System.Logger.Level.INFO, "RunConfig: {0}", config);
+        logger.info("RunConfig: {}", config);
 
             // 2. 初始化 ModelProvider
             initializeModelProvider();
@@ -108,14 +110,12 @@ public final class AliceCliLauncher {
             String apiKey = System.getenv("OPENAI_API_KEY");
             if (apiKey != null && !apiKey.isEmpty()) {
                 provider.registerSupplier(new OpenAiSupplier(apiKey));
-                logger.log(System.Logger.Level.INFO, "OpenAI supplier registered");
+                logger.info("OpenAI supplier registered");
             } else {
-                logger.log(System.Logger.Level.WARNING,
-                    "OPENAI_API_KEY not set. Set it via environment variable to enable LLM calls.");
+                logger.warn("OPENAI_API_KEY not set. Set it via environment variable to enable LLM calls.");
             }
         } catch (Exception e) {
-            logger.log(System.Logger.Level.WARNING,
-                "ModelProvider initialization failed (some features may be unavailable)", e);
+        logger.warn("ModelProvider initialization failed (some features may be unavailable)", e);
         }
     }
 }

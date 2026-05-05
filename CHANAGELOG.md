@@ -8,6 +8,13 @@ description: record your changes
 
 ### Changes
 
+- 日志系统：全模块从 `System.Logger` / `System.getLogger()` 迁移至 **SLF4J 2.0 + Logback 1.5** 工业级日志方案。
+- 日志/模块依赖：所有 10 个子模块的 `build.gradle` 统一添加 SLF4J API、Logback Classic、Logback Core 实现依赖。
+- 日志/模块系统：所有 10 个子模块的 `module-info.java` 统一添加 `requires org.slf4j` 和 `requires ch.qos.logback.classic`。
+- 日志/Java 源文件：28 个 Java 文件完成迁移，`System.Logger` 声明全部替换为 `LoggerFactory.getLogger()`，`logger.log(Level.XXX, ...)` 替换为 `logger.info/warn/error/debug()`，`{0}/{1}` 占位符替换为 `{}`。
+- 日志/配置文件：新增 `app/src/main/resources/logback.xml`，强制 UTF-8 编码输出，配置控制台日志（带 `[thread]` `%level` 格式）和按天滚动文件日志（30 天保留），彻底根治乱码问题。
+- 日志/编译验证：全模块 `compileJava` 通过，无编译错误。***(#14)
+
 - alice-facade-tui/TUI 外观模块：基于设计文档(`docs/alice-facade-tui/DESIGN.md`) 实现完整终端用户界面模块，提供富交互、可视化的 Agent 任务监控面板。
 - alice-facade-tui/AliceTuiLauncher：新增主入口启动器，初始化 Agent → EventBridge → ScreenManager 链路，进入主事件循环。
 - alice-facade-tui/ScreenManager：新增屏幕管理器（对应 §2 ScreenManager），管理 Lanterna 终端渲染循环、键盘输入处理、组件生命周期、终端 resize 响应。

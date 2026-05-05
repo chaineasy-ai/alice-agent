@@ -1,5 +1,7 @@
 package org.cland.alice.core.planner.sop;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.cland.alice.core.planner.Plan;
 
 import java.util.Map;
@@ -15,7 +17,7 @@ import java.util.Objects;
  */
 public final class StaticPlanner {
 
-    private static final System.Logger logger = System.getLogger(StaticPlanner.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(StaticPlanner.class);
 
     private final SopRegistry sopRegistry;
 
@@ -39,11 +41,11 @@ public final class StaticPlanner {
         // 匹配 SOP 模板
         SopRegistry.SopTemplate template = sopRegistry.match(prompt);
         if (template == null) {
-            logger.log(System.Logger.Level.DEBUG, "[StaticPlanner] No matching SOP for prompt");
+            logger.debug("[StaticPlanner] No matching SOP for prompt");
             return null;
         }
 
-        logger.log(System.Logger.Level.INFO, "[StaticPlanner] Matched SOP: {0}", template.id());
+            logger.info("[StaticPlanner] Matched SOP: {}", template.id());
 
         // 直接转换为静态 Plan
         Plan.Builder builder = Plan.builder()

@@ -1,5 +1,7 @@
 package org.cland.alice.facade.tui;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.googlecode.lanterna.TerminalSize;
 import com.googlecode.lanterna.TextCharacter;
 import com.googlecode.lanterna.graphics.TextGraphics;
@@ -37,7 +39,7 @@ import java.util.function.Consumer;
  */
 public class ScreenManager implements AutoCloseable {
 
-    private static final System.Logger logger = System.getLogger(ScreenManager.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(ScreenManager.class);
 
     /** 渲染帧间隔（毫秒） */
     private static final long FRAME_INTERVAL_MS = 50;
@@ -241,7 +243,7 @@ public class ScreenManager implements AutoCloseable {
                 Thread.currentThread().interrupt();
                 break;
             } catch (IOException e) {
-                logger.log(System.Logger.Level.ERROR, "Render error", e);
+            logger.error("Render error", e);
             }
         }
     }
@@ -467,7 +469,7 @@ public class ScreenManager implements AutoCloseable {
             screen.doResizeIfNecessary();
             layout.recalculate(newSize.getColumns(), newSize.getRows());
         } catch (Exception e) {
-            logger.log(System.Logger.Level.WARNING, "Resize handling failed", e);
+        logger.warn("Resize handling failed", e);
         }
     }
 
@@ -513,12 +515,12 @@ public class ScreenManager implements AutoCloseable {
         try {
             screen.stopScreen();
         } catch (IOException e) {
-            logger.log(System.Logger.Level.WARNING, "Error stopping screen", e);
+        logger.warn("Error stopping screen", e);
         }
         try {
             terminal.close();
         } catch (IOException e) {
-            logger.log(System.Logger.Level.WARNING, "Error closing terminal", e);
+        logger.warn("Error closing terminal", e);
         }
     }
 }

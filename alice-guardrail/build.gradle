@@ -19,6 +19,11 @@ repositories {
 }
 
 dependencies {
+    // === SLF4J + Logback (replaces System.getLogger) ===
+    implementation 'org.slf4j:slf4j-api:2.0.16'
+    implementation 'ch.qos.logback:logback-classic:1.5.16'
+    implementation 'ch.qos.logback:logback-core:1.5.16'
+
     // 本地子模块依赖 — 用于 PreValidator 接口中的 Plan 类型
     implementation project(':alice-core-planner')
 

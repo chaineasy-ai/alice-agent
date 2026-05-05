@@ -373,7 +373,9 @@
 │    │  │    └── cland
 │    │  │      └── alice
 │    │  │        └── agent
-│    │  │          └── AliceAgent.java
+│    │  │          ├── AliceAgent.java
+│    │  │          ├── AliceApp.java
+│    │  │          └── FacadeSelector.java
 │    │  └── resources
 │    └── test
 │      ├── groovy

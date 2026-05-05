@@ -1,5 +1,7 @@
 package org.cland.alice.env.adapter.transport;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
@@ -18,8 +20,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public final class StdioMcpTransport implements McpTransport {
 
-    private static final System.Logger logger =
-        System.getLogger(StdioMcpTransport.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(StdioMcpTransport.class);
 
     private final String command;
     private final String[] args;
@@ -80,8 +81,7 @@ public final class StdioMcpTransport implements McpTransport {
                 stderrThread.start();
 
                 connected = true;
-                logger.log(System.Logger.Level.INFO,
-                    "StdioMCP connected: {0}", command);
+            logger.info("StdioMCP connected: {}", command);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to start MCP subprocess: " + command, e);
             }
@@ -109,7 +109,7 @@ public final class StdioMcpTransport implements McpTransport {
                 stdinWriter.write('\n');
                 stdinWriter.flush();
             }
-            logger.log(System.Logger.Level.DEBUG, "Sent MCP message, id={0}", id);
+        logger.debug("Sent MCP message, id={}", id);
         } catch (Exception e) {
             pendingRequests.remove(id);
             future.completeExceptionally(e);
@@ -144,7 +144,7 @@ public final class StdioMcpTransport implements McpTransport {
             }
         });
         pendingRequests.clear();
-        logger.log(System.Logger.Level.INFO, "StdioMCP disconnected");
+        logger.info("StdioMCP disconnected");
     }
 
     @Override
@@ -167,8 +167,7 @@ public final class StdioMcpTransport implements McpTransport {
             }
         } catch (java.io.IOException e) {
             if (connected) {
-                logger.log(System.Logger.Level.ERROR,
-                    "Stdio read error: {0}", e.getMessage());
+                                logger.error("Stdio read error: {}", e.getMessage());
             }
         } finally {
             connected = false;
@@ -179,7 +178,7 @@ public final class StdioMcpTransport implements McpTransport {
         try {
             String line;
             while ((line = stderrReader.readLine()) != null) {
-                logger.log(System.Logger.Level.DEBUG, "MCP stderr: {0}", line);
+            logger.debug("MCP stderr: {}", line);
             }
         } catch (java.io.IOException ignored) {
             // subprocess terminated
@@ -211,8 +210,7 @@ public final class StdioMcpTransport implements McpTransport {
                 notificationListener.onNotification(method, params);
             }
         } catch (Exception e) {
-            logger.log(System.Logger.Level.WARNING,
-                "Failed to parse MCP response: {0}", e.getMessage());
+                logger.warn("Failed to parse MCP response: {}", e.getMessage());
         }
     }
 }

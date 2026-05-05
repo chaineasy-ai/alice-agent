@@ -1,5 +1,7 @@
 package org.cland.alice.core.agent.executor;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
@@ -28,7 +30,7 @@ import java.util.Objects;
  */
 public class AgentExecutor {
 
-    private static final System.Logger logger = System.getLogger(AgentExecutor.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(AgentExecutor.class);
 
     private final Vertx vertx;
     private final AgentCore agentCore;
@@ -78,8 +80,7 @@ public class AgentExecutor {
      * 3. 任何 fatal error 被 handleFatalError 捕获
      */
     private Future<AgentContext> executeLoop(String input, AgentContext context) {
-        logger.log(System.Logger.Level.INFO, "Agent {0} starting PPAO loop (maxIterations={1})",
-            agentCore.agentId(), config.maxIterations());
+            logger.info("Agent {} starting PPAO loop (maxIterations={})", agentCore.agentId(), config.maxIterations());
 
         return perceive(input, context)
             .compose(this::loopBody)
@@ -95,8 +96,7 @@ public class AgentExecutor {
     private Future<AgentContext> loopBody(AgentContext context) {
         // 检查是否应提前终止
         if (agentCore.shouldFinish(context, null)) {
-            logger.log(System.Logger.Level.INFO, "Agent {0} PPAO loop finished early (iter={1})",
-                agentCore.agentId(), context.iteration());
+                logger.info("Agent {} PPAO loop finished early (iter={})", agentCore.agentId(), context.iteration());
             return Future.succeededFuture(context);
         }
 
@@ -110,8 +110,7 @@ public class AgentExecutor {
             .compose(ctx -> {
                 // 递归：如果不应终止则继续下一轮
                 if (agentCore.shouldFinish(ctx, null)) {
-                    logger.log(System.Logger.Level.INFO, "Agent {0} PPAO loop finished (iter={1})",
-                        agentCore.agentId(), ctx.iteration());
+                                    logger.info("Agent {} PPAO loop finished (iter={})", agentCore.agentId(), ctx.iteration());
                     return Future.succeededFuture(ctx);
                 }
                 return loopBody(ctx);
@@ -150,7 +149,7 @@ public class AgentExecutor {
 
     /** 1. Perceive: 感知输入，构建上下文 */
     private Future<AgentContext> perceive(String input, AgentContext context) {
-        logger.log(System.Logger.Level.DEBUG, "[Perceive] input={0}", input);
+                logger.debug("[Perceive] input={}", input);
         context.transitionTo(AgentContext.Phase.PERCEIVING);
 
         context.put("input", input);
@@ -163,7 +162,7 @@ public class AgentExecutor {
 
     /** 2. Plan: 基于上下文规划下一步 Action */
     private Future<StepWithContext> plan(AgentContext context) {
-        logger.log(System.Logger.Level.DEBUG, "[Plan] iteration={0}", context.iteration());
+            logger.debug("[Plan] iteration={}", context.iteration());
         context.transitionTo(AgentContext.Phase.PLANNING);
 
         Action nextAction;
@@ -179,7 +178,7 @@ public class AgentExecutor {
             nextAction = Action.llmInference(modelId, prompt);
         }
 
-        logger.log(System.Logger.Level.INFO, "[Plan] action={0}", nextAction);
+                logger.info("[Plan] action={}", nextAction);
         context.appendThought("Plan: " + nextAction.type() + " -> " + nextAction.target());
         return Future.succeededFuture(new StepWithContext(context, new StepResult.Continue(nextAction)));
     }
@@ -193,15 +192,15 @@ public class AgentExecutor {
             return Future.succeededFuture(stepWithCtx);
         }
 
-        logger.log(System.Logger.Level.DEBUG, "[Verify/Pre] action={0}", action);
+                logger.debug("[Verify/Pre] action={}", action);
         ctx.transitionTo(AgentContext.Phase.VERIFYING_PRE);
 
         if (agentCore.verifyPre(action)) {
-            logger.log(System.Logger.Level.DEBUG, "[Verify/Pre] approved");
+            logger.debug("[Verify/Pre] approved");
             return Future.succeededFuture(stepWithCtx);
         }
 
-        logger.log(System.Logger.Level.WARNING, "[Verify/Pre] blocked action={0}", action);
+                logger.warn("[Verify/Pre] blocked action={}", action);
         Action revision = Action.revision("Blocked by pre-verify: " + action);
         ctx.appendThought("Pre-verify blocked: " + action.type());
         return Future.succeededFuture(new StepWithContext(ctx, new StepResult.Continue(revision)));
@@ -216,7 +215,7 @@ public class AgentExecutor {
             return Future.succeededFuture(stepWithCtx);
         }
 
-        logger.log(System.Logger.Level.INFO, "[Act] action={0}", action);
+                logger.info("[Act] action={}", action);
         ctx.transitionTo(AgentContext.Phase.ACTING);
 
         return switch (action.type()) {
@@ -259,13 +258,13 @@ public class AgentExecutor {
                     && call.result() != null) {
                     String content = call.result().content();
                     ctx.put("result", content);
-                    logger.log(System.Logger.Level.DEBUG, "[Act/LLM] response length={0}", content.length());
+                                    logger.debug("[Act/LLM] response length={}", content.length());
                     return new StepResult.Continue(Action.finish(), Observation.success(content));
                 } else {
                     return new StepResult.Failure("LLM call failed: " + call.status());
                 }
             } catch (Exception e) {
-                logger.log(System.Logger.Level.ERROR, "[Act/LLM] error", e);
+            logger.error("[Act/LLM] error", e);
                 return new StepResult.Failure("LLM call error: " + e.getMessage(), e);
             }
         }).onComplete(ar -> {
@@ -282,7 +281,7 @@ public class AgentExecutor {
     /** 执行工具调用 Action */
     private Future<StepWithContext> actToolCall(AgentContext ctx, Action action) {
         if (agentCore.toolRegistry() == null) {
-            logger.log(System.Logger.Level.WARNING, "[Act/Tool] no ToolRegistry available");
+            logger.warn("[Act/Tool] no ToolRegistry available");
             return Future.succeededFuture(new StepWithContext(ctx,
                 new StepResult.Continue(
                     Action.revision("No ToolRegistry available for tool: " + action.target()),
@@ -322,7 +321,7 @@ public class AgentExecutor {
         AgentContext ctx = stepWithCtx.context();
         StepResult result = stepWithCtx.result();
 
-        logger.log(System.Logger.Level.DEBUG, "[Observe] result={0}", result);
+                logger.debug("[Observe] result={}", result);
         ctx.transitionTo(AgentContext.Phase.OBSERVING);
 
         // 提取 Observation
@@ -349,17 +348,17 @@ public class AgentExecutor {
         AgentContext ctx = stepWithCtx.context();
         StepResult result = stepWithCtx.result();
 
-        logger.log(System.Logger.Level.DEBUG, "[Verify/Post] result={0}", result);
+                logger.debug("[Verify/Post] result={}", result);
 
         if (agentCore.verifyPost(result)) {
-            logger.log(System.Logger.Level.DEBUG, "[Verify/Post] audit passed");
+            logger.debug("[Verify/Post] audit passed");
             if (agentCore.shouldFinish(ctx, result)) {
                 ctx.transitionTo(AgentContext.Phase.FINISH);
             }
             return Future.succeededFuture(stepWithCtx);
         }
 
-        logger.log(System.Logger.Level.WARNING, "[Verify/Post] audit failed, forcing revision");
+        logger.warn("[Verify/Post] audit failed, forcing revision");
         ctx.appendThought("Post-verify failed");
         Action revision = Action.revision("Post-verify audit rejected: " + result);
         return Future.succeededFuture(
@@ -369,7 +368,7 @@ public class AgentExecutor {
     /** 7. Reflect: 注入验证反馈，准备下一轮规划 */
     private Future<AgentContext> reflect(StepWithContext stepWithCtx) {
         AgentContext ctx = stepWithCtx.context();
-        logger.log(System.Logger.Level.DEBUG, "[Reflect] phase={0}", ctx.currentPhase());
+            logger.debug("[Reflect] phase={}", ctx.currentPhase());
 
         if (ctx.currentPhase() != AgentContext.Phase.FINISH) {
             ctx.transitionTo(AgentContext.Phase.REFLECTING);
@@ -407,7 +406,7 @@ public class AgentExecutor {
      * 将错误信息记录到上下文中，设置终态，返回 context 而非抛出。
      */
     private AgentContext handleFatalError(Throwable error, AgentContext context) {
-        logger.log(System.Logger.Level.ERROR, "Agent {0} fatal error in PPAO loop", agentCore.agentId(), error);
+            logger.error("Agent {} fatal error in PPAO loop", agentCore.agentId(), error);
         context.put("error", error.getMessage());
         context.put("status", "FATAL_ERROR");
         context.transitionTo(AgentContext.Phase.FINISH);

@@ -22,4 +22,8 @@ module alice.agent.facade.tui.main {
     requires com.fasterxml.jackson.databind;
     requires com.fasterxml.jackson.core;
     requires com.fasterxml.jackson.datatype.jsr310;
+    requires org.slf4j;
+
+    requires ch.qos.logback.classic;
+
 }

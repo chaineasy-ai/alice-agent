@@ -1,5 +1,7 @@
 package org.cland.alice.core.planner.budget;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.cland.alice.core.planner.tree.ThinkingNode;
 
 import java.util.Objects;
@@ -96,10 +98,8 @@ public final class TokenBudget {
         this.currentDepth = Math.max(this.currentDepth, d);
 
         if (isExhausted()) {
-            System.Logger logger = System.getLogger(TokenBudget.class.getName());
-            logger.log(System.Logger.Level.WARNING,
-                "TokenBudget exhausted: tokens={0}/{1}, depth={2}/{3}",
-                consumedTokens.get(), maxTokens, currentDepth, maxDepth);
+            Logger logger = LoggerFactory.getLogger(TokenBudget.class);
+                logger.warn("TokenBudget exhausted: tokens={}/{}, depth={}/{}", consumedTokens.get(), maxTokens, currentDepth, maxDepth);
         }
     }
 

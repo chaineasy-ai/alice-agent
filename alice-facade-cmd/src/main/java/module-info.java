@@ -12,4 +12,8 @@ module alice.agent.facade.cmd.main {
     requires com.fasterxml.jackson.datatype.jsr310;
     requires com.google.common;
     requires io.vertx.core;
+    requires org.slf4j;
+
+    requires ch.qos.logback.classic;
+
 }

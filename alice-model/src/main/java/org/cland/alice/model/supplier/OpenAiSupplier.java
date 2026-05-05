@@ -1,5 +1,7 @@
 package org.cland.alice.model.supplier;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.cland.alice.model.Call;
 import org.cland.alice.model.ModelSupplier;
 
@@ -16,7 +18,7 @@ import java.util.Map;
  */
 public class OpenAiSupplier implements ModelSupplier {
 
-    private static final System.Logger logger = System.getLogger(OpenAiSupplier.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(OpenAiSupplier.class);
     private static final String DEFAULT_BASE_URL = "https://api.openai.com/v1/chat/completions";
 
     private final String name;
@@ -59,7 +61,7 @@ public class OpenAiSupplier implements ModelSupplier {
             .POST(HttpRequest.BodyPublishers.ofString(requestBody))
             .build();
 
-        logger.log(System.Logger.Level.DEBUG, "Sending request to {0} for model {1}", baseUrl, payload.modelId());
+            logger.debug("Sending request to {} for model {}", baseUrl, payload.modelId());
 
         HttpResponse<String> httpResponse = client.send(request, HttpResponse.BodyHandlers.ofString());
 
@@ -113,7 +115,7 @@ public class OpenAiSupplier implements ModelSupplier {
 
             return new Call.Response(content, usage, Map.of("raw", responseBody));
         } catch (Exception e) {
-            logger.log(System.Logger.Level.WARNING, "Failed to parse response, returning raw body");
+            logger.warn("Failed to parse response, returning raw body");
             return new Call.Response(responseBody, null, Map.of("parseError", e.getMessage()));
         }
     }

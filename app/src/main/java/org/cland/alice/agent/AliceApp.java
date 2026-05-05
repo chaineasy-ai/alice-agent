@@ -7,8 +7,8 @@
  */
 package org.cland.alice.agent;
 
-import java.lang.System.Logger;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 /**
  * AliceAgent 系统的 JVM 入口点。
  * <p>
@@ -30,7 +30,7 @@ import java.lang.System.Logger;
  */
 public final class AliceApp {
 
-    private static final Logger logger = System.getLogger(AliceApp.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(AliceApp.class);
 
     public static final int EXIT_SUCCESS = 0;
     public static final int EXIT_RUNTIME_ERROR = 1;
@@ -46,10 +46,10 @@ public final class AliceApp {
      *
      * @param args 命令行参数
      */
-    public static void main(String[] args) {
+    static void main(String[] args) {
         // 1. 注册 JVM 关闭钩子
         Runtime.getRuntime().addShutdownHook(new Thread(() ->
-            logger.log(System.Logger.Level.INFO, "JVM shutting down...")
+            logger.info("JVM shutting down...")
         ));
 
         // 2. 执行初始化检查
@@ -65,7 +65,7 @@ public final class AliceApp {
         int exitCode = AliceAgent.bootstrap(args);
 
         // 4. 退出
-        logger.log(System.Logger.Level.INFO, "Alice Agent exiting with code {0}", exitCode);
+        logger.info("Alice Agent exiting with code {}", exitCode);
         System.exit(exitCode);
     }
 
@@ -80,17 +80,17 @@ public final class AliceApp {
      * 当前实现为轻量版本，后续可扩展为加载 YAML / 环境变量合并配置。
      */
     private static void initializeEnvironment() {
-        logger.log(System.Logger.Level.INFO, "Initializing Alice Agent environment...");
+        logger.info("Initializing Alice Agent environment...");
 
         // 检查 Java 版本
         String javaVersion = System.getProperty("java.version");
-        logger.log(System.Logger.Level.DEBUG, "Java version: {0}", javaVersion);
+                logger.debug("Java version: {}", javaVersion);
 
         // 检查关键环境变量（非阻塞，仅警告）
         checkEnvVar("OPENAI_API_KEY", "LLM calls will be unavailable");
         checkEnvVar("ANTHROPIC_API_KEY", "Anthropic models will be unavailable");
 
-        logger.log(System.Logger.Level.INFO, "Environment initialized successfully");
+        logger.info("Environment initialized successfully");
     }
 
     /**
@@ -98,8 +98,7 @@ public final class AliceApp {
      */
     private static void checkEnvVar(String name, String hint) {
         if (System.getenv(name) == null || System.getenv(name).isEmpty()) {
-            logger.log(System.Logger.Level.WARNING,
-                "Environment variable {0} is not set. {1}.", name, hint);
+        logger.warn("Environment variable {} is not set. {}.", name, hint);
         }
     }
 }

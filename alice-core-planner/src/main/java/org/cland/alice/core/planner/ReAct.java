@@ -1,5 +1,7 @@
 package org.cland.alice.core.planner;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.cland.alice.core.planner.budget.TokenBudget;
 import org.cland.alice.core.planner.model.ModelSupplier;
 import org.cland.alice.core.planner.sop.SopRegistry;
@@ -22,7 +24,7 @@ import java.util.Objects;
  */
 public class ReAct {
 
-    private static final System.Logger logger = System.getLogger(ReAct.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(ReAct.class);
 
     private final PlannerService plannerService;
 
@@ -112,7 +114,7 @@ public class ReAct {
     public Map<String, Object> proposeNext(Map<String, Object> context) {
         Objects.requireNonNull(context, "context must not be null");
 
-        logger.log(System.Logger.Level.DEBUG, "[ReAct] proposeNext called");
+        logger.debug("[ReAct] proposeNext called");
 
         // 使用新引擎规划
         Plan plan = plannerService.plan(context);

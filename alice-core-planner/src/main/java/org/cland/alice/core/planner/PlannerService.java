@@ -1,5 +1,7 @@
 package org.cland.alice.core.planner;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.cland.alice.core.planner.strategy.StrategySelector;
 import org.cland.alice.core.planner.sop.StaticPlanner;
 
@@ -31,7 +33,7 @@ import java.util.Objects;
  */
 public final class PlannerService {
 
-    private static final System.Logger logger = System.getLogger(PlannerService.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(PlannerService.class);
 
     private final StrategySelector strategySelector;
     private final StaticPlanner staticPlanner;
@@ -59,14 +61,13 @@ public final class PlannerService {
     public Plan plan(Map<String, Object> context) {
         Objects.requireNonNull(context, "context must not be null");
 
-        logger.log(System.Logger.Level.INFO, "[PlannerService] Planning with context keys={0}",
-            String.join(", ", context.keySet()));
+            logger.info("[PlannerService] Planning with context keys={}", String.join(", ", context.keySet()));
 
         // 1. 如果有最终结果，直接返回 FINISH
         if (context.containsKey("result") && context.get("result") != null) {
             String result = context.get("result").toString();
             if (!result.isEmpty()) {
-                logger.log(System.Logger.Level.INFO, "[PlannerService] Result already present, finishing");
+                logger.info("[PlannerService] Result already present, finishing");
                 return Plan.builder()
                     .type(Plan.Type.FAST_PATH)
                     .summary("Task completed")
@@ -79,15 +80,14 @@ public final class PlannerService {
         if (staticPlanner != null) {
             Plan staticPlan = staticPlanner.plan(context);
             if (staticPlan != null) {
-                logger.log(System.Logger.Level.INFO, "[PlannerService] Static plan selected");
+                logger.info("[PlannerService] Static plan selected");
                 return staticPlan;
             }
         }
 
         // 3. 双路径决策：StrategySelector 评估复杂度并路由
         Plan plan = strategySelector.select(context);
-        logger.log(System.Logger.Level.INFO, "[PlannerService] Plan completed: type={0}, steps={1}",
-            plan.type(), plan.steps().size());
+            logger.info("[PlannerService] Plan completed: type={}, steps={}", plan.type(), plan.steps().size());
 
         return plan;
     }

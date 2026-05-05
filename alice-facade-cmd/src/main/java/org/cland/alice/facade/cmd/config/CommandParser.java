@@ -1,5 +1,7 @@
 package org.cland.alice.facade.cmd.config;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -28,7 +30,7 @@ import java.util.concurrent.Callable;
  */
 public class CommandParser {
 
-    private static final System.Logger logger = System.getLogger(CommandParser.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(CommandParser.class);
 
     /**
      * 解析失败时抛出的异常，携带合适的退出码。

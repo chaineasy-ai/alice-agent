@@ -7,16 +7,16 @@
  */
 package org.cland.alice.agent;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
 import org.cland.alice.model.ModelProvider;
 import org.cland.alice.model.supplier.OpenAiSupplier;
 
-import java.lang.System.Logger;
-
 public final class AliceAgent implements AutoCloseable {
 
-    private static final Logger logger = System.getLogger(AliceAgent.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(AliceAgent.class);
 
     public static final String VERSION = "0.1.0";
 
@@ -34,46 +34,41 @@ public final class AliceAgent implements AutoCloseable {
         this.agent = new Agent(config);
         this.running = false;
 
-        logger.log(System.Logger.Level.INFO, "AliceAgent [{0}] created with model={1}, maxIterations={2}",
-            agent.agentId(), config.defaultModelId(), config.maxIterations());
+            logger.info("AliceAgent [{}] created with model={}, maxIterations={}", agent.agentId(), config.defaultModelId(), config.maxIterations());
     }
 
     public static int bootstrap(String[] args) {
-        logger.log(System.Logger.Level.INFO, "Alice Agent v{0} bootstrapping...", VERSION);
+                logger.info("Alice Agent v{} bootstrapping...", VERSION);
 
         try {
             initializeModelProvider();
         } catch (Exception e) {
-            logger.log(System.Logger.Level.ERROR, "Failed to initialize ModelProvider", e);
+        logger.error("Failed to initialize ModelProvider", e);
             return AliceApp.EXIT_RUNTIME_ERROR;
         }
 
         FacadeSelector.FacadeType facadeType = FacadeSelector.detect(args);
-        logger.log(System.Logger.Level.INFO, "Facade selected: {0}", facadeType);
+                logger.info("Facade selected: {}", facadeType);
 
         AgentConfig config = buildConfig(args);
 
         try (AliceAgent orchestrator = new AliceAgent(config)) {
             orchestrator.facadeType = facadeType;
             int exitCode = orchestrator.start(args);
-            logger.log(System.Logger.Level.INFO,
-                "AliceAgent [{0}] exited with code {1}",
-                orchestrator.agent.agentId(), exitCode);
+                logger.info("AliceAgent [{}] exited with code {}", orchestrator.agent.agentId(), exitCode);
             return exitCode;
         } catch (Exception e) {
-            logger.log(System.Logger.Level.ERROR, "AliceAgent bootstrap failed", e);
+        logger.error("AliceAgent bootstrap failed", e);
             return AliceApp.EXIT_RUNTIME_ERROR;
         }
     }
 
     public int start(String[] args) {
         this.running = true;
-        logger.log(System.Logger.Level.INFO,
-            "AliceAgent [{0}] starting {1} facade...",
-            agent.agentId(), facadeType);
+            logger.info("AliceAgent [{}] starting {} facade...", agent.agentId(), facadeType);
 
         if (agent.agentCore() == null) {
-            logger.log(System.Logger.Level.ERROR, "AgentCore not initialized");
+            logger.error("AgentCore not initialized");
             return AliceApp.EXIT_RUNTIME_ERROR;
         }
 
@@ -84,12 +79,12 @@ public final class AliceAgent implements AutoCloseable {
     public void close() {
         if (!running) return;
         running = false;
-        logger.log(System.Logger.Level.INFO, "AliceAgent [{0}] shutting down...", agent.agentId());
+            logger.info("AliceAgent [{}] shutting down...", agent.agentId());
         try { agent.close(); }
         catch (Exception e) {
-            logger.log(System.Logger.Level.WARNING, "Error closing Agent core", e);
+        logger.warn("Error closing Agent core", e);
         }
-        logger.log(System.Logger.Level.INFO, "AliceAgent [{0}] shut down complete", agent.agentId());
+            logger.info("AliceAgent [{}] shut down complete", agent.agentId());
     }
 
     public Agent agent() { return agent; }
@@ -98,24 +93,23 @@ public final class AliceAgent implements AutoCloseable {
     public boolean isRunning() { return running; }
 
     private static void initializeModelProvider() {
-        logger.log(System.Logger.Level.INFO, "Initializing ModelProvider...");
+        logger.info("Initializing ModelProvider...");
         ModelProvider provider = ModelProvider.getInstance();
         provider.registerBuiltinModels();
 
         String openAiKey = System.getenv("OPENAI_API_KEY");
         if (openAiKey != null && !openAiKey.isEmpty()) {
             provider.registerSupplier(new OpenAiSupplier(openAiKey));
-            logger.log(System.Logger.Level.INFO, "OpenAI supplier registered");
+            logger.info("OpenAI supplier registered");
         } else {
-            logger.log(System.Logger.Level.WARNING,
-                "OPENAI_API_KEY not set. LLM calls via OpenAI will be unavailable.");
+            logger.warn("OPENAI_API_KEY not set. LLM calls via OpenAI will be unavailable.");
         }
 
         String anthropicKey = System.getenv("ANTHROPIC_API_KEY");
         if (anthropicKey != null && !anthropicKey.isEmpty()) {
-            logger.log(System.Logger.Level.INFO, "Anthropic API key detected");
+            logger.info("Anthropic API key detected");
         }
-        logger.log(System.Logger.Level.INFO, "ModelProvider initialized");
+        logger.info("ModelProvider initialized");
     }
 
     private static AgentConfig buildConfig(String[] args) {
@@ -131,13 +125,13 @@ public final class AliceAgent implements AutoCloseable {
                 case "--max-iterations":
                     if (i + 1 < args.length) {
                         try { builder.maxIterations(Integer.parseInt(args[++i])); }
-                        catch (NumberFormatException e) { logger.log(System.Logger.Level.WARNING, "Invalid max-iterations"); }
+                        catch (NumberFormatException e) { logger.warn("Invalid max-iterations"); }
                     }
                     break;
                 case "--timeout":
                     if (i + 1 < args.length) {
                         try { builder.actionTimeoutMs(Long.parseLong(args[++i]) * 1000); }
-                        catch (NumberFormatException e) { logger.log(System.Logger.Level.WARNING, "Invalid timeout"); }
+                        catch (NumberFormatException e) { logger.warn("Invalid timeout"); }
                     }
                     break;
                 case "--verbose": case "-v": case "--debug":

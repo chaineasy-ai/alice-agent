@@ -1,5 +1,7 @@
 package org.cland.alice.env.adapter;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.cland.alice.env.adapter.model.Resource;
 import org.cland.alice.env.adapter.model.ResourceResult;
 import org.cland.alice.env.adapter.model.Tool;
@@ -30,8 +32,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public final class McpClient {
 
-    private static final System.Logger logger =
-        System.getLogger(McpClient.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(McpClient.class);
 
     private final String serverId;
     private final McpTransport transport;
@@ -93,15 +94,11 @@ public final class McpClient {
             .thenCompose(v -> performHandshake())
             .thenRun(() -> {
                 state = ClientState.READY;
-                logger.log(System.Logger.Level.INFO,
-                    "MCP client '{0}' ready with {1} tools, {2} resources",
-                    serverId, tools.size(), resources.size());
+                                logger.info("MCP client '{}' ready with {} tools, {} resources", serverId, tools.size(), resources.size());
             })
             .exceptionally(e -> {
                 state = ClientState.ERROR;
-                logger.log(System.Logger.Level.ERROR,
-                    "MCP client '{0}' connection failed: {1}",
-                    serverId, e.getMessage());
+                                logger.error("MCP client '{}' connection failed: {}", serverId, e.getMessage());
                 throw new RuntimeException(e);
             });
     }
@@ -192,8 +189,7 @@ public final class McpClient {
         resources.clear();
         serverCapabilities.set(null);
         state = ClientState.DISCONNECTED;
-        logger.log(System.Logger.Level.INFO,
-            "MCP client '{0}' disconnected", serverId);
+                logger.info("MCP client '{}' disconnected", serverId);
     }
 
     /**
@@ -322,8 +318,7 @@ public final class McpClient {
                         }
                     }
                 } catch (Exception e) {
-                    logger.log(System.Logger.Level.WARNING,
-                        "Failed to parse tools list: {0}", e.getMessage());
+                                    logger.warn("Failed to parse tools list: {}", e.getMessage());
                 }
             });
         }
@@ -352,8 +347,7 @@ public final class McpClient {
                         }
                     }
                 } catch (Exception e) {
-                    logger.log(System.Logger.Level.WARNING,
-                        "Failed to parse resources list: {0}", e.getMessage());
+                                    logger.warn("Failed to parse resources list: {}", e.getMessage());
                 }
             });
         }

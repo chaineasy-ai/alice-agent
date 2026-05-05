@@ -1,5 +1,7 @@
 package org.cland.alice.facade.tui.command;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.cland.alice.facade.tui.bridge.EventBridge;
 import org.cland.alice.facade.tui.bridge.TuiEvent;
 
@@ -25,7 +27,7 @@ import java.util.function.Consumer;
  */
 public class CommandHandler {
 
-    private static final System.Logger logger = System.getLogger(CommandHandler.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(CommandHandler.class);
 
     private final EventBridge eventBridge;
 
@@ -88,7 +90,7 @@ public class CommandHandler {
             return false;
         }
 
-        logger.log(System.Logger.Level.DEBUG, "Executing slash command: {0}", cmd);
+                logger.debug("Executing slash command: {}", cmd);
 
         return switch (cmd.type()) {
             case INTERNAL -> handleInternal(cmd);

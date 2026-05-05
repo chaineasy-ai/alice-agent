@@ -1,5 +1,7 @@
 package org.cland.alice.env.adapter.transport;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -21,8 +23,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public final class SseMcpTransport implements McpTransport {
 
-    private static final System.Logger logger =
-        System.getLogger(SseMcpTransport.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(SseMcpTransport.class);
 
     private final String endpointUrl;
     private final java.util.Map<String, String> headers;
@@ -79,8 +80,7 @@ public final class SseMcpTransport implements McpTransport {
                 sseReaderThread.setDaemon(true);
                 sseReaderThread.start();
 
-                logger.log(System.Logger.Level.INFO,
-                    "SSE MCP connected: {0}", endpointUrl);
+            logger.info("SSE MCP connected: {}", endpointUrl);
             } catch (Exception e) {
                 throw new RuntimeException(
                     "Failed to connect SSE transport: " + endpointUrl, e);
@@ -127,8 +127,7 @@ public final class SseMcpTransport implements McpTransport {
             int responseCode = conn.getResponseCode();
             if (responseCode == 200 || responseCode == 202) {
                 // Response will come via SSE stream
-                logger.log(System.Logger.Level.DEBUG,
-                    "Sent MCP message via SSE, id={0}", id);
+            logger.debug("Sent MCP message via SSE, id={}", id);
             } else {
                 pendingRequests.remove(id);
                 future.completeExceptionally(
@@ -155,7 +154,7 @@ public final class SseMcpTransport implements McpTransport {
             }
         });
         pendingRequests.clear();
-        logger.log(System.Logger.Level.INFO, "SSE MCP disconnected");
+        logger.info("SSE MCP disconnected");
     }
 
     @Override
@@ -194,8 +193,7 @@ public final class SseMcpTransport implements McpTransport {
             }
         } catch (java.io.IOException e) {
             if (connected) {
-                logger.log(System.Logger.Level.ERROR,
-                    "SSE read error: {0}", e.getMessage());
+                                logger.error("SSE read error: {}", e.getMessage());
             }
         } finally {
             connected = false;
@@ -230,8 +228,7 @@ public final class SseMcpTransport implements McpTransport {
                 notificationListener.onNotification(method, params);
             }
         } catch (Exception e) {
-            logger.log(System.Logger.Level.WARNING,
-                "Failed to parse SSE event: {0}", e.getMessage());
+                logger.warn("Failed to parse SSE event: {}", e.getMessage());
         }
     }
 

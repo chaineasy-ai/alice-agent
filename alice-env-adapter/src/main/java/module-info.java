@@ -7,4 +7,8 @@ module alice.agent.alice.env.adapter.main {
 
     requires com.google.gson;
     requires com.google.common;
+    requires org.slf4j;
+
+    requires ch.qos.logback.classic;
+
 }

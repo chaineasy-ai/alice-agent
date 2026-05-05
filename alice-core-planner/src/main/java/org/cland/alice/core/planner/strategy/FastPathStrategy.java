@@ -1,5 +1,7 @@
 package org.cland.alice.core.planner.strategy;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.cland.alice.core.planner.Plan;
 import org.cland.alice.core.planner.model.ModelSession;
 import org.cland.alice.core.planner.model.ModelSupplier;
@@ -19,7 +21,7 @@ import java.util.Objects;
  */
 public final class FastPathStrategy implements DecisionStrategy {
 
-    private static final System.Logger logger = System.getLogger(FastPathStrategy.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(FastPathStrategy.class);
 
     private final ModelSupplier modelSupplier;
 
@@ -32,7 +34,7 @@ public final class FastPathStrategy implements DecisionStrategy {
         String prompt = (String) context.getOrDefault("prompt", "");
         String result = context.containsKey("result") ? context.get("result").toString() : null;
 
-        logger.log(System.Logger.Level.DEBUG, "[FastPath] processing prompt length={0}", prompt.length());
+            logger.debug("[FastPath] processing prompt length={}", prompt.length());
 
         // 如果有最终结果，直接返回 FINISH
         if (result != null && !result.isEmpty()) {

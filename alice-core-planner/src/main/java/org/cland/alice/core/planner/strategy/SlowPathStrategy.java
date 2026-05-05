@@ -1,5 +1,7 @@
 package org.cland.alice.core.planner.strategy;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.cland.alice.core.planner.Plan;
 import org.cland.alice.core.planner.budget.TokenBudget;
 import org.cland.alice.core.planner.model.ModelSupplier;
@@ -20,7 +22,7 @@ import java.util.function.Function;
  */
 public final class SlowPathStrategy implements DecisionStrategy {
 
-    private static final System.Logger logger = System.getLogger(SlowPathStrategy.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(SlowPathStrategy.class);
 
     /** MCTS 默认迭代次数 */
     private static final int DEFAULT_MCTS_ITERATIONS = 20;
@@ -47,7 +49,7 @@ public final class SlowPathStrategy implements DecisionStrategy {
         String prompt = (String) context.getOrDefault("prompt", "");
         String result = context.containsKey("result") ? context.get("result").toString() : null;
 
-        logger.log(System.Logger.Level.INFO, "[SlowPath] starting MCTS for prompt length={0}", prompt.length());
+            logger.info("[SlowPath] starting MCTS for prompt length={}", prompt.length());
 
         // 如果有最终结果，直接返回 FINISH
         if (result != null && !result.isEmpty()) {
@@ -68,8 +70,7 @@ public final class SlowPathStrategy implements DecisionStrategy {
 
         // 从最优路径生成 Plan
         List<ThinkingNode> bestPath = tree.bestPath();
-        logger.log(System.Logger.Level.INFO, "[SlowPath] best path length={0}, nodes visited={1}",
-            bestPath.size(), tree.nodeCount());
+            logger.info("[SlowPath] best path length={}, nodes visited={}", bestPath.size(), tree.nodeCount());
 
         // 将最优路径转换为 Plan 步骤
         Plan.Builder planBuilder = Plan.builder()

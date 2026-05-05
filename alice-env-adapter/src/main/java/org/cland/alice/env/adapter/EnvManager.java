@@ -1,5 +1,7 @@
 package org.cland.alice.env.adapter;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.cland.alice.env.adapter.model.ResourceResult;
 import org.cland.alice.env.adapter.model.Tool;
 import org.cland.alice.env.adapter.model.ToolResult;
@@ -37,8 +39,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public final class EnvManager {
 
-    private static final System.Logger logger =
-        System.getLogger(EnvManager.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(EnvManager.class);
 
     /** Registered MCP client connections */
     private final List<McpClient> activeClients = new CopyOnWriteArrayList<>();
@@ -93,8 +94,7 @@ public final class EnvManager {
 
         // Set up notification forwarding
         transport.onNotification((method, paramsJson) -> {
-            logger.log(System.Logger.Level.DEBUG,
-                "MCP notification from {0}: {1}", serverId, method);
+        logger.debug("MCP notification from {}: {}", serverId, method);
             notifyListeners(new EnvEvent(
                 EnvEvent.Type.RESOURCE_CHANGED,
                 serverId,
@@ -109,8 +109,7 @@ public final class EnvManager {
             .thenApply(v -> {
                 activeClients.add(client);
                 state.set(EnvState.READY);
-                logger.log(System.Logger.Level.INFO,
-                    "Client '{0}' connected and ready", serverId);
+            logger.info("Client '{}' connected and ready", serverId);
 
                 // Notify listeners
                 notifyListeners(new EnvEvent(
@@ -142,8 +141,7 @@ public final class EnvManager {
             .ifPresent(client -> {
                 client.disconnect();
                 activeClients.remove(client);
-                logger.log(System.Logger.Level.INFO,
-                    "Client '{0}' disconnected", serverId);
+            logger.info("Client '{}' disconnected", serverId);
 
                 notifyListeners(new EnvEvent(
                     EnvEvent.Type.CLIENT_DISCONNECTED,
@@ -228,8 +226,7 @@ public final class EnvManager {
             })
             .exceptionally(e -> {
                 state.set(EnvState.ROLLING_BACK);
-                logger.log(System.Logger.Level.ERROR,
-                    "Action execution failed: {0}", e.getMessage());
+                                logger.error("Action execution failed: {}", e.getMessage());
 
                 // Auto-rollback on failure
                 rollbackSnapshot();
@@ -274,8 +271,7 @@ public final class EnvManager {
         EnvSnapshot snapshot = builder.build();
         snapshotManager.save(snapshot);
 
-        logger.log(System.Logger.Level.DEBUG,
-            "Snapshot captured: {0}", snapshot.snapshotId());
+            logger.debug("Snapshot captured: {}", snapshot.snapshotId());
         return snapshot;
     }
 
@@ -290,13 +286,10 @@ public final class EnvManager {
         Optional<EnvSnapshot> target = snapshotManager.rollback();
         if (target.isPresent()) {
             EnvSnapshot snap = target.get();
-            logger.log(System.Logger.Level.INFO,
-                "Rolling back to snapshot: {0} (taken at {1})",
-                snap.snapshotId(), snap.timestamp());
+                logger.info("Rolling back to snapshot: {} (taken at {})", snap.snapshotId(), snap.timestamp());
 
             if (snap.hasIrreversibleEffects()) {
-                logger.log(System.Logger.Level.WARNING,
-                    "Snapshot contains irreversible effects: {0}. "
+                logger.warn("Snapshot contains irreversible effects: {}. "
                     + "Logical compensation may be required.",
                     snap.irreversibleEffects());
             }
@@ -315,7 +308,7 @@ public final class EnvManager {
     public void commitSnapshot() {
         snapshotManager.commit();
         state.set(EnvState.COMMITTED);
-        logger.log(System.Logger.Level.DEBUG, "State committed");
+        logger.debug("State committed");
 
         // Transition back to READY for next action
         state.set(EnvState.READY);
@@ -393,8 +386,7 @@ public final class EnvManager {
             try {
                 listener.onEnvEvent(event);
             } catch (Exception e) {
-                logger.log(System.Logger.Level.WARNING,
-                    "Event listener threw exception: {0}", e.getMessage());
+                                logger.warn("Event listener threw exception: {}", e.getMessage());
             }
         }
     }
@@ -403,8 +395,7 @@ public final class EnvManager {
      * Shutdown all clients and clean up.
      */
     public void shutdown() {
-        logger.log(System.Logger.Level.INFO,
-            "Shutting down EnvManager (namespace: {0})", namespace);
+                logger.info("Shutting down EnvManager (namespace: {})", namespace);
         for (McpClient client : activeClients) {
             client.disconnect();
         }

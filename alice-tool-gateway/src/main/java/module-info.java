@@ -1,6 +1,9 @@
 module alice.agent.alice.tool.gateway.main {
     requires com.fasterxml.jackson.databind;
     requires com.google.common;
+    requires org.slf4j;
+
+    requires ch.qos.logback.classic;
 
     exports org.cland.alice.tool.gateway;
     exports org.cland.alice.tool.gateway.annotation;

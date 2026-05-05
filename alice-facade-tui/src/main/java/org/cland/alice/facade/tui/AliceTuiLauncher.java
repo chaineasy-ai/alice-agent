@@ -1,5 +1,7 @@
 package org.cland.alice.facade.tui;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.googlecode.lanterna.input.KeyStroke;
 import com.googlecode.lanterna.input.KeyType;
 
@@ -29,7 +31,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class AliceTuiLauncher implements AutoCloseable {
 
-    private static final System.Logger logger = System.getLogger(AliceTuiLauncher.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(AliceTuiLauncher.class);
 
     private final Agent agent;
     private final EventBridge eventBridge;
@@ -79,7 +81,7 @@ public class AliceTuiLauncher implements AutoCloseable {
             .onExit(() -> this.running = false)
             .onModelSwitch(modelId -> {
                 // 模型切换：仅更新显示，实际由 /model 命令处理
-                logger.log(System.Logger.Level.INFO, "Model switch requested: {0}", modelId);
+            logger.info("Model switch requested: {}", modelId);
             });
 
         // 连接 Agent 事件到 EventBridge
@@ -105,7 +107,7 @@ public class AliceTuiLauncher implements AutoCloseable {
      * 启动 TUI。
      */
     public void start() throws IOException {
-        logger.log(System.Logger.Level.INFO, "Starting Alice Agent TUI...");
+        logger.info("Starting Alice Agent TUI...");
         screenManager.start();
         eventBridge.onChatMessage("System", "欢迎使用 Alice Agent TUI！");
         eventBridge.onChatMessage("System", "输入 /help 查看可用命令。");
@@ -119,7 +121,7 @@ public class AliceTuiLauncher implements AutoCloseable {
      * 对应设计文档 §4 业务流程中的主事件循环。
      */
     public void run() {
-        logger.log(System.Logger.Level.INFO, "Alice Agent TUI entering main loop.");
+        logger.info("Alice Agent TUI entering main loop.");
 
         try {
             while (running) {
@@ -134,15 +136,15 @@ public class AliceTuiLauncher implements AutoCloseable {
                 // 处理输入
                 boolean shouldContinue = screenManager.handleInput(keyStroke);
                 if (!shouldContinue) {
-                    logger.log(System.Logger.Level.INFO, "Exit requested via keyboard.");
+        logger.info("Exit requested via keyboard.");
                     break;
                 }
             }
         } catch (IOException e) {
-            logger.log(System.Logger.Level.ERROR, "IO error in main loop", e);
+        logger.error("IO error in main loop", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            logger.log(System.Logger.Level.INFO, "Main loop interrupted.");
+            logger.info("Main loop interrupted.");
         } finally {
             shutdown();
         }
@@ -156,7 +158,7 @@ public class AliceTuiLauncher implements AutoCloseable {
      * @param input 用户输入
      */
     private void submitTask(String input) {
-        logger.log(System.Logger.Level.INFO, "Submitting task: {0}", input);
+                logger.info("Submitting task: {}", input);
 
         CompletableFuture.runAsync(() -> {
             try {
@@ -168,7 +170,7 @@ public class AliceTuiLauncher implements AutoCloseable {
                 screenManager.state().transitionTo(TuiState.State.IDLE);
 
             } catch (Exception e) {
-                logger.log(System.Logger.Level.ERROR, "Task execution failed", e);
+            logger.error("Task execution failed", e);
                 eventBridge.onTaskError(e.getMessage());
                 screenManager.state().transitionTo(TuiState.State.ERROR);
             }
@@ -178,23 +180,23 @@ public class AliceTuiLauncher implements AutoCloseable {
     // ========== 关闭 ==========
 
     private void shutdown() {
-        logger.log(System.Logger.Level.INFO, "Shutting down Alice Agent TUI...");
+        logger.info("Shutting down Alice Agent TUI...");
         try {
             screenManager.close();
         } catch (Exception e) {
-            logger.log(System.Logger.Level.WARNING, "Error closing screen manager", e);
+        logger.warn("Error closing screen manager", e);
         }
         try {
             eventBridge.close();
         } catch (Exception e) {
-            logger.log(System.Logger.Level.WARNING, "Error closing event bridge", e);
+        logger.warn("Error closing event bridge", e);
         }
         try {
             agent.close();
         } catch (Exception e) {
-            logger.log(System.Logger.Level.WARNING, "Error closing agent", e);
+        logger.warn("Error closing agent", e);
         }
-        logger.log(System.Logger.Level.INFO, "Alice Agent TUI shut down complete.");
+        logger.info("Alice Agent TUI shut down complete.");
     }
 
     @Override

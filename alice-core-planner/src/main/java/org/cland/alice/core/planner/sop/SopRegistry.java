@@ -1,5 +1,7 @@
 package org.cland.alice.core.planner.sop;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.cland.alice.core.planner.Plan;
 
 import java.util.*;
@@ -22,7 +24,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public final class SopRegistry {
 
-    private static final System.Logger logger = System.getLogger(SopRegistry.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(SopRegistry.class);
 
     /** SOP 模板存储 */
     private final Map<String, SopTemplate> templates = new ConcurrentHashMap<>();
@@ -44,8 +46,7 @@ public final class SopRegistry {
                 .add(template.id());
         }
 
-        logger.log(System.Logger.Level.INFO, "Registered SOP: {0} ({1} steps, {2} keywords)",
-            template.id(), template.steps().size(), template.keywords().size());
+            logger.info("Registered SOP: {} ({} steps, {} keywords)", template.id(), template.steps().size(), template.keywords().size());
         return this;
     }
 

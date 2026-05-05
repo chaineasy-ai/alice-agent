@@ -13,4 +13,8 @@ module alice.agent.alice.core.agent.main {
 
     requires io.vertx.core;
     requires com.google.common;
+    requires org.slf4j;
+
+    requires ch.qos.logback.classic;
+
 }

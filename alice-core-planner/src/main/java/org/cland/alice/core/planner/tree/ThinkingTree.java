@@ -1,5 +1,7 @@
 package org.cland.alice.core.planner.tree;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.cland.alice.core.planner.budget.TokenBudget;
 
 import java.util.*;
@@ -20,7 +22,7 @@ import java.util.function.Function;
  */
 public final class ThinkingTree {
 
-    private static final System.Logger logger = System.getLogger(ThinkingTree.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(ThinkingTree.class);
     private static final double DEFAULT_EXPLORATION_CONSTANT = Math.sqrt(2);
 
     /** 根节点 */
@@ -97,7 +99,7 @@ public final class ThinkingTree {
      */
     public void expand(ThinkingNode parent, List<Function<ThinkingNode, ThinkingNode>> childGenerators) {
         if (parent.expanded()) {
-            logger.log(System.Logger.Level.WARNING, "Node {0} already expanded", parent.nodeId());
+                logger.warn("Node {} already expanded", parent.nodeId());
             return;
         }
 
@@ -129,7 +131,7 @@ public final class ThinkingTree {
     public void evaluate(ThinkingNode node, Function<Map<String, Object>, Double> evaluator) {
         double reward = evaluator.apply(node.state());
         node.setReward(reward);
-        logger.log(System.Logger.Level.DEBUG, "[Tree] evaluate node {0} reward={1}", node.nodeId(), reward);
+            logger.debug("[Tree] evaluate node {} reward={}", node.nodeId(), reward);
     }
 
     /**
@@ -224,7 +226,7 @@ public final class ThinkingTree {
             Function<Map<String, Object>, Double> simulator) {
 
         if (tokenBudget.isExhausted()) {
-            logger.log(System.Logger.Level.WARNING, "[MCTS] Token budget exhausted, stopping iteration");
+            logger.warn("[MCTS] Token budget exhausted, stopping iteration");
             return;
         }
 
@@ -248,8 +250,7 @@ public final class ThinkingTree {
 
         tokenBudget.consume(selected);
 
-        logger.log(System.Logger.Level.DEBUG, "[MCTS] iteration complete, nodes={0}, depth={1}",
-            nodeCount.get(), depth);
+            logger.debug("[MCTS] iteration complete, nodes={}, depth={}", nodeCount.get(), depth);
     }
 
     /**
@@ -262,8 +263,7 @@ public final class ThinkingTree {
             if (tokenBudget.isExhausted()) break;
             mctsIteration(expander, simulator);
         }
-        logger.log(System.Logger.Level.INFO, "[MCTS] {0} iterations done, nodes={1}, depth={2}",
-            iterations, nodeCount.get(), depth);
+            logger.info("[MCTS] {} iterations done, nodes={}, depth={}", iterations, nodeCount.get(), depth);
     }
 
     // ========== 序列化支持 ==========

@@ -1,5 +1,7 @@
 package org.cland.alice.facade.tui.bridge;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.cland.alice.core.agent.AgentCore;
 import org.cland.alice.core.agent.lifecycle.Action;
 import org.cland.alice.core.agent.lifecycle.Observation;
@@ -25,7 +27,7 @@ import java.util.function.Consumer;
  */
 public class EventBridge implements AutoCloseable {
 
-    private static final System.Logger logger = System.getLogger(EventBridge.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(EventBridge.class);
 
     private final List<Consumer<TuiEvent>> listeners;
     private final ExecutorService eventThread;
@@ -62,8 +64,7 @@ public class EventBridge implements AutoCloseable {
                 try {
                     listener.accept(event);
                 } catch (Exception e) {
-                    logger.log(System.Logger.Level.WARNING,
-                        "Event listener threw exception", e);
+                logger.warn("Event listener threw exception", e);
                 }
             }
         });

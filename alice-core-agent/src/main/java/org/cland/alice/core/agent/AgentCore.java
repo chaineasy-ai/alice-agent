@@ -1,5 +1,7 @@
 package org.cland.alice.core.agent;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.cland.alice.core.agent.executor.AgentExecutor;
 import org.cland.alice.core.agent.lifecycle.Action;
 import org.cland.alice.core.agent.result.StepResult;
@@ -25,7 +27,7 @@ import org.cland.alice.env.adapter.EnvEvent;
  */
 public class AgentCore {
 
-    private static final System.Logger logger = System.getLogger(AgentCore.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(AgentCore.class);
 
     /** Agent 唯一 ID */
     private final String agentId;
@@ -119,7 +121,7 @@ public class AgentCore {
         if (!config.preVerifyEnabled() || guardrail == null) {
             return true;
         }
-        logger.log(System.Logger.Level.DEBUG, "Pre-verify action: {0}", action);
+                logger.debug("Pre-verify action: {}", action);
         // 将 Action 转为 Map 传递给 Guardrail
         return guardrail.intercept(Map.of(
             "type", action.type().name(),
@@ -138,7 +140,7 @@ public class AgentCore {
         if (!config.postVerifyEnabled() || guardrail == null) {
             return true;
         }
-        logger.log(System.Logger.Level.DEBUG, "Post-verify result: {0}", stepResult);
+                logger.debug("Post-verify result: {}", stepResult);
         return guardrail.audit(stepResult);
     }
 
@@ -156,8 +158,7 @@ public class AgentCore {
         }
         // 3. 达到最大迭代次数
         if (context.isMaxIterationsReached()) {
-            logger.log(System.Logger.Level.WARNING,
-                "Agent {0} reached max iterations ({1})", agentId, config.maxIterations());
+                logger.warn("Agent {} reached max iterations ({})", agentId, config.maxIterations());
             return true;
         }
         return false;

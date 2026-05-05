@@ -1,5 +1,7 @@
 package org.cland.alice.core.agent;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import io.vertx.core.Vertx;
 import org.cland.alice.core.agent.executor.AgentExecutor;
 import org.cland.alice.core.agent.result.StepResult;
@@ -25,7 +27,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class Agent {
 
-    private static final System.Logger logger = System.getLogger(Agent.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(Agent.class);
 
     private final String agentId;
     private final AgentCore agentCore;
@@ -86,7 +88,7 @@ public class Agent {
             ? context.get("model").toString()
             : config.defaultModelId();
 
-        logger.log(System.Logger.Level.INFO, "Agent {0} running with model {1}", agentId, modelId);
+                logger.info("Agent {} running with model {}", agentId, modelId);
 
         // 同步执行 PPAO 循环
         CountDownLatch latch = new CountDownLatch(1);
@@ -98,7 +100,7 @@ public class Agent {
                 latch.countDown();
             })
             .onFailure(err -> {
-                logger.log(System.Logger.Level.ERROR, "Agent {0} PPAO loop failed", agentId, err);
+            logger.error("Agent {} PPAO loop failed", agentId, err);
                 context.put("error", err.getMessage());
                 context.put("status", "FATAL_ERROR");
                 latch.countDown();
@@ -116,7 +118,7 @@ public class Agent {
             context.putAll(resultCtx.asMap());
         }
 
-        logger.log(System.Logger.Level.INFO, "Agent {0} completed");
+        logger.info("Agent {} completed");
     }
 
     /**
@@ -142,7 +144,7 @@ public class Agent {
      * @return 模型返回的响应文本
      */
     public String ask(String prompt, String modelId) {
-        logger.log(System.Logger.Level.INFO, "Agent {0} ask model={1}", agentId, modelId);
+                logger.info("Agent {} ask model={}", agentId, modelId);
 
         AgentContext context = new AgentContext(config.maxIterations());
         context.put("prompt", prompt);
@@ -186,7 +188,7 @@ public class Agent {
             throw new RuntimeException("Agent ask returned null result");
         }
 
-        logger.log(System.Logger.Level.INFO, "Agent {0} response length={1}", agentId, result.length());
+            logger.info("Agent {} response length={}", agentId, result.length());
         return result;
     }
 
@@ -222,7 +224,7 @@ public class Agent {
 
     /** 直接调用 LLM（回退逻辑） */
     private String callLlmDirect(String prompt, String modelId) {
-        logger.log(System.Logger.Level.DEBUG, "Falling back to direct LLM call: model={0}", modelId);
+                logger.debug("Falling back to direct LLM call: model={}", modelId);
         ModelProvider provider = ModelProvider.getInstance();
         Call result = provider.dispatch(modelId, prompt);
 
@@ -230,8 +232,7 @@ public class Agent {
             throw new RuntimeException("Agent call failed: " + result.status());
         }
 
-        logger.log(System.Logger.Level.INFO, "Agent {0} direct LLM response status={1}, tokens={2}",
-            agentId, result.status(),
+            logger.info("Agent {} direct LLM response status={}, tokens={}", agentId, result.status(),
             result.metrics().tokenUsage() != null ? result.metrics().tokenUsage().totalTokens() : "N/A");
 
         return result.result().content();

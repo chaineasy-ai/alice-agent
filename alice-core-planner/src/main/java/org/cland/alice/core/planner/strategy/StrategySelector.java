@@ -1,5 +1,7 @@
 package org.cland.alice.core.planner.strategy;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.cland.alice.core.planner.Plan;
 
 import java.util.Map;
@@ -20,7 +22,7 @@ import java.util.function.Function;
  */
 public final class StrategySelector {
 
-    private static final System.Logger logger = System.getLogger(StrategySelector.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(StrategySelector.class);
 
     /** 默认复杂判定阈值 — prompt 超过此长度视为复杂 */
     private static final int DEFAULT_COMPLEX_THRESHOLD = 200;
@@ -56,14 +58,14 @@ public final class StrategySelector {
         boolean isComplex = complexityFunction.apply(context);
 
         if (isComplex) {
-            logger.log(System.Logger.Level.INFO, "[StrategySelector] Routing to SLOW path");
+            logger.info("[StrategySelector] Routing to SLOW path");
             Plan plan = slowPath.decide(context);
-            logger.log(System.Logger.Level.INFO, "[StrategySelector] Slow path completed: {0}", plan);
+        logger.info("[StrategySelector] Slow path completed: {}", plan);
             return plan;
         } else {
-            logger.log(System.Logger.Level.INFO, "[StrategySelector] Routing to FAST path");
+            logger.info("[StrategySelector] Routing to FAST path");
             Plan plan = fastPath.decide(context);
-            logger.log(System.Logger.Level.INFO, "[StrategySelector] Fast path completed: {0}", plan);
+        logger.info("[StrategySelector] Fast path completed: {}", plan);
             return plan;
         }
     }
@@ -93,9 +95,7 @@ public final class StrategySelector {
 
         // 1. 长度检查
         if (prompt.length() > DEFAULT_COMPLEX_THRESHOLD) {
-            logger.log(System.Logger.Level.DEBUG,
-                "[Complexity] Prompt length {0} > threshold {1}, routing to SLOW",
-                prompt.length(), DEFAULT_COMPLEX_THRESHOLD);
+                logger.debug("[Complexity] Prompt length {} > threshold {}, routing to SLOW", prompt.length(), DEFAULT_COMPLEX_THRESHOLD);
             return true;
         }
 
@@ -103,26 +103,25 @@ public final class StrategySelector {
         String lowerPrompt = prompt.toLowerCase();
         for (String keyword : COMPLEX_KEYWORDS) {
             if (lowerPrompt.contains(keyword.toLowerCase())) {
-                logger.log(System.Logger.Level.DEBUG,
-                    "[Complexity] Found keyword '{0}', routing to SLOW", keyword);
+            logger.debug("[Complexity] Found keyword '{}', routing to SLOW", keyword);
                 return true;
             }
         }
 
         // 3. 有反馈信息 -> 复杂
         if (context.containsKey("lastFeedback") && context.get("lastFeedback") != null) {
-            logger.log(System.Logger.Level.DEBUG, "[Complexity] Has feedback, routing to SLOW");
+            logger.debug("[Complexity] Has feedback, routing to SLOW");
             return true;
         }
 
         // 4. 有错误 -> 复杂
         if (context.containsKey("error") && context.get("error") != null) {
-            logger.log(System.Logger.Level.DEBUG, "[Complexity] Has error, routing to SLOW");
+            logger.debug("[Complexity] Has error, routing to SLOW");
             return true;
         }
 
         // 默认走 Fast Path
-        logger.log(System.Logger.Level.DEBUG, "[Complexity] Simple task, routing to FAST");
+        logger.debug("[Complexity] Simple task, routing to FAST");
         return false;
     }
 

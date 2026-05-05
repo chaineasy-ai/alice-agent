@@ -1,5 +1,7 @@
 package org.cland.alice.facade.cmd;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
 import org.cland.alice.core.agent.AgentContext;
@@ -24,7 +26,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public final class ExecutionCoordinator {
 
-    private static final System.Logger logger = System.getLogger(ExecutionCoordinator.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(ExecutionCoordinator.class);
 
     private final RunConfig config;
     private final OutputRenderer renderer;
@@ -54,7 +56,7 @@ public final class ExecutionCoordinator {
      * @return 退出码（0 成功，1 失败）
      */
     public int execute() {
-        logger.log(System.Logger.Level.INFO, "Starting task: {0}", config.task());
+            logger.info("Starting task: {}", config.task());
 
         try {
             // 1. 构建 AgentConfig
@@ -65,7 +67,7 @@ public final class ExecutionCoordinator {
 
             // 2. 创建 Agent
             Agent agent = new Agent(agentConfig);
-            logger.log(System.Logger.Level.DEBUG, "Agent created: {0}", agent.agentId());
+                logger.debug("Agent created: {}", agent.agentId());
 
             // 3. 构建上下文
             AgentContext context = new AgentContext();
@@ -76,7 +78,7 @@ public final class ExecutionCoordinator {
             String stdinInput = readStdin();
             if (stdinInput != null && !stdinInput.isBlank()) {
                 context.put("stdin", stdinInput);
-                logger.log(System.Logger.Level.DEBUG, "Stdin input captured: {0} chars", stdinInput.length());
+                                logger.debug("Stdin input captured: {} chars", stdinInput.length());
             }
 
             // 5. 同步执行
@@ -139,7 +141,7 @@ public final class ExecutionCoordinator {
             return 0;
 
         } catch (Exception e) {
-            logger.log(System.Logger.Level.ERROR, "Execution failed", e);
+        logger.error("Execution failed", e);
             renderer.renderError("Unexpected error: " + e.getMessage(), config);
             if (config.verbose()) {
                 e.printStackTrace(System.err);
@@ -188,7 +190,7 @@ public final class ExecutionCoordinator {
                 }
             }
         } catch (Exception e) {
-            logger.log(System.Logger.Level.DEBUG, "No stdin data available");
+            logger.debug("No stdin data available");
         }
         return null;
     }

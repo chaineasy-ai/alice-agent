@@ -19,6 +19,11 @@ repositories {
 }
 
 dependencies {
+    // === SLF4J + Logback (replaces System.getLogger) ===
+    implementation 'org.slf4j:slf4j-api:2.0.16'
+    implementation 'ch.qos.logback:logback-classic:1.5.16'
+    implementation 'ch.qos.logback:logback-core:1.5.16'
+
     // Jackson 用于 JSON Schema 生成和序列化
     implementation 'com.fasterxml.jackson.core:jackson-core:2.18.3'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.3'

@@ -10,4 +10,7 @@ module alice.agent.alice.core.planner.main {
     exports org.cland.alice.core.planner.tree;
     exports org.cland.alice.core.planner.sop;
     exports org.cland.alice.core.planner.budget;
+
+    requires org.slf4j;
+    requires ch.qos.logback.classic;
 }
