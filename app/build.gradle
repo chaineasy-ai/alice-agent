@@ -60,6 +60,15 @@ tasks.withType(GroovyCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
+// 针对 application 插件自动生成的分发任务
+distributions {
+    main {
+        contents {
+            duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+        }
+    }
+}
+
 jar {
     archiveBaseName = 'alice-agent'
 }
@@ -67,13 +76,6 @@ jar {
 application {
     mainClass = 'org.cland.alice.agent.AliceApp'
     applicationName = 'alice-agent'
-}
-
-tasks.withType(Tar).configureEach {
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-}
-tasks.withType(Zip).configureEach {
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 tasks.named('test') {

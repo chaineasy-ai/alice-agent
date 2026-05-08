@@ -77,6 +77,10 @@ tasks.withType(GroovyCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
+tasks.named('installDist') {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
 jar {
     archiveBaseName = 'alice-facade-cmd'
 }

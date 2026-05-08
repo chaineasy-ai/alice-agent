@@ -1,0 +1,17 @@
+// 放在根目录 build.gradle 的最外层或 subprojects 块中
+subprojects {
+    // 针对 application 插件生成的特殊复制规范进行拦截
+    tasks.withType(Copy).configureEach {
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    }
+
+    // 针对 installDist 背后依赖的打包逻辑
+    plugins.withType(DistributionPlugin) {
+        tasks.withType(Tar).configureEach {
+            duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+        }
+        tasks.withType(Zip).configureEach {
+            duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+        }
+    }
+}

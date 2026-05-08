@@ -112,7 +112,7 @@ public final class FacadeSelector {
             // 没有提供子命令时打印提示，不作为错误
             if (filteredArgs == null || filteredArgs.length == 0) {
                 System.out.println("Alice Agent v" + AliceAgent.VERSION
-                    + " — AI-powered autonomous agent");
+                    + " - AI-powered autonomous agent");
                 System.out.println();
                 System.out.println("Usage: alice [--tui] <command> [options]");
                 System.out.println();
