@@ -6,7 +6,7 @@ class ModelEnumSpec extends Specification {
 
     def "should have correct number of models"() {
         expect:
-        ModelEnum.values().length == 14
+        ModelEnum.values().length == 15
     }
 
     def "GPT_4O should have correct metadata"() {
@@ -50,6 +50,7 @@ class ModelEnumSpec extends Specification {
         ModelEnum.fromModelId("claude-3-5-sonnet-latest") == ModelEnum.CLAUDE_3_5_SONNET
         ModelEnum.fromModelId("deepseek-chat") == ModelEnum.DEEPSEEK_V3
         ModelEnum.fromModelId("gemini-2.0-flash") == ModelEnum.GEMINI_2_0_FLASH
+        ModelEnum.fromModelId("gemma-4") == ModelEnum.GEMMA_4
     }
 
     def "fromModelId should be case insensitive"() {

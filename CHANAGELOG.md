@@ -8,6 +8,10 @@ description: record your changes
 
 ### Changes
 
+- alice-model/模型注册：新增 `GEMMA_4` 模型枚举注册，支持 `gemma-4` 模型 ID 查找和 `fromModelId()` 路由。(#15)
+- alice-model/供应商：新增 `Gemma4Supplier` 实现 `ModelSupplier` 接口，对接 OpenAI 兼容的本地 Gemma-4 API（`http://192.168.1.14:10303/v1`），支持 Chat Completion（含 `tool_calls` 功能调用）与 SSE 流式响应。(#15)
+- docs: 新增 `docs/alice-model/models/gemma4/gemma4.http` HTTP API 测试文件，含 Simple Chat、Tool Calling、Streaming 三项冒烟测试，全部通过。(#15)
+
 - 日志系统：全模块从 `System.Logger` / `System.getLogger()` 迁移至 **SLF4J 2.0 + Logback 1.5** 工业级日志方案。
 - 日志/模块依赖：所有 10 个子模块的 `build.gradle` 统一添加 SLF4J API、Logback Classic、Logback Core 实现依赖。
 - 日志/模块系统：所有 10 个子模块的 `module-info.java` 统一添加 `requires org.slf4j` 和 `requires ch.qos.logback.classic`。
@@ -130,6 +134,12 @@ description: record your changes
 
 - alice-model/模块系统：修复 `module-info.java` 中 facade 导出包为空的问题，移除冗余 facade 层。
 - alice-facade-cmd/AliceCliLauncher：将 `run(String[])` 访问级别从 package-private 改为 `public`，允许 app 模块 Orchestrator 调用。
+- alice-facade-tui/TUI 自动退出：修复 `AliceTuiLauncher.run()` 中 EOF 被错误视为退出信号的问题。EOF 不再触发退出，TUI 仅通过 `/exit` 命令、`Ctrl+Q` 或 `F10` 退出。
+- alice-facade-tui/重绘布局：根据 `docs/alice-facade-tui/DESIGN.md` §7.1 布局规范重写 UI 渲染。新增 box-drawing 边框（`┌─┐│└─┘`），Header 改为单行 `┌─ title ─ Model ─ Status ─┐`，Chat/Thought 面板使用完整边框，Input 区改为 `┌> ` 提示符，移除多余的 StatusComponent。
+- alice-facade-tui/状态栏移除：删除已废弃的 `StatusComponent`，状态信息合并至 Header 组件显示。
+- alice-facade-tui/双重关闭：修复 `AliceTuiLauncher.shutdown()` 被 `run()` finally 块和 `close()` 重复调用的问题，新增 `shutdown` 守卫标志。
+- alice-facade-tui/Escape 键：修复按下 Escape 键导致 TUI 立即退出的问题，改为仅清空输入框内容。
+- alice-facade-tui/无用导入清理：移除 `AliceTuiLauncher` 中未使用的 `AgentContext`、`Action`、`StepResult`、`EnvEvent`、`TimeUnit` 导入。
 
 ## 20260505
 

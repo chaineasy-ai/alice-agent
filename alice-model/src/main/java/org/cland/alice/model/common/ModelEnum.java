@@ -21,6 +21,9 @@ public enum ModelEnum {
     GEMINI_2_0_FLASH("gemini-2.0-flash", "google", Capability.ALL, 0.10, 0.40),
     GEMINI_2_0_PRO("gemini-2.0-pro", "google", Capability.ALL, 1.25, 5.00),
 
+    // ======== Gemma 4 (Local, OpenAI-compatible) ========
+    GEMMA_4("gemma-4", "gemma4", Capability.ALL, 0.0, 0.0),
+
     // ======== DeepSeek ========
     DEEPSEEK_V3("deepseek-chat", "deepseek", Capability.FC, 0.27, 1.10),
     DEEPSEEK_R1("deepseek-reasoner", "deepseek", Capability.NONE, 0.55, 2.19),

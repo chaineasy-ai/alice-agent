@@ -1,0 +1,58 @@
+### Probe Gemma4 Model - Simple Chat (No Tools)
+# @name SimpleChat
+POST http://192.168.1.14:10303/v1/chat/completions
+Content-Type: application/json
+
+{
+    "model": "gemma-4",
+    "messages": [
+        {"role": "user", "content": "Say 'Hello from Gemma4' in one sentence."}
+    ],
+    "temperature": 0.7,
+    "max_tokens": 100
+}
+
+### Probe Gemma4 Model - With Tool/Function Calling
+# @name ToolCalling
+POST http://192.168.1.14:10303/v1/chat/completions
+Content-Type: application/json
+
+{
+    "model": "gemma-4",
+    "messages": [
+        {"role": "user", "content": "帮我查一下今天北京的天气"}
+    ],
+    "tools": [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "查询指定城市的天气",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "city": {"type": "string", "description": "城市名称，例如：北京"},
+                        "date": {"type": "string", "description": "查询日期，格式：YYYY-MM-DD"}
+                    },
+                    "required": ["city", "date"]
+                }
+            }
+        }
+    ],
+    "tool_choice": "auto",
+    "max_tokens": 500
+}
+
+### Probe Gemma4 Model - Streaming Test
+# @name Streaming
+POST http://192.168.1.14:10303/v1/chat/completions
+Content-Type: application/json
+
+{
+    "model": "gemma-4",
+    "messages": [
+        {"role": "user", "content": "Count from 1 to 5."}
+    ],
+    "stream": true,
+    "max_tokens": 100
+}

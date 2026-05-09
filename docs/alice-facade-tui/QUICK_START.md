@@ -1,0 +1,1 @@
+./app/build/install/alice-agent/bin/alice-agent --tui
