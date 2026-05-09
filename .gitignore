@@ -38,3 +38,4 @@ alice-core-agent/build
 alice-model/build
 alice-facade-cmd/build
 alice-facade-tui/build
+build

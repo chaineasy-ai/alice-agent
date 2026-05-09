@@ -1,5 +1,27 @@
+plugins {
+    id 'java'
+    id "com.diffplug.spotless" version "6.25.0" apply false
+}
 // 放在根目录 build.gradle 的最外层或 subprojects 块中
 subprojects {
+    // 只给 Java 子模块生效
+    apply plugin: 'java'
+    apply plugin: "com.diffplug.spotless"
+
+    spotless {
+        java {
+            // 就是这个！和你 pom.xml 里的 1.28.0 完全相同
+            googleJavaFormat('1.28.0')
+
+            // 格式化所有 Java 文件
+            target 'src/**/*.java'
+        }
+    }
+
+    tasks.withType(JavaCompile) {
+        dependsOn spotlessApply
+    }
+
     // 针对 application 插件生成的特殊复制规范进行拦截
     tasks.withType(Copy).configureEach {
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE

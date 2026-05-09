@@ -8,6 +8,12 @@ See [project.tree](./project.tree) for the full project structure (sourced from 
 1. Add any dependencies to build.gradle.
 2. Add logic to AliceAgent.java.
 
+## Format
+Format java code:
+```
+./gradlew spotlessApply
+```
+
 ## Run Tests
 You can run tests with:
 ```
