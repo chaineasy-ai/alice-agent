@@ -7,10 +7,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 思考流面板组件，对应设计文档 §7.1 布局中右侧的 Thought Stream 区域。
+ * 思考流面板组件。
  * <p>
- * 实时展示 Agent 的思考过程（Thought Chain），
- * 包含推理步骤编号、动作描述等信息。
+ * 实时展示 Agent 的思考过程。
+ * 边框和分隔线由 {@link org.cland.alice.facade.tui.ScreenManager} 统一绘制，
+ * 本组件只负责绘制内容区域。
  */
 public class ThoughtComponent extends Component {
 
@@ -42,20 +43,6 @@ public class ThoughtComponent extends Component {
         markDirty();
     }
 
-    /** @deprecated 使用 {@link #addThought(String, int)} */
-    @Deprecated
-    public void updateThought(String thought) {
-        if (!thoughts.isEmpty()) {
-            int lastIdx = thoughts.size() - 1;
-            ThoughtEntry last = thoughts.get(lastIdx);
-            thoughts.set(lastIdx, new ThoughtEntry(last.step(), thought));
-        } else {
-            thoughts.add(new ThoughtEntry(1, thought));
-        }
-        scrollToBottom();
-        markDirty();
-    }
-
     /**
      * 追加动作执行记录。
      *
@@ -65,7 +52,7 @@ public class ThoughtComponent extends Component {
         if (thoughts.size() >= MAX_THOUGHTS) {
             thoughts.remove(0);
         }
-        thoughts.add(new ThoughtEntry(-1, "⚡ " + actionDescription));
+        thoughts.add(new ThoughtEntry(-1, "\u26A1 " + actionDescription));
         scrollToBottom();
         markDirty();
     }
@@ -79,7 +66,7 @@ public class ThoughtComponent extends Component {
         if (thoughts.size() >= MAX_THOUGHTS) {
             thoughts.remove(0);
         }
-        thoughts.add(new ThoughtEntry(-1, "◉ " + observation));
+        thoughts.add(new ThoughtEntry(-1, "\u25C9 " + observation));
         scrollToBottom();
         markDirty();
     }
@@ -100,8 +87,8 @@ public class ThoughtComponent extends Component {
     }
 
     public void scrollDown() {
-        int totalLines = calculateTotalLines();
-        int visibleLines = height > 0 ? height : 1;
+        int totalLines = calculateContentLines();
+        int visibleLines = height;
         int maxOffset = Math.max(0, totalLines - visibleLines);
         if (scrollOffset < maxOffset) {
             scrollOffset++;
@@ -110,22 +97,22 @@ public class ThoughtComponent extends Component {
     }
 
     public void scrollToBottom() {
-        int totalLines = calculateTotalLines();
-        int visibleLines = height > 0 ? height : 1;
+        int totalLines = calculateContentLines();
+        int visibleLines = height;
         scrollOffset = Math.max(0, totalLines - visibleLines);
         markDirty();
     }
 
     public void pageUp() {
-        int pageSize = Math.max(1, height - 3);
+        int pageSize = Math.max(1, height - 1);
         scrollOffset = Math.max(0, scrollOffset - pageSize);
         markDirty();
     }
 
     public void pageDown() {
-        int totalLines = calculateTotalLines();
-        int visibleLines = height > 0 ? height : 1;
-        int pageSize = Math.max(1, height - 3);
+        int totalLines = calculateContentLines();
+        int visibleLines = height;
+        int pageSize = Math.max(1, height - 1);
         scrollOffset = Math.min(Math.max(0, totalLines - visibleLines), scrollOffset + pageSize);
         markDirty();
     }
@@ -136,57 +123,38 @@ public class ThoughtComponent extends Component {
     public void draw(TextGraphics g) {
         if (!visible || width <= 0 || height <= 0) return;
 
-        // 清空区域
+        // 清空内容区域
         for (int r = 0; r < height; r++) {
             for (int c = 0; c < width; c++) {
                 g.setCharacter(col + c, row + r, ' ');
             }
         }
 
-        // 标题
-        g.setForegroundColor(TextColor.ANSI.GREEN);
-        String titleText = " [Thought Stream] ";
-        int titleX = col + 2;
-        for (int i = 0; i < titleText.length() && titleX + i < col + width; i++) {
-            g.setCharacter(titleX + i, row, titleText.charAt(i));
-        }
-
-        // 分隔线
-        if (height > 1) {
-            g.setForegroundColor(TextColor.ANSI.WHITE);
-            for (int c = 0; c < width; c++) {
-                g.setCharacter(col + c, row + 1, '─');
-            }
-        }
-
         // 内容绘制
         List<String> renderedLines = renderThoughts();
-        int contentStartRow = row + 2;
-        int maxContentRows = height - 3;
 
         int startLine = scrollOffset;
-        for (int i = 0; i < maxContentRows; i++) {
+        for (int i = 0; i < height; i++) {
             int lineIdx = startLine + i;
             if (lineIdx >= renderedLines.size()) break;
 
             String line = renderedLines.get(lineIdx);
-            int y = contentStartRow + i;
-            if (y >= row + height - 1) break;
-
-            // 根据前缀颜色
-            if (line.startsWith("⚡ ")) {
-                g.setForegroundColor(TextColor.ANSI.YELLOW);
-            } else if (line.startsWith("◉ ")) {
-                g.setForegroundColor(TextColor.ANSI.MAGENTA);
-            } else {
-                g.setForegroundColor(TextColor.ANSI.WHITE);
-            }
-
             if (line.length() > width) {
                 line = line.substring(0, width);
             }
+
+            // 根据前缀着色
+            g.setForegroundColor(TextColor.ANSI.WHITE);
+            if (line.startsWith("\u26A1 ")) {
+                g.setForegroundColor(TextColor.ANSI.YELLOW);
+            } else if (line.startsWith("\u25C9 ")) {
+                g.setForegroundColor(TextColor.ANSI.MAGENTA);
+            } else if (line.matches("^\\[\\d+\\].*")) {
+                g.setForegroundColor(TextColor.ANSI.GREEN);
+            }
+
             for (int c = 0; c < line.length(); c++) {
-                g.setCharacter(col + c, y, line.charAt(c));
+                g.setCharacter(col + c, row + i, line.charAt(c));
             }
         }
 
@@ -211,7 +179,7 @@ public class ThoughtComponent extends Component {
         return lines;
     }
 
-    private int calculateTotalLines() {
+    private int calculateContentLines() {
         return renderThoughts().size();
     }
 

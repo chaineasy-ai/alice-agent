@@ -3,7 +3,6 @@ package org.cland.alice.facade.tui;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.googlecode.lanterna.TerminalSize;
-import com.googlecode.lanterna.TextCharacter;
 import com.googlecode.lanterna.graphics.TextGraphics;
 import com.googlecode.lanterna.screen.Screen;
 import com.googlecode.lanterna.screen.TerminalScreen;
@@ -88,7 +87,7 @@ public class ScreenManager implements AutoCloseable {
         this.eventBridge = eventBridge;
 
         DefaultTerminalFactory factory = new DefaultTerminalFactory();
-        factory.setForceTextTerminal(true);  // 确保在 IDE 中也使用文本终端
+        factory.setForceTextTerminal(true);
         this.terminal = factory.createTerminal();
         this.screen = new TerminalScreen(terminal);
         this.graphics = screen.newTextGraphics();
@@ -97,11 +96,10 @@ public class ScreenManager implements AutoCloseable {
         HeaderComponent header = new HeaderComponent();
         ChatComponent chat = new ChatComponent();
         ThoughtComponent thought = new ThoughtComponent();
-        StatusComponent status = new StatusComponent();
         InputComponent input = new InputComponent();
         FooterComponent footer = new FooterComponent();
 
-        this.layout = new TuiLayout(header, chat, thought, status, input, footer);
+        this.layout = new TuiLayout(header, chat, thought, input, footer);
         this.state = new TuiState();
         this.commandHandler = new CommandHandler(eventBridge);
         this.running = new AtomicBoolean(true);
@@ -132,7 +130,7 @@ public class ScreenManager implements AutoCloseable {
     /** 启动 TUI */
     public void start() throws IOException {
         screen.startScreen();
-        screen.setCursorPosition(null); // 隐藏默认光标
+        screen.setCursorPosition(null);
         layout.recalculate(terminal.getTerminalSize().getColumns(),
             terminal.getTerminalSize().getRows());
         renderThread.start();
@@ -149,12 +147,10 @@ public class ScreenManager implements AutoCloseable {
             switch (event) {
                 case TuiEvent.StartThinking e -> {
                     layout.header().setStatus("Thinking...");
-                    layout.status().setStatus("Thinking...");
                     layout.chat().addMessage("Agent", "思考中: " + e.prompt());
                 }
                 case TuiEvent.NewThought e -> {
                     layout.thought().addThought(e.thought(), e.step());
-                    layout.status().setIteration(e.step());
                 }
                 case TuiEvent.ActionExecuting e -> {
                     String desc = e.action().type().name()
@@ -170,18 +166,16 @@ public class ScreenManager implements AutoCloseable {
                 }
                 case TuiEvent.TaskComplete e -> {
                     layout.header().setStatus("Complete");
-                    layout.status().setStatus("Complete");
                     layout.chat().addMessage("Agent", e.result());
                     state.transitionTo(TuiState.State.IDLE);
                 }
                 case TuiEvent.TaskError e -> {
                     layout.header().setStatus("Error");
-                    layout.status().setStatus("Error");
                     layout.chat().addMessage("System", "错误: " + e.errorMessage());
                     state.transitionTo(TuiState.State.ERROR);
                 }
                 case TuiEvent.TokenUpdate e -> {
-                    layout.status().updateStats(e.tokenCount(), e.status());
+                    // Token 信息：后续可扩展显示
                 }
                 default -> {}
             }
@@ -195,9 +189,6 @@ public class ScreenManager implements AutoCloseable {
                 layout.thought().clear();
                 state.transitionTo(TuiState.State.IDLE);
                 layout.header().setStatus("Idle");
-                layout.status().setStatus("Idle");
-                layout.status().setIteration(0);
-                layout.status().setTokenCount(0);
             })
             .onClear(() -> {
                 layout.chat().clearMessages();
@@ -207,7 +198,6 @@ public class ScreenManager implements AutoCloseable {
                 if (onExit != null) onExit.run();
             })
             .onCommandOutput(output -> {
-                // 命令输出自动传给 Agent 作为上下文
                 if (onTaskSubmit != null) {
                     onTaskSubmit.accept(output);
                 }
@@ -260,10 +250,9 @@ public class ScreenManager implements AutoCloseable {
         switch (keyStroke.getKeyType()) {
             // ===== 退出 =====
             case EOF:
+                return true;
+
             case Escape:
-                if (focusTarget == FocusTarget.INPUT && layout.input().getText().isEmpty()) {
-                    return false; // 退出
-                }
                 layout.input().clear();
                 return true;
 
@@ -273,7 +262,6 @@ public class ScreenManager implements AutoCloseable {
                 return true;
 
             case F5:
-                // 停止当前任务
                 if (state.isRunning()) {
                     layout.chat().addMessage("System", "正在停止当前任务...");
                     state.transitionTo(TuiState.State.INTERVENE);
@@ -374,7 +362,7 @@ public class ScreenManager implements AutoCloseable {
                 if (ch == 0) return true;
 
                 // Ctrl+Q -> 退出
-                if (ch == 0x11) { // Ctrl+Q
+                if (ch == 0x11) {
                     return false;
                 }
 
@@ -421,7 +409,6 @@ public class ScreenManager implements AutoCloseable {
         layout.chat().addMessage("User", input);
         state.transitionTo(TuiState.State.RUNNING);
         layout.header().setStatus("Running");
-        layout.status().setStatus("Running");
 
         if (onTaskSubmit != null) {
             onTaskSubmit.accept(input);

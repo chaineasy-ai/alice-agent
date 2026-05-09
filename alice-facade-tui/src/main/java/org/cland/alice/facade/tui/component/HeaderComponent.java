@@ -4,16 +4,14 @@ import com.googlecode.lanterna.graphics.TextGraphics;
 import com.googlecode.lanterna.TextColor;
 
 /**
- * 顶部标题栏组件，对应设计文档 §7.1 布局中的 Header 区域。
+ * 顶部标题栏组件。
  * <p>
- * 显示：Agent 版本、当前模型、运行状态。
- * <pre>
- * [Alice Agent v1.0] | Model: GPT-4o | Status: Thinking...
- * </pre>
+ * 显示在整体边框的顶部，单行显示 Agent 版本、当前模型、运行状态。
+ * 边框由 {@link org.cland.alice.facade.tui.ScreenManager} 统一绘制。
  */
 public class HeaderComponent extends Component {
 
-    private static final String DEFAULT_TITLE = "Alice Agent v1.0";
+    private static final String DEFAULT_TITLE = " Alice Agent v1.0 ";
 
     private String title;
     private String modelId;
@@ -43,6 +41,10 @@ public class HeaderComponent extends Component {
         markDirty();
     }
 
+    public String title()   { return title; }
+    public String modelId() { return modelId; }
+    public String status()  { return status; }
+
     // ========== 绘制 ==========
 
     @Override
@@ -51,29 +53,29 @@ public class HeaderComponent extends Component {
 
         // 背景填充
         g.setBackgroundColor(TextColor.ANSI.BLUE);
-        for (int r = 0; r < height; r++) {
-            for (int c = 0; c < width; c++) {
-                g.setCharacter(col + c, row + r, ' ');
-            }
+        for (int c = 0; c < width; c++) {
+            g.setCharacter(col + c, row, ' ');
         }
+
         g.setForegroundColor(TextColor.ANSI.WHITE);
 
-        // 标题（居中或左对齐）
-        String leftText = "[" + title + "]";
-        String midText = "Model: " + modelId;
-        String rightText = "Status: " + status;
+        // 内容：在边框内部绘制标题信息
+        // 边框占了 col 0 和 col width-1，内容从 col+1 开始，到 col+width-2
+        // 格式： Alice Agent v1.0 ── Model: xxx ── Status: yyy
+        String text = title
+            + " ── Model: " + modelId
+            + " ── Status: " + status;
 
-        // 清空行
-        int y = row;
-        StringBuilder line = new StringBuilder();
-        line.append(leftText).append("  |  ").append(midText).append("  |  ").append(rightText);
+        int contentStart = col + 2; // 跳过 ┌ 和 ─
+        int contentEnd = col + width - 2; // 跳过 ─ 和 ┐
+        int maxLen = contentEnd - contentStart + 1;
 
-        String display = line.toString();
-        if (display.length() > width) {
-            display = display.substring(0, width);
+        if (text.length() > maxLen) {
+            text = text.substring(0, maxLen);
         }
-        for (int i = 0; i < display.length(); i++) {
-            g.setCharacter(col + i, y, display.charAt(i));
+
+        for (int i = 0; i < text.length(); i++) {
+            g.setCharacter(contentStart + i, row, text.charAt(i));
         }
 
         clearDirty();

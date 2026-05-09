@@ -4,9 +4,11 @@ import com.googlecode.lanterna.graphics.TextGraphics;
 import com.googlecode.lanterna.TextColor;
 
 /**
- * 输入框组件，对应设计文档 §7.1 布局中的 Input 区域。
+ * 输入框组件。
  * <p>
  * 支持文本输入、光标显示、历史浏览。
+ * 边框由 {@link org.cland.alice.facade.tui.ScreenManager} 统一绘制，
+ * 本组件只负责绘制输入内容和光标。
  */
 public class InputComponent extends Component {
 
@@ -118,38 +120,37 @@ public class InputComponent extends Component {
         if (!visible || width <= 0 || height <= 0) return;
 
         // 填充背景
-        g.setBackgroundColor(focused ? TextColor.ANSI.BLACK : TextColor.ANSI.DEFAULT);
         for (int r = 0; r < height; r++) {
             for (int c = 0; c < width; c++) {
                 g.setCharacter(col + c, row + r, ' ');
             }
         }
 
-        // 前缀
+        // 在最左侧显示提示符
+        String prompt = focused ? "> " : "  ";
         g.setForegroundColor(TextColor.ANSI.GREEN);
-        String prefix = focused ? "[Input]: " : "[Input]: ";
-        int inputAreaWidth = width - prefix.length();
-
-        // 绘制前缀
-        for (int i = 0; i < prefix.length() && i < width; i++) {
-            g.setCharacter(col + i, row, prefix.charAt(i));
+        for (int i = 0; i < prompt.length() && i < width; i++) {
+            g.setCharacter(col + i, row, prompt.charAt(i));
         }
 
-        // 绘制输入文本
+        // 输入文本
+        int promptLen = prompt.length();
+        int inputAreaWidth = width - promptLen;
+
         g.setForegroundColor(TextColor.ANSI.WHITE);
         String displayText = inputBuffer.toString();
         if (displayText.length() > inputAreaWidth) {
             displayText = displayText.substring(displayText.length() - inputAreaWidth);
         }
         for (int i = 0; i < displayText.length() && i < inputAreaWidth; i++) {
-            g.setCharacter(col + prefix.length() + i, row, displayText.charAt(i));
+            g.setCharacter(col + promptLen + i, row, displayText.charAt(i));
         }
 
         // 绘制光标（在 focused 时显示）
         if (focused) {
             int cursorDisplayPos = Math.min(cursorPos, inputAreaWidth - 1);
             if (cursorDisplayPos >= 0) {
-                int cursorX = col + prefix.length() + cursorDisplayPos;
+                int cursorX = col + promptLen + cursorDisplayPos;
                 if (cursorX < col + width) {
                     g.setBackgroundColor(TextColor.ANSI.WHITE);
                     g.setForegroundColor(TextColor.ANSI.BLACK);

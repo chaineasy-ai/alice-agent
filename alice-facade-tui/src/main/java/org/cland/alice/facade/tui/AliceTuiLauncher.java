@@ -7,17 +7,12 @@ import com.googlecode.lanterna.input.KeyType;
 
 import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
-import org.cland.alice.core.agent.AgentContext;
-import org.cland.alice.core.agent.lifecycle.Action;
-import org.cland.alice.core.agent.result.StepResult;
-import org.cland.alice.env.adapter.EnvEvent;
 import org.cland.alice.facade.tui.bridge.EventBridge;
 import org.cland.alice.facade.tui.bridge.TuiEvent;
 import org.cland.alice.facade.tui.state.TuiState;
 
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 
 /**
  * AliceTuiLauncher：TUI 外观模块的入口启动器。
@@ -38,6 +33,7 @@ public class AliceTuiLauncher implements AutoCloseable {
     private final ScreenManager screenManager;
 
     private volatile boolean running;
+    private volatile boolean shutdown;
 
     // ========== 构造 ==========
 
@@ -119,6 +115,7 @@ public class AliceTuiLauncher implements AutoCloseable {
      * 运行主事件循环。
      * <p>
      * 对应设计文档 §4 业务流程中的主事件循环。
+     * 仅通过 /exit 命令或 Ctrl+Q / F10 退出。
      */
     public void run() {
         logger.info("Alice Agent TUI entering main loop.");
@@ -133,7 +130,13 @@ public class AliceTuiLauncher implements AutoCloseable {
                     continue;
                 }
 
-                // 处理输入
+                // EOF 完全忽略，不触发退出（仅 /exit 命令可退出）
+                if (keyStroke.getKeyType() == KeyType.EOF) {
+                    Thread.sleep(100);
+                    continue;
+                }
+
+                // 处理输入，返回 false 表示退出（Ctrl+Q, F10, /exit 命令）
                 boolean shouldContinue = screenManager.handleInput(keyStroke);
                 if (!shouldContinue) {
         logger.info("Exit requested via keyboard.");
@@ -180,6 +183,8 @@ public class AliceTuiLauncher implements AutoCloseable {
     // ========== 关闭 ==========
 
     private void shutdown() {
+        if (shutdown) return;
+        shutdown = true;
         logger.info("Shutting down Alice Agent TUI...");
         try {
             screenManager.close();

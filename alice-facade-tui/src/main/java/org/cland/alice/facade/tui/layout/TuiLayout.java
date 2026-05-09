@@ -5,58 +5,78 @@ import org.cland.alice.facade.tui.component.*;
 import java.util.List;
 
 /**
- * TUI 布局管理器，对应设计文档 §7.1 的布局设计。
+ * TUI 布局管理器。
  * <p>
  * 负责计算各组件在终端屏幕中的位置与大小，并在终端尺寸变化时重新布局。
  * <p>
  * 布局结构：
  * <pre>
- * +-----------------------------------------------------------+
- * | [Alice Agent v1.0] | Model: GPT-4o | Status: Thinking...  |  <- Header (3行)
- * +---------------------------+-------------------------------+
- * |                           | [Thought Stream]              |
- * | [Chat History]            | ...                           |
- * | ...                       |                               |
- * +---------------------------+-------------------------------+
- * | Iter: 5 | Tokens: 1024 | Status: Running                  |  <- Status (2行)
- * +-----------------------------------------------------------+
- * | [Input]: /exec ls -la_____________________________________|  <- Input (1行)
- * +-----------------------------------------------------------+
- * | F1:Help | F5:Stop | Tab:Focus | Ctrl+Q:Quit               |  <- Footer (1行)
- * +-----------------------------------------------------------+
+ * ┌─ Alice Agent v1.0 ── Model: gpt-4o-mini ── Status: Idle ────────────┐  (Header, 1行)
+ * │                                                                      │  (Header padding, 1行)
+ * ├─ Chat History ────────────┬─ Thought Stream ────────────────────────┤  (Title divider, 1行)
+ * │ User: hello               │ [1]> Analyzing...                       │  (Content, 可变)
+ * │ Agent: Hi!                │ ⚡ Execute search                        │
+ * ├───────────────────────────┴─────────────────────────────────────────┤  (Input divider, 1行)
+ * │ > /exec ls -la                                                       │  (Input, 1行)
+ * ├─────────────────────────────────────────────────────────────────────┤  (Footer divider, 1行)
+ * │ F1:Help | F5:Stop | Tab:Focus | PgUp/PgDn | /help | Ctrl+Q:Quit     │  (Footer, 1行)
+ * └─────────────────────────────────────────────────────────────────────┘  (Bottom border, 1行)
  * </pre>
  */
 public class TuiLayout {
 
     /** 各行高度常量 */
-    public static final int HEADER_HEIGHT = 2;
-    public static final int STATUS_HEIGHT = 2;
+    public static final int HEADER_HEIGHT = 1;
+    public static final int HEADER_PADDING_HEIGHT = 1;
+    public static final int TITLE_DIVIDER_HEIGHT = 1;
+    public static final int INPUT_DIVIDER_HEIGHT = 1;
     public static final int INPUT_HEIGHT = 1;
+    public static final int FOOTER_DIVIDER_HEIGHT = 1;
     public static final int FOOTER_HEIGHT = 1;
-    public static final int MIN_CONTENT_HEIGHT = 10;
+    public static final int BOTTOM_BORDER_HEIGHT = 1;
+
+    public static final int MIN_CONTENT_HEIGHT = 3;
 
     private final HeaderComponent header;
     private final ChatComponent chat;
     private final ThoughtComponent thought;
-    private final StatusComponent status;
     private final InputComponent input;
     private final FooterComponent footer;
+
+    /** 边框字符 */
+    static final char BOX_TOP_LEFT = '┌';
+    static final char BOX_TOP_RIGHT = '┐';
+    static final char BOX_BOTTOM_LEFT = '└';
+    static final char BOX_BOTTOM_RIGHT = '┘';
+    static final char BOX_HORIZONTAL = '─';
+    static final char BOX_VERTICAL = '│';
+    static final char BOX_TITLE_LEFT = '├';
+    static final char BOX_TITLE_RIGHT = '┤';
+    static final char BOX_TITLE_CROSS = '┼';
+    static final char BOX_TITLE_DOWN = '┬';
+    static final char BOX_TITLE_UP = '┴';
 
     /** 当前终端尺寸 */
     private int terminalWidth;
     private int terminalHeight;
 
+    /** 各区域的起始行与高度 */
+    private int contentStartRow;
+    private int contentHeight;
+    private int inputStartRow;
+    private int footerStartRow;
+    private int chatWidth;
+    private int thoughtWidth;
+
     public TuiLayout(
             HeaderComponent header,
             ChatComponent chat,
             ThoughtComponent thought,
-            StatusComponent status,
             InputComponent input,
             FooterComponent footer) {
         this.header = header;
         this.chat = chat;
         this.thought = thought;
-        this.status = status;
         this.input = input;
         this.footer = footer;
     }
@@ -66,42 +86,96 @@ public class TuiLayout {
      * 通常在终端 resize 时调用。
      */
     public void recalculate(int terminalWidth, int terminalHeight) {
+        // 确保最小尺寸
         this.terminalWidth = Math.max(terminalWidth, 60);
         this.terminalHeight = Math.max(terminalHeight, MIN_CONTENT_HEIGHT
-            + HEADER_HEIGHT + STATUS_HEIGHT + INPUT_HEIGHT + FOOTER_HEIGHT);
+            + HEADER_HEIGHT + HEADER_PADDING_HEIGHT + TITLE_DIVIDER_HEIGHT
+            + INPUT_DIVIDER_HEIGHT + INPUT_HEIGHT
+            + FOOTER_DIVIDER_HEIGHT + FOOTER_HEIGHT + BOTTOM_BORDER_HEIGHT);
 
-        int totalFixedHeight = HEADER_HEIGHT + STATUS_HEIGHT + INPUT_HEIGHT + FOOTER_HEIGHT;
-        int contentHeight = this.terminalHeight - totalFixedHeight;
+        int fixedNonContent = HEADER_HEIGHT + HEADER_PADDING_HEIGHT + TITLE_DIVIDER_HEIGHT
+            + INPUT_DIVIDER_HEIGHT + INPUT_HEIGHT
+            + FOOTER_DIVIDER_HEIGHT + FOOTER_HEIGHT + BOTTOM_BORDER_HEIGHT;
 
-        // Header: row=0, col=0, width=terminalWidth, height=HEADER_HEIGHT
-        header.setBounds(0, 0, this.terminalWidth, HEADER_HEIGHT);
+        contentHeight = this.terminalHeight - fixedNonContent;
 
-        // 内容区域分为左右两列（默认 50%/50%）
-        int chatWidth = this.terminalWidth / 2;
-        int thoughtWidth = this.terminalWidth - chatWidth;
+        // 计算各行起始位置
+        int currentRow = 0;
+        // Header: row 0
+        header.setBounds(currentRow, 0, this.terminalWidth, HEADER_HEIGHT);
 
-        // Chat (左列)
-        int chatStartRow = HEADER_HEIGHT;
-        chat.setBounds(chatStartRow, 0, chatWidth, contentHeight);
+        // Header padding: invisible spacer row
+        currentRow += HEADER_HEIGHT + HEADER_PADDING_HEIGHT;
 
-        // Thought Stream (右列)
-        int thoughtStartRow = HEADER_HEIGHT;
-        thought.setBounds(thoughtStartRow, chatWidth, thoughtWidth, contentHeight);
+        // Title divider row: ├─ Chat ──┬─ Thought ─┤
+        contentStartRow = currentRow + TITLE_DIVIDER_HEIGHT;
 
-        // Status (状态栏)
-        int statusStartRow = HEADER_HEIGHT + contentHeight;
-        status.setBounds(statusStartRow, 0, this.terminalWidth, STATUS_HEIGHT);
+        // 内容区域分为左右两列（50%/50%）
+        chatWidth = this.terminalWidth / 2;
+        thoughtWidth = this.terminalWidth - chatWidth;
 
-        // Input (输入框)
-        int inputStartRow = HEADER_HEIGHT + contentHeight + STATUS_HEIGHT;
-        input.setBounds(inputStartRow, 0, this.terminalWidth, INPUT_HEIGHT);
+        // Chat (左列) 和 Thought (右列)：从 contentStartRow 开始
+        chat.setBounds(contentStartRow, 0, chatWidth, contentHeight);
+        thought.setBounds(contentStartRow, chatWidth, thoughtWidth, contentHeight);
 
-        // Footer
-        int footerStartRow = HEADER_HEIGHT + contentHeight + STATUS_HEIGHT + INPUT_HEIGHT;
-        footer.setBounds(footerStartRow, 0, this.terminalWidth, FOOTER_HEIGHT);
+        // Input 分隔行
+        inputStartRow = contentStartRow + contentHeight;
+        currentRow = inputStartRow + INPUT_DIVIDER_HEIGHT;
+
+        // Input 行
+        input.setBounds(currentRow, 0, this.terminalWidth, INPUT_HEIGHT);
+
+        // Footer 分隔行
+        footerStartRow = currentRow + INPUT_HEIGHT;
+        currentRow = footerStartRow + FOOTER_DIVIDER_HEIGHT;
+
+        // Footer 行
+        footer.setBounds(currentRow, 0, this.terminalWidth, FOOTER_HEIGHT);
 
         // 标记所有组件为脏
         markAllDirty();
+    }
+
+    // ========== 布局信息查询 ==========
+
+    /** 获取内容区域起始行（边框之后的第一行） */
+    public int contentStartRow() {
+        return contentStartRow;
+    }
+
+    /** 获取内容区域高度 */
+    public int contentHeight() {
+        return contentHeight;
+    }
+
+    /** 获取输入区域起始行 */
+    public int inputStartRow() {
+        return inputStartRow;
+    }
+
+    /** 获取输入分隔行 */
+    public int inputDividerRow() {
+        return inputStartRow;
+    }
+
+    /** 获取 Footer 分隔行 */
+    public int footerDividerRow() {
+        return footerStartRow + INPUT_HEIGHT;
+    }
+
+    /** 获取最后一个绘制行 */
+    public int lastRow() {
+        return footerStartRow + FOOTER_DIVIDER_HEIGHT + FOOTER_HEIGHT + BOTTOM_BORDER_HEIGHT - 1;
+    }
+
+    /** 获取 Chat 面板宽度 */
+    public int chatWidth() {
+        return chatWidth;
+    }
+
+    /** 获取 Thought 面板宽度 */
+    public int thoughtWidth() {
+        return thoughtWidth;
     }
 
     /** 标记所有组件为需要重绘 */
@@ -109,14 +183,13 @@ public class TuiLayout {
         header.markDirty();
         chat.markDirty();
         thought.markDirty();
-        status.markDirty();
         input.markDirty();
         footer.markDirty();
     }
 
     /** 获取所有需要绘制的可见组件 */
     public List<Component> getComponents() {
-        return List.of(header, chat, thought, status, input, footer);
+        return List.of(header, chat, thought, input, footer);
     }
 
     // ========== Getters ==========
@@ -124,7 +197,6 @@ public class TuiLayout {
     public HeaderComponent header()    { return header; }
     public ChatComponent chat()        { return chat; }
     public ThoughtComponent thought()  { return thought; }
-    public StatusComponent status()    { return status; }
     public InputComponent input()      { return input; }
     public FooterComponent footer()    { return footer; }
 
