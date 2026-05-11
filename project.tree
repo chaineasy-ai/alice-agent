@@ -184,7 +184,6 @@
 │    │  │            │  ├── FooterComponent.java
 │    │  │            │  ├── HeaderComponent.java
 │    │  │            │  ├── InputComponent.java
-│    │  │            │  ├── StatusComponent.java
 │    │  │            │  └── ThoughtComponent.java
 │    │  │            ├── layout
 │    │  │            │  └── TuiLayout.java
@@ -286,6 +285,7 @@
 │    │  │          ├── ModelProvider.java
 │    │  │          ├── ModelSupplier.java
 │    │  │          └── supplier
+│    │  │            ├── Gemma4Supplier.java
 │    │  │            └── OpenAiSupplier.java
 │    │  └── resources
 │    └── test
@@ -365,6 +365,9 @@
 │      └── resources
 ├── app
 │  ├── build.gradle
+│  ├── logs
+│  │  ├── alice-agent-2026-05-06.log
+│  │  └── alice-agent.log
 │  └── src
 │    ├── main
 │    │  ├── java
@@ -377,6 +380,7 @@
 │    │  │          ├── AliceApp.java
 │    │  │          └── FacadeSelector.java
 │    │  └── resources
+│    │    └── logback.xml
 │    └── test
 │      ├── groovy
 │      │  └── org
@@ -385,6 +389,7 @@
 │      │        └── agent
 │      │          └── AliceAgentSpec.groovy
 │      └── resources
+├── build.gradle
 ├── CHANAGELOG.md
 ├── docs
 │  ├── alice-core-agent
@@ -396,13 +401,18 @@
 │  ├── alice-facade-cmd
 │  │  └── DESIGN.md
 │  ├── alice-facade-tui
-│  │  └── DESIGN.md
+│  │  ├── DESIGN.md
+│  │  └── QUICK_START.md
 │  ├── alice-guardrail
 │  │  └── DESIGN.md
 │  ├── alice-memory-vault
 │  │  └── DESIGN.md
 │  ├── alice-model
 │  │  ├── DESIGN.md
+│  │  ├── models
+│  │  │  └── gemma4
+│  │  │    ├── example_tool.py
+│  │  │    └── gemma4.http
 │  │  └── README.md
 │  ├── alice-tool-gateway
 │  │  └── DESIGN.md
@@ -417,6 +427,7 @@
 ├── gradlew
 ├── gradlew.bat
 ├── LICENSE
+├── logs
 ├── project.tree
 ├── README.md
 └── settings.gradle
