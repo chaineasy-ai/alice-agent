@@ -60,40 +60,37 @@ sequenceDiagram
     participant T as ToolGateway
     participant E as EnvAdapter
 
-    Note over A: 1. Perceive
-    A->>M: fetchContext(sessionId)
-    M-->>A: Long-term + Short-term
-    A->>E: syncState()
+    Note over A: 1. Perceive (感知环境与记忆)
+    A->>M: fetchContext(sessionId) 
+    A->>E: syncState() [cite: 14]
 
-    loop Iteration
-        Note over A: 2. Plan
-        A->>P: proposeNextStep(context)
-        P-->>A: Step(Thought, Action)
+    loop Macro-Iteration (战略调整)
+        Note over A: 2. Plan (生成阶段性目标)
+        A->>P: proposeNextStep(context) [cite: 9]
+        P-->>A: TargetGoal (e.g. "读取并清理文件数据") [cite: 9]
 
         Note over A: 3. Verify (Pre)
-        A->>V: interceptPlan(Action)
-        alt Blocked
-            V-->>A: Reject(Security/Policy)
-            A->>P: requestRevision(Feedback)
-        else Approved
-            V-->>A: Allow
+        A->>V: interceptPlan(TargetGoal) [cite: 31]
+        
+        rect rgb(240, 248, 255)
+        Note right of A: Micro-ReAct Loop (执行态闭环)
+        loop Micro-Iteration (直到目标达成或熔断)
+            Note over A: 4. Act (Reasoning & Action) [cite: 4]
+            A->>T: dispatch(Action) [cite: 15, 45]
+            T->>E: applyEffect() [cite: 14]
             
-            Note over A: 4. Act
-            A->>T: dispatch(Action)
-            T->>E: applyEffect()
-
-            Note over A: 5. Observe
-            E-->>A: RawObservation
-            A->>M: persist(Observation)
-            
-            Note over A: 6. Verify (Post)
-            A->>V: auditResult(Observation)
-            V-->>A: VerificationScore
+            Note over A: 5. Observe [cite: 4]
+            E-->>A: RawObservation [cite: 16]
+            A->>M: updateWorkingMemory(Observation) [cite: 35]
+            Note over A: 根据 Obs 生成下一个微观 Thought/Action 
+        end
         end
 
-        Note over A: 7. Reflect
-        A->>P: evaluate(VerificationScore, Observation)
-        P-->>A: isFinished?
+        Note over A: 6. Verify (Post) [cite: 31]
+        A->>V: auditFinalResult(Observation) [cite: 33]
+        
+        Note over A: 7. Reflect (战略复盘) [cite: 13]
+        A->>P: evaluate(VerificationScore)
     end
 ```
 
@@ -106,12 +103,19 @@ sequenceDiagram
 ```mermaid
 graph TD
     Raw[User Input / Env Signal] -->|Perceive| Structured[AgentContext]
-    Structured -->|Plan| Intent[Action Intent]
-    Intent -->|Verify Pre| SafeIntent[Authorized Action]
-    SafeIntent -->|Act| Effect[Env Side Effect]
-    Effect -->|Observe| RawObs[Raw Observation]
-    RawObs -->|Verify Post| ValidatedObs[Audited Fact]
-    ValidatedObs -->|Reflect| Knowledge[Memory/Result]
+    Structured -->|Plan| StrategicGoal[Sub-Goal / Milestone]
+    StrategicGoal -->|Verify Pre| AuthorizedGoal[Authorized Strategy]
+    
+    subgraph Execution_Session [Tactical ReAction Loop]
+        AuthorizedGoal -->|Reason| MicroIntent[Micro Action]
+        MicroIntent -->|Execute| SideEffect[Env Side Effect]
+        SideEffect -->|Observe| LocalObs[Micro Observation]
+        LocalObs -->|In-loop Update| MicroIntent
+    end
+    
+    LocalObs -->|Session Exit| FinalResult[Cumulative Result]
+    FinalResult -->|Verify Post| AuditedFact[Validated Fact]
+    AuditedFact -->|Reflect| Knowledge[Memory / Experience]
 ```
 
 ---
@@ -121,33 +125,41 @@ graph TD
 引入了 **REVISION** 状态，用于处理当 V 层拦截或执行结果不符合预期时的逻辑修正。
 
 ```text
-       [ START ]
+[ START ]
            |
            v
     +--------------+
-    |  PERCEIVING  | <---------------------------+
-    +--------------+                             |
-           |                                     |
-           v          (Re-Plan / Reflect)        |
-    +--------------+                             |
-    |   PLANNING   | <---------------------+     |
-    +--------------+                       |     |
-           |                               |     |
-           v         (Pre-Verify Fail)     |     |
-    +--------------+ ----------------------+     |
-    |  VERIFYING   |                             |
-    +--------------+ --+                         |
-           |           | (Execution Error)       |
-           v (Pass)    +-------------------------+
-    +--------------+                             |
-    |    ACTING    |                             |
-    +--------------+                             |
-           |                                     |
-           v                                     |
-    +--------------+      (Post-Verify Fail)     |
-    |  OBSERVING   | ----------------------------+
-    +--------------+
-           | (Done)
+    |  PERCEIVING  | <------------------------------------------+
+    +--------------+                                            |
+           |                                                    |
+           v                                                    |
+    +--------------+           (Strategic Re-Plan)              |
+    |   PLANNING   | <---------------------------------------+  |
+    +--------------+                                         |  |
+           |                                                 |  |
+           v                                                 |  |
+    +--------------+         (Pre-Verify Blocked)            |  |
+    |  VERIFYING   | ----------------------------------------+  |
+    +--------------+                                            |
+           | (Pass)                                             |
+           v                                                    |
+    +-------------------------------------------------------+   |
+    |  ACTING (Tactical ReAction Session)                   |   |
+    |                                                       |   |
+    |  +-----------+       +-----------+       +---------+  |   |
+    |  | Reasoning | ----> | Dispatch  | ----> | Observe |  |   |
+    |  +-----------+       +-----------+       +---------+  |   |
+    |        ^                                     |        |   |
+    |        +----------(Micro Loop)---------------+        |   |
+    |                                                       |   |
+    +-------------------------------------------------------+   |
+           |                                                    |
+           | (Sub-Goal Done / Execution Error)                  |
+           v                                                    |
+    +--------------+                                            |
+    |  REFLECTING  | -------------------------------------------+
+    +--------------+        (Post-Verify & Strategy Update)
+           |
            v
        [ FINISH ]
 ```

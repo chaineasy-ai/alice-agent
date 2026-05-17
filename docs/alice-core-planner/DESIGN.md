@@ -14,7 +14,7 @@
 classDiagram
     class PlannerService {
         -StrategySelector selector
-        -ThinkingEngine engine
+        -StaticPlanner staticPlanner
         +plan(AgentContext ctx) Plan
     }
 
@@ -24,29 +24,40 @@ classDiagram
     }
 
     class FastPathStrategy {
+        -ModelSupplier modelSupplier
         +decide(AgentContext ctx) Plan
     }
 
     class SlowPathStrategy {
         -MCTSSearcher searcher
+        -WorldModel worldModel
         +decide(AgentContext ctx) Plan
+    }
+
+    class WorldModel {
+        <<interface>>
+        +predict(State s, Action a) Observation
     }
 
     class ThinkingTree {
         -ThinkingNode root
-        +expand(ThinkingNode parent)
-        +evaluate(ThinkingNode node)
+        +search(int iterations)
     }
 
     class ThinkingNode {
+        -State state
         -Thought thought
         -Action action
-        -Observation observation
-        -double reward
+        -Observation expectedObs
+        -double value
     }
 
     PlannerService o-- DecisionStrategy
+    PlannerService o-- StaticPlanner
+    DecisionStrategy <|.. SlowPathStrategy
+    DecisionStrategy <|.. FastPathStrategy
     SlowPathStrategy *-- ThinkingTree
+    SlowPathStrategy o-- WorldModel
     ThinkingTree *-- ThinkingNode
 ```
 
@@ -62,20 +73,27 @@ classDiagram
 graph TD
     Input[AgentContext] --> Assess{Complexity?}
     
-    subgraph "Fast Path (System 1)"
-        Assess -->|Low| Direct[Template/Direct LLM Call]
-        Direct --> Final[Action/Answer]
+    subgraph "Fast Path (Reactive)"
+        Assess -->|Low| Direct[Direct Reasoning]
+        Direct --> GenPlan[Generate Atomic Plan]
     end
     
-    subgraph "Slow Path (System 2)"
-        Assess -->|High| Root[Root Node Creation]
-        Root --> MCTS[MCTS / Reason-without-Observation]
-        MCTS --> Search[Tree Search & Simulation]
-        Search --> Replan[Refined Plan]
+    subgraph "Slow Path (Deliberative)"
+        Assess -->|High| Root[Root State Node]
+        Root --> Search[MCTS Tree Search]
+        
+        subgraph "Internal Simulation (Virtual ReAct)"
+            Search --> Thought[Predict Thought]
+            Thought --> VAction[Predict Action]
+            VAction --> World[WorldModel: Predict Obs]
+            World --> Thought
+        end
+        
+        Search --> BestPath[Extract Optimal Path]
     end
     
-    Final --> Output[Return Plan to AgentCore]
-    Replan --> Output
+    GenPlan --> Output[Return Plan to AgentCore]
+    BestPath --> Output
 ```
 
 ---
