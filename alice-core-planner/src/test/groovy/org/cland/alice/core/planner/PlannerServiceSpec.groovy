@@ -424,43 +424,26 @@ class PlannerServiceSpec extends Specification {
     }
 
     // ========================================================================
-    // ReAct (Backward Compatibility)
-    // ========================================================================
-
-    def "ReAct should maintain backward compatible proposeNext API"() {
-        given:
-        def react = new ReAct()
-
-        when:
-        def result = react.proposeNext([prompt: "Hello"])
-
-        then:
-        result.containsKey("type")
-        result.containsKey("target")
-        result["type"] == "LLM_INFERENCE" || result["type"] == "FINISH"
-    }
-
-    def "ReAct should return FINISH when result exists"() {
-        given:
-        def react = new ReAct()
-
-        when:
-        def result = react.proposeNext([prompt: "Hello", result: "Done"])
-
-        then:
-        result["type"] == "FINISH"
-    }
-
-    // ========================================================================
     // PlannerService Integration
     // ========================================================================
 
-    def "PlannerService should handle simple prompt"() {
+    def "PlannerService should handle simple prompt via FastPathStrategy"() {
         given:
-        def react = new ReAct()
+        def supplier = Stub(ModelSupplier) {
+            getInstructionModel() >> ModelSession.of("gpt-4o-mini", "test")
+        }
+        def fastPath = new FastPathStrategy(supplier)
+        def slowPath = Stub(DecisionStrategy)
+        def selector = StrategySelector.builder()
+            .fastPath(fastPath)
+            .slowPath(slowPath)
+            .build()
+        def plannerService = PlannerService.builder()
+            .strategySelector(selector)
+            .build()
 
         when:
-        def plan = react.plannerService().plan("Hello")
+        def plan = plannerService.plan([prompt: "Hello"])
 
         then:
         plan != null
@@ -469,10 +452,21 @@ class PlannerServiceSpec extends Specification {
 
     def "PlannerService should finish when result is present"() {
         given:
-        def react = new ReAct()
+        def supplier = Stub(ModelSupplier) {
+            getInstructionModel() >> ModelSession.of("gpt-4o-mini", "test")
+        }
+        def fastPath = new FastPathStrategy(supplier)
+        def slowPath = Stub(DecisionStrategy)
+        def selector = StrategySelector.builder()
+            .fastPath(fastPath)
+            .slowPath(slowPath)
+            .build()
+        def plannerService = PlannerService.builder()
+            .strategySelector(selector)
+            .build()
 
         when:
-        def plan = react.plannerService().plan([prompt: "test", result: "done"])
+        def plan = plannerService.plan([prompt: "test", result: "done"])
 
         then:
         plan.steps().size() == 1

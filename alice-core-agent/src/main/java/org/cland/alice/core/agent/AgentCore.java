@@ -4,7 +4,7 @@ import java.util.Map;
 import org.cland.alice.core.agent.executor.AgentExecutor;
 import org.cland.alice.core.agent.lifecycle.Action;
 import org.cland.alice.core.agent.result.StepResult;
-import org.cland.alice.core.planner.ReAct;
+import org.cland.alice.core.planner.PlannerService;
 import org.cland.alice.env.adapter.EnvEvent;
 import org.cland.alice.guardrail.Verificator;
 import org.cland.alice.memory.AgentSession;
@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory;
  * <p>生命周期状态机参见设计文档：
  *
  * <pre>
- *   START -> PERCEIVING -> PLANNING -> VERIFYING_PRE -> ACTING
+ *   START -> PERCEIVING -> PLANNING -> VERIFYING_PRE -> ACTING (Micro-ReAct)
  *       -> OBSERVING -> VERIFYING_POST -> REFLECTING -> (loop|FINISH)
  * </pre>
  */
@@ -38,7 +38,7 @@ public class AgentCore {
   // ========== 子模块引用 ==========
 
   private AgentExecutor executor;
-  private ReAct planner;
+  private PlannerService plannerService;
   private Verificator guardrail;
   private ToolRegistry toolRegistry;
   private AgentSession memory;
@@ -73,8 +73,9 @@ public class AgentCore {
     return this;
   }
 
-  public AgentCore withPlanner(ReAct planner) {
-    this.planner = planner;
+  /** 注入 {@link PlannerService} — 规划器引擎。 */
+  public AgentCore withPlannerService(PlannerService plannerService) {
+    this.plannerService = plannerService;
     return this;
   }
 
@@ -112,8 +113,9 @@ public class AgentCore {
     return executor;
   }
 
-  public ReAct planner() {
-    return planner;
+  /** 获取 {@link PlannerService} 规划器引擎。 */
+  public PlannerService plannerService() {
+    return plannerService;
   }
 
   public Verificator guardrail() {
@@ -145,7 +147,6 @@ public class AgentCore {
       return true;
     }
     logger.debug("Pre-verify action: {}", action);
-    // 将 Action 转为 Map 传递给 Guardrail
     return guardrail.intercept(
         Map.of(
             "type", action.type().name(),
@@ -169,15 +170,12 @@ public class AgentCore {
 
   /** 判断 PPAO 循环是否需要终止。 */
   public boolean shouldFinish(AgentContext context, StepResult result) {
-    // 1. 显式 Finish 结果
     if (result instanceof StepResult.Finish) {
       return true;
     }
-    // 2. 不可恢复错误
     if (result instanceof StepResult.Failure) {
       return true;
     }
-    // 3. 达到最大迭代次数
     if (context.isMaxIterationsReached()) {
       logger.warn("Agent {} reached max iterations ({})", agentId, config.maxIterations());
       return true;

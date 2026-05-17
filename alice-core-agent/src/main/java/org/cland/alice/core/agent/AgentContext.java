@@ -128,7 +128,10 @@ public class AgentContext {
       case PERCEIVING -> to == Phase.PLANNING;
       case PLANNING -> to == Phase.VERIFYING_PRE || to == Phase.REVISION;
       case VERIFYING_PRE -> to == Phase.ACTING || to == Phase.REVISION;
-      case ACTING -> to == Phase.OBSERVING;
+      case ACTING ->
+          to == Phase.ACTING // Micro-ReAct 自循环
+              || to == Phase.OBSERVING // Macro: 退出 Micro 进入 Observe
+              || to == Phase.REVISION; // Micro 内 Revision 跳出
       case OBSERVING -> to == Phase.VERIFYING_POST || to == Phase.REVISION;
       case VERIFYING_POST -> to == Phase.REFLECTING || to == Phase.FINISH || to == Phase.REVISION;
       case REFLECTING -> to == Phase.PLANNING || to == Phase.FINISH;

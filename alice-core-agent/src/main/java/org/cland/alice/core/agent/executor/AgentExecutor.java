@@ -11,6 +11,7 @@ import org.cland.alice.core.agent.AgentCore;
 import org.cland.alice.core.agent.lifecycle.Action;
 import org.cland.alice.core.agent.lifecycle.Observation;
 import org.cland.alice.core.agent.result.StepResult;
+import org.cland.alice.core.planner.Plan;
 import org.cland.alice.model.Call;
 import org.cland.alice.model.ModelProvider;
 import org.slf4j.Logger;
@@ -19,13 +20,22 @@ import org.slf4j.LoggerFactory;
 /**
  * Agent PPAO 循环的响应式执行器。
  *
- * <p>基于 Vert.x 的 {@link Future} 实现异步 PPAO 闭环：
+ * <p>基于 Vert.x 的 {@link Future} 实现异步 PPAO 闭环。 根据设计文档，PPAO 循环分为两层：
+ *
+ * <p><b>Macro Loop (战略层 — PPAO)：</b>
  *
  * <pre>
- *   Perceive -> Plan -> Verify(Pre) -> Act -> Observe -> Verify(Post) -> Reflect -> (loop | finish)
+ *   Perceive → Plan → Verify(Pre) → [Act: Micro-ReAct] → Verify(Post) → Reflect → (loop|FINISH)
  * </pre>
  *
- * <p>对应设计文档中的 AgentExecutor 类，整个 PPAO Loop 被建模为一个 Future 链， 每个阶段接收并传递 {@link AgentContext} 作为状态载体。
+ * <p><b>Micro Loop (战术层 — ReAct，在 Act 阶段内部)：</b>
+ *
+ * <pre>
+ *   Reason → Dispatch → Observe → (loop until sub-goal done or circuit break)
+ * </pre>
+ *
+ * <p>对应设计文档中的 AgentExecutor 类。 整个 PPAO Loop 被建模为一个 Future 链， 每个阶段接收并传递 {@link AgentContext} 作为状态载体。
+ * 其中 Act 阶段内部包含一个 ReAct 微循环（战术执行态闭环）。
  */
 public class AgentExecutor {
 
@@ -68,11 +78,11 @@ public class AgentExecutor {
   }
 
   // ========================================================================
-  // 核心循环
+  // Macro Loop (PPAO)
   // ========================================================================
 
   /**
-   * 启动整个 PPAO 递归循环。
+   * 启动整个 PPAO 递归循环（Macro Loop）。
    *
    * <p>1. Perceive 输入，初始化上下文 2. 进入 loopBody 递归 3. 任何 fatal error 被 handleFatalError 捕获
    */
@@ -88,9 +98,9 @@ public class AgentExecutor {
   }
 
   /**
-   * PPAO 递归循环体。
+   * PPAO 递归循环体（Macro Loop body）。
    *
-   * <p>每一轮迭代执行：Plan -> Verify(Pre) -> Act -> Observe -> Verify(Post) -> Reflect
+   * <p>每一轮 Macro 迭代执行： Plan → Verify(Pre) → [Act: Micro-ReAct] → Verify(Post) → Reflect
    * 然后根据终止条件决定是退出还是递归进入下一轮。
    */
   private Future<AgentContext> loopBody(AgentContext context) {
@@ -102,15 +112,15 @@ public class AgentExecutor {
     }
 
     return Future.succeededFuture(context)
-        .compose(this::plan) // context -> Pair(context, Continue)
-        .compose(this::verifyPre) // pair -> pair (or revision)
-        .compose(this::act) // pair -> pair (with result)
-        .compose(this::observe) // pair -> pair (with observation)
-        .compose(this::verifyPost) // pair -> pair (or revision)
-        .compose(this::reflect) // pair -> context
+        .compose(this::plan) // Macro: Plan (制定阶段性目标)
+        .compose(this::verifyPre) // Macro: Verify(Pre) (目标拦截)
+        .compose(this::actWithMicroReAct) // Macro: Act (内含 Micro-ReAct 战术循环)
+        .compose(this::observe) // Macro: Observe (汇总观测结果)
+        .compose(this::verifyPost) // Macro: Verify(Post) (结果审计)
+        .compose(this::reflect) // Macro: Reflect (战略复盘)
         .compose(
             ctx -> {
-              // 递归：如果不应终止则继续下一轮
+              // 递归：如果不应终止则继续下一轮 Macro 迭代
               if (agentCore.shouldFinish(ctx, null)) {
                 logger.info(
                     "Agent {} PPAO loop finished (iter={})", agentCore.agentId(), ctx.iteration());
@@ -121,7 +131,7 @@ public class AgentExecutor {
   }
 
   // ========================================================================
-  // 内部记录：将 Context 和 StepResult 捆绑传递
+  // 内部记录
   // ========================================================================
 
   /** 内部记录，将一个 {@link StepResult} 与当前 {@link AgentContext} 关联。 用于在 PPAO 阶段之间传递两者。 */
@@ -144,7 +154,7 @@ public class AgentExecutor {
   }
 
   // ========================================================================
-  // PPAO 各阶段
+  // Macro PPAO 各阶段
   // ========================================================================
 
   /** 1. Perceive: 感知输入，构建上下文 */
@@ -160,16 +170,17 @@ public class AgentExecutor {
     return Future.succeededFuture(context);
   }
 
-  /** 2. Plan: 基于上下文规划下一步 Action */
+  /** 2. Plan: 基于上下文制定阶段性目标（Macro 规划） */
   private Future<StepWithContext> plan(AgentContext context) {
     logger.debug("[Plan] iteration={}", context.iteration());
     context.transitionTo(AgentContext.Phase.PLANNING);
 
     Action nextAction;
-    if (agentCore.planner() != null) {
-      // 通过 Planner 的 Map 接口获取规划意图，再转换为 Action
-      Map<String, Object> plan = agentCore.planner().proposeNext(context.asMap());
-      nextAction = mapToAction(plan);
+    if (agentCore.plannerService() != null) {
+      // PlannerService.plan() 返回 Plan，转为意图 Map
+      Plan plan = agentCore.plannerService().plan(context.asMap());
+      Map<String, Object> intent = planToIntent(plan, context.asMap());
+      nextAction = mapToAction(intent);
     } else {
       String prompt = context.containsKey("prompt") ? context.get("prompt").toString() : "Hello!";
       String modelId = config.defaultModelId();
@@ -182,7 +193,7 @@ public class AgentExecutor {
         new StepWithContext(context, new StepResult.Continue(nextAction)));
   }
 
-  /** 3. Verify (Pre): 在 Act 前拦截检查 */
+  /** 3. Verify (Pre): 在 Act 前拦截检查战略目标的安全性/策略合规性 */
   private Future<StepWithContext> verifyPre(StepWithContext stepWithCtx) {
     Action action = stepWithCtx.nextAction();
     AgentContext ctx = stepWithCtx.context();
@@ -205,8 +216,26 @@ public class AgentExecutor {
     return Future.succeededFuture(new StepWithContext(ctx, new StepResult.Continue(revision)));
   }
 
-  /** 4. Act: 执行 Action（根据类型分发） */
-  private Future<StepWithContext> act(StepWithContext stepWithCtx) {
+  /**
+   * 4. Act (with Micro-ReAct Loop): 执行战略目标，内部嵌入战术级 ReAct 循环。
+   *
+   * <p>对应设计文档中的 Micro-ReAct Loop（执行态闭环）：
+   *
+   * <pre>
+   *   Reasoning → Dispatch → Observe → (loop until sub-goal done or circuit break)
+   * </pre>
+   *
+   * <p>如果是 {@code LLM_INFERENCE} 或 {@code TOOL_CALL} 类型的 Action， 进入 Micro-ReAct 循环：
+   *
+   * <ol>
+   *   <li>执行当前 Action（Dispatch）
+   *   <li>收集观察结果（Observe）
+   *   <li>基于观察，通过 planner.reason() 生成下一步微意图（Reason）
+   *   <li>若为 FINISH 或达到熔断条件则退出循环
+   *   <li>否则继续 Dispatch → Observe → Reason
+   * </ol>
+   */
+  private Future<StepWithContext> actWithMicroReAct(StepWithContext stepWithCtx) {
     Action action = stepWithCtx.nextAction();
     AgentContext ctx = stepWithCtx.context();
 
@@ -214,12 +243,13 @@ public class AgentExecutor {
       return Future.succeededFuture(stepWithCtx);
     }
 
-    logger.info("[Act] action={}", action);
+    logger.info("[Act] entering Micro-ReAct loop, initial action={}", action);
     ctx.transitionTo(AgentContext.Phase.ACTING);
 
+    // 根据初始 Action 类型进入不同的执行路径
     return switch (action.type()) {
-      case LLM_INFERENCE -> actLlmInference(ctx, action);
-      case TOOL_CALL -> actToolCall(ctx, action);
+      case LLM_INFERENCE -> microReActLoop(ctx, action);
+      case TOOL_CALL -> microReActLoop(ctx, action);
       case FINISH ->
           Future.succeededFuture(
               new StepWithContext(
@@ -245,8 +275,124 @@ public class AgentExecutor {
     };
   }
 
-  /** 执行 LLM 推理 Action */
-  private Future<StepWithContext> actLlmInference(AgentContext ctx, Action action) {
+  /**
+   * Micro-ReAct 循环：Reason → Dispatch → Observe → (loop | break)。
+   *
+   * <p>这是设计文档中"战术执行态闭环"的实现。 在当前 Action 执行完毕后，基于观察结果调用 planner 生成下一个微意图， 直到满足终止条件（FINISH / 熔断 /
+   * 最大微迭代次数）。
+   */
+  private Future<StepWithContext> microReActLoop(AgentContext ctx, Action initialAction) {
+    // Micro-ReAct 熔断参数
+    final int maxMicroIterations = config.maxIterations(); // 复用全局配置
+    final String originalPrompt = ctx.containsKey("prompt") ? ctx.get("prompt").toString() : "";
+
+    return microReActStep(ctx, initialAction, originalPrompt, 0, maxMicroIterations);
+  }
+
+  /**
+   * Micro-ReAct 单步递归：执行 Action → 观察 → 推理下一步 → 递归/终止。
+   *
+   * @param ctx 当前 Agent 上下文
+   * @param currentAction 当前要执行的 Action
+   * @param originalPrompt 原始的 Macro 级别 prompt
+   * @param depth 当前 Micro 迭代深度
+   * @param maxDepth 最大 Micro 迭代深度（熔断阈值）
+   * @return 执行结果（包含最终 Action 和观察）
+   */
+  private Future<StepWithContext> microReActStep(
+      AgentContext ctx, Action currentAction, String originalPrompt, int depth, int maxDepth) {
+
+    logger.debug("[Micro-ReAct] step depth={}/{} action={}", depth, maxDepth, currentAction);
+
+    // 熔断检查
+    if (depth >= maxDepth) {
+      logger.warn("[Micro-ReAct] circuit breaker triggered at depth={}", depth);
+      ctx.appendThought("[Micro-ReAct] Circuit breaker: max depth reached");
+      return Future.succeededFuture(
+          new StepWithContext(ctx, new StepResult.Continue(Action.finish())));
+    }
+
+    // === Dispatch (执行) ===
+    Future<StepWithContext> dispatchFuture =
+        switch (currentAction.type()) {
+          case LLM_INFERENCE -> dispatchLlmInference(ctx, currentAction);
+          case TOOL_CALL -> dispatchToolCall(ctx, currentAction);
+          default ->
+              // 非 LLM/TOOL 类型不进入 Micro-ReAct
+              Future.succeededFuture(
+                  new StepWithContext(ctx, new StepResult.Continue(currentAction)));
+        };
+
+    return dispatchFuture.compose(
+        stepResult -> {
+          AgentContext updatedCtx = stepResult.context();
+          StepResult result = stepResult.result();
+
+          // === Observe (观察结果) ===
+          if (result instanceof StepResult.Finish || result instanceof StepResult.Failure) {
+            // 终态：退出 Micro-ReAct
+            return Future.succeededFuture(stepResult);
+          }
+
+          // 提取观察
+          Observation obs = stepResult.observation();
+          if (obs != null) {
+            updatedCtx.appendThought("[Micro-ReAct] Observed: " + obs.summary());
+            updatedCtx.put("lastObservation", obs);
+            updatedCtx.put("lastActionResult", obs.summary());
+          }
+
+          // === Reason (基于观察推理下一步微意图) ===
+          if (agentCore.plannerService() == null) {
+            // 没有规划器，默认以 FINISH 退出 Micro-ReAct
+            return Future.succeededFuture(
+                new StepWithContext(updatedCtx, new StepResult.Continue(Action.finish())));
+          }
+
+          // 构建 Micro 上下文：包含上一次行动的结果
+          Map<String, Object> microCtx = updatedCtx.asMap();
+          microCtx.put("__micro_depth", depth);
+          microCtx.put("__micro_original_prompt", originalPrompt);
+
+          // PlannerService.plan() 作为 Reason：基于观察结果生成下一步微意图
+          Plan microPlan = agentCore.plannerService().plan(microCtx);
+          Map<String, Object> nextIntent = planToIntent(microPlan, microCtx);
+          Action nextAction = mapToAction(nextIntent);
+
+          // 检查是否应退出 Micro-ReAct
+          if (nextAction.type() == Action.Type.FINISH) {
+            logger.debug("[Micro-ReAct] FINISH received, exiting micro loop");
+            updatedCtx.put(
+                "result", obs != null ? obs.summary() : "Sub-goal completed via Micro-ReAct");
+            return Future.succeededFuture(
+                new StepWithContext(
+                    updatedCtx,
+                    new StepResult.Finish(
+                        obs != null ? obs.summary() : "",
+                        "Micro-ReAct loop completed at depth " + depth)));
+          }
+
+          if (nextAction.type() == Action.Type.REVISION) {
+            // Revision 需要跳出 Micro-ReAct 回到 Macro Reflect 阶段
+            String feedback =
+                nextAction.parameters().getOrDefault("feedback", "Micro revision").toString();
+            updatedCtx.put("lastFeedback", feedback);
+            updatedCtx.appendThought("[Micro-ReAct] Revision: " + feedback);
+            return Future.succeededFuture(
+                new StepWithContext(updatedCtx, new StepResult.Continue(nextAction)));
+          }
+
+          // === 递归：继续下一轮 Micro-ReAct ===
+          return microReActStep(updatedCtx, nextAction, originalPrompt, depth + 1, maxDepth);
+        });
+  }
+
+  // ========================================================================
+  // Dispatch (Micro-ReAct 中的执行阶段)
+  // ========================================================================
+
+  /** Dispatch LLM_INFERENCE */
+  private Future<StepWithContext> dispatchLlmInference(AgentContext ctx, Action action) {
     Promise<StepWithContext> promise = Promise.promise();
 
     String modelId = action.target();
@@ -263,14 +409,18 @@ public class AgentExecutor {
                     && call.result() != null) {
                   String content = call.result().content();
                   ctx.put("result", content);
-                  logger.debug("[Act/LLM] response length={}", content.length());
+                  logger.debug("[Micro-ReAct/LLM] response length={}", content.length());
                   return new StepResult.Continue(Action.finish(), Observation.success(content));
                 } else {
-                  return new StepResult.Failure("LLM call failed: " + call.status());
+                  return new StepResult.Continue(
+                      Action.revision("LLM call failed: " + call.status()),
+                      Observation.failure("LLM call failed: " + call.status()));
                 }
               } catch (Exception e) {
-                logger.error("[Act/LLM] error", e);
-                return new StepResult.Failure("LLM call error: " + e.getMessage(), e);
+                logger.error("[Micro-ReAct/LLM] error", e);
+                return new StepResult.Continue(
+                    Action.revision("LLM call error: " + e.getMessage()),
+                    Observation.failure("LLM call error: " + e.getMessage()));
               }
             })
         .onComplete(
@@ -285,10 +435,10 @@ public class AgentExecutor {
     return promise.future();
   }
 
-  /** 执行工具调用 Action */
-  private Future<StepWithContext> actToolCall(AgentContext ctx, Action action) {
+  /** Dispatch TOOL_CALL */
+  private Future<StepWithContext> dispatchToolCall(AgentContext ctx, Action action) {
     if (agentCore.toolRegistry() == null) {
-      logger.warn("[Act/Tool] no ToolRegistry available");
+      logger.warn("[Micro-ReAct/Tool] no ToolRegistry available");
       return Future.succeededFuture(
           new StepWithContext(
               ctx,
@@ -307,15 +457,18 @@ public class AgentExecutor {
                     agentCore.toolRegistry().execute(action.target(), action.parameters());
                 if (success) {
                   return new StepResult.Continue(
-                      Action.llmInference(config.defaultModelId(), "Tool executed, continue"),
-                      Observation.success("Tool " + action.target() + " executed"));
+                      Action.llmInference(
+                          config.defaultModelId(), "Tool executed, continue reasoning"),
+                      Observation.success("Tool " + action.target() + " executed successfully"));
                 } else {
                   return new StepResult.Continue(
                       Action.revision("Tool execution failed: " + action.target()),
-                      Observation.failure("Tool " + action.target() + " failed"));
+                      Observation.failure("Tool " + action.target() + " returned failure"));
                 }
               } catch (Exception e) {
-                return new StepResult.Failure("Tool error: " + e.getMessage(), e);
+                return new StepResult.Continue(
+                    Action.revision("Tool error: " + e.getMessage()),
+                    Observation.failure("Tool error: " + e.getMessage()));
               }
             })
         .onComplete(
@@ -330,7 +483,11 @@ public class AgentExecutor {
     return promise.future();
   }
 
-  /** 5. Observe: 收集并持久化观测结果 */
+  // ========================================================================
+  // Macro PPAO 剩余阶段 (Observe / VerifyPost / Reflect)
+  // ========================================================================
+
+  /** 5. Observe: 收集并持久化 Macro 级的观测结果 */
   private Future<StepWithContext> observe(StepWithContext stepWithCtx) {
     AgentContext ctx = stepWithCtx.context();
     StepResult result = stepWithCtx.result();
@@ -358,7 +515,7 @@ public class AgentExecutor {
     return Future.succeededFuture(stepWithCtx);
   }
 
-  /** 6. Verify (Post): 审计观测结果 */
+  /** 6. Verify (Post): 审计宏观执行结果 */
   private Future<StepWithContext> verifyPost(StepWithContext stepWithCtx) {
     AgentContext ctx = stepWithCtx.context();
     StepResult result = stepWithCtx.result();
@@ -382,7 +539,7 @@ public class AgentExecutor {
             new StepResult.Continue(revision, Observation.blocked("Post-verify audit failed"))));
   }
 
-  /** 7. Reflect: 注入验证反馈，准备下一轮规划 */
+  /** 7. Reflect: 注入验证反馈，准备下一轮 Macro 规划 */
   private Future<AgentContext> reflect(StepWithContext stepWithCtx) {
     AgentContext ctx = stepWithCtx.context();
     logger.debug("[Reflect] phase={}", ctx.currentPhase());
@@ -451,6 +608,54 @@ public class AgentExecutor {
       default -> { // LLM_INFERENCE 及其他
         String prompt = (String) plan.getOrDefault("prompt", "Hello!");
         yield Action.llmInference(target, prompt);
+      }
+    };
+  }
+
+  /**
+   * 将 {@link Plan} 转换为 ReAct 兼容的意图 Map（仅取第一步）。
+   *
+   * <p>Plan 是 PlannerService 的输出，包含多个步骤。 AgentExecutor 只需要第一步作为当前 Action 意图。
+   */
+  private static Map<String, Object> planToIntent(Plan plan, Map<String, Object> context) {
+    if (plan.steps().isEmpty()) {
+      return Map.of(
+          "type", "LLM_INFERENCE",
+          "target", "gpt-4o-mini",
+          "prompt", context.getOrDefault("prompt", "Hello!"));
+    }
+
+    Plan.Step firstStep = plan.steps().get(0);
+    String actionType = firstStep.actionType();
+
+    return switch (actionType) {
+      case "FINISH" -> Map.of("type", "FINISH", "target", "FINISH");
+      case "TOOL_CALL" -> {
+        var m = new java.util.LinkedHashMap<String, Object>();
+        m.put("type", "TOOL_CALL");
+        m.put("target", firstStep.target());
+        if (!firstStep.parameters().isEmpty()) m.put("parameters", firstStep.parameters());
+        if (firstStep.thought() != null) m.put("thought", firstStep.thought());
+        yield Map.copyOf(m);
+      }
+      case "REVISION" -> {
+        var m = new java.util.LinkedHashMap<String, Object>();
+        m.put("type", "REVISION");
+        m.put("target", "REVISION");
+        m.put("feedback", firstStep.parameters().getOrDefault("feedback", "Revision requested"));
+        yield Map.copyOf(m);
+      }
+      default -> {
+        var m = new java.util.LinkedHashMap<String, Object>();
+        m.put("type", "LLM_INFERENCE");
+        m.put("target", firstStep.target() != null ? firstStep.target() : "gpt-4o-mini");
+        m.put(
+            "prompt",
+            firstStep
+                .parameters()
+                .getOrDefault("prompt", context.getOrDefault("prompt", "Hello!")));
+        if (firstStep.thought() != null) m.put("thought", firstStep.thought());
+        yield Map.copyOf(m);
       }
     };
   }
