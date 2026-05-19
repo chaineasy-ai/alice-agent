@@ -11,7 +11,7 @@ import org.cland.alice.core.agent.result.StepResult;
  * <ul>
  *   <li>{@link #onPerceive(Object)} — 感知输入，构建上下文
  *   <li>{@link #onPlan(AgentContext)} — 基于上下文规划下一步
- *   <li>{@link #onAct(Action)} — 执行规划的动作
+ *   <li>{@link #onAct(Action,AgentContext)} — 执行规划的动作
  *   <li>{@link #onVerify(StepResult)} — 验证执行结果并决定后续
  * </ul>
  *
