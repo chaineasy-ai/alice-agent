@@ -1,0 +1,53 @@
+/*
+ * alice-agent-command: 抽象指令层
+ *
+ * 定义 AgentCommand 密封接口体系，供 facade-cmd 与 facade-tui 共同依赖。
+ * 对应 docs/app/AgentCommand.md 中的类图。
+ */
+
+plugins {
+    id 'groovy'
+    id 'java-library'
+}
+
+group = "org.cland.alice"
+version = "0.1.0"
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.slf4j:slf4j-api:2.0.16'
+
+    // 可选的工具列表引用（ToolMetadata）
+    compileOnly project(':alice-tool-gateway')
+
+    // Groovy / Spock for testing
+    testImplementation 'org.apache.groovy:groovy:4.0.30'
+    testImplementation 'org.spockframework:spock-core:2.4-groovy-4.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'org.slf4j:slf4j-api:2.0.16'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+    modularity.inferModulePath = true
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 25
+    options.encoding = 'UTF-8'
+}
+
+tasks.withType(GroovyCompile).configureEach {
+    sourceCompatibility = '25'
+    targetCompatibility = '25'
+    options.encoding = 'UTF-8'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}

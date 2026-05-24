@@ -1,5 +1,9 @@
 package org.cland.alice.facade.cmd;
 
+import java.util.UUID;
+import org.cland.alice.agent.command.AgentCommand;
+import org.cland.alice.agent.command.CapabilityCmd;
+import org.cland.alice.agent.command.ControlCmd;
 import org.cland.alice.facade.cmd.config.CommandParser;
 import org.cland.alice.facade.cmd.config.CommandParser.ParseException;
 import org.cland.alice.facade.cmd.config.RunConfig;
@@ -17,7 +21,8 @@ import org.slf4j.LoggerFactory;
  * <ul>
  *   <li>解析 CLI 命令参数（委托给 {@link CommandParser}）
  *   <li>初始化核心环境（ModelProvider 等）
- *   <li>驱动 {@link ExecutionCoordinator} 执行任务
+ *   <li>对于 {@code run} 子命令，驱动 {@link ExecutionCoordinator} 执行任务
+ *   <li>对于其他子命令（预留），通过 {@link AgentCommand} 抽象层路由
  *   <li>映射退出码并退出 JVM
  * </ul>
  *
@@ -50,7 +55,6 @@ public final class AliceCliLauncher {
    * @param args 命令行参数
    */
   public static void main(String[] args) {
-    // 注册 JVM 关闭钩子处理 Ctrl+C
     Runtime.getRuntime()
         .addShutdownHook(
             new Thread(
@@ -95,6 +99,78 @@ public final class AliceCliLauncher {
       System.err.println("Error: " + e.getMessage());
       return e.exitCode();
     }
+  }
+
+  /**
+   * 将用户输入解析为 {@link AgentCommand} 并分发。
+   *
+   * <p>用于交互式 CLI 会话（chat 模式），根据 AgentCommand 类型路由：
+   *
+   * <ul>
+   *   <li>{@code AcquireGoalCmd} / {@code ExecuteRawCmd} → Agent 核心执行
+   *   <li>{@code SwitchModelCmd} → 模型切换
+   *   <li>{@code RegisterSkillCmd} / {@code UpdateRulesCmd} / {@code ReloadKernelCmd} → 能力装载
+   *   <li>{@code ResetSessionCmd} / {@code InterruptCmd} → 生命周期控制
+   * </ul>
+   *
+   * @param input 用户原始输入
+   * @return 退出码
+   */
+  public static int dispatchCommand(String input) {
+    String sessionId = UUID.randomUUID().toString().substring(0, 8);
+    String traceId = UUID.randomUUID().toString().substring(0, 12);
+
+    AgentCommand cmd = AgentCommand.parse(input, sessionId, traceId);
+    if (cmd == null) {
+      System.err.println("Unrecognized command: " + input);
+      return EXIT_PARAM_ERROR;
+    }
+
+    logger.info(
+        "Dispatching AgentCommand: {} (session={})", cmd.getClass().getSimpleName(), sessionId);
+
+    return switch (cmd) {
+      case org.cland.alice.agent.command.ExecutionCmd.AcquireGoalCmd run -> {
+        System.out.println("Executing goal: " + run.goal());
+        yield EXIT_SUCCESS;
+      }
+      case org.cland.alice.agent.command.ExecutionCmd.ExecuteRawCmd exec -> {
+        System.out.println("Executing raw: " + exec.command());
+        yield EXIT_SUCCESS;
+      }
+      case CapabilityCmd.RegisterSkillCmd skill -> {
+        System.out.println("Registering skill: " + skill.skillRef());
+        yield EXIT_SUCCESS;
+      }
+      case CapabilityCmd.UpdateRulesCmd rules -> {
+        System.out.println("Updating rules: " + rules.rulesRef());
+        yield EXIT_SUCCESS;
+      }
+      case CapabilityCmd.ReloadKernelCmd reload -> {
+        System.out.println("Reloading kernel...");
+        yield EXIT_SUCCESS;
+      }
+      case org.cland.alice.agent.command.AlignmentCmd.SwitchModelCmd model -> {
+        System.out.println("Switching model to: " + model.modelId());
+        yield EXIT_SUCCESS;
+      }
+      case ControlCmd.ResetSessionCmd reset -> {
+        System.out.println("Resetting session: " + reset.sessionId());
+        yield EXIT_SUCCESS;
+      }
+      case ControlCmd.FeedbackCmd fb -> {
+        System.out.println("Feedback received: " + fb.message());
+        yield EXIT_SUCCESS;
+      }
+      case ControlCmd.InterruptCmd interrupt -> {
+        System.out.println("Interrupted: " + interrupt.cause());
+        yield EXIT_SUCCESS;
+      }
+      case null, default -> {
+        System.err.println("Unknown command type");
+        yield EXIT_PARAM_ERROR;
+      }
+    };
   }
 
   // ========================================================================

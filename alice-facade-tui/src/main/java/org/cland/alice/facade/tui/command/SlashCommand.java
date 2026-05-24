@@ -1,7 +1,11 @@
 package org.cland.alice.facade.tui.command;
 
+import org.cland.alice.agent.command.AgentCommand;
+
 /**
  * 斜杠命令定义，对应设计文档 §7.3 的斜杠命令表。
+ *
+ * <p>现在基于 {@link org.cland.alice.agent.command.AgentCommand} 抽象指令层实现。
  *
  * <p>命令分为三类：
  *
@@ -57,6 +61,21 @@ public record SlashCommand(String command, String args, Type type, String descri
       case "/tools" -> new SlashCommand(cmd, args, Type.CONFIG, "查看工具：列出 Agent 可用工具集");
       default -> null;
     };
+  }
+
+  /**
+   * 将当前 SlashCommand 转换为对应的 {@link AgentCommand}。
+   *
+   * <p>部分命令（如 /clear, /help）仅 UI 层面处理，无 AgentCommand 映射，返回 {@code null}。
+   *
+   * @param sessionId 当前会话 ID
+   * @param traceId 当前链路 ID
+   * @return 对应的 AgentCommand，或 {@code null}
+   */
+  public AgentCommand toAgentCommand(String sessionId, String traceId) {
+    // 拼接原始格式作为 AgentCommand.parse 的输入
+    String raw = command + (args.isEmpty() ? "" : " " + args);
+    return AgentCommand.parse(raw, sessionId, traceId);
   }
 
   /** 是否匹配某个命令 */

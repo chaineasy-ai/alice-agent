@@ -6,8 +6,10 @@ import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+import org.cland.alice.agent.command.AgentCommand;
 import org.cland.alice.facade.tui.bridge.EventBridge;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,13 +17,12 @@ import org.slf4j.LoggerFactory;
 /**
  * 斜杠命令执行处理器。
  *
- * <p>根据命令类型执行相应操作：
+ * <p>根据命令类型执行相应操作。现在基于 {@link AgentCommand} 抽象指令层：
  *
  * <ul>
- *   <li>Type A（INTERNAL）：直接处理 UI/会话操作
- *   <li>Type B（IO）：读取文件并回调
- *   <li>Type C（SYSTEM）：通过 ProcessBuilder 执行 shell 命令
- *   <li>Type D（CONFIG）：更新模型/工具配置
+ *   <li>UI 内部命令（/clear, /help）仍直接处理
+ *   <li>IO 命令（/prompt, /history）读取完成后转换为 AgentCommand
+ *   <li>系统命令（/exec）、配置命令（/model）转换为 AgentCommand 后通过回调派发给 Agent
  * </ul>
  */
 public class CommandHandler {
@@ -29,6 +30,9 @@ public class CommandHandler {
   private static final Logger logger = LoggerFactory.getLogger(CommandHandler.class);
 
   private final EventBridge eventBridge;
+
+  /** AgentCommand 分发回调（将指令派发给 Agent 核心执行） */
+  private Consumer<AgentCommand> onAgentCommand;
 
   /** 会话重置回调 */
   private Consumer<String> onReset;
@@ -45,11 +49,26 @@ public class CommandHandler {
   /** 模型切换回调 */
   private Consumer<String> onModelSwitch;
 
+  /** 当前会话 ID（由 ScreenManager 注入） */
+  private String sessionId;
+
   public CommandHandler(EventBridge eventBridge) {
     this.eventBridge = eventBridge;
+    this.sessionId = UUID.randomUUID().toString().substring(0, 8);
+  }
+
+  /** 设置当前会话 ID */
+  public CommandHandler sessionId(String sessionId) {
+    this.sessionId = sessionId;
+    return this;
   }
 
   // ========== 回调注册 ==========
+
+  public CommandHandler onAgentCommand(Consumer<AgentCommand> onAgentCommand) {
+    this.onAgentCommand = onAgentCommand;
+    return this;
+  }
 
   public CommandHandler onReset(Consumer<String> onReset) {
     this.onReset = onReset;
@@ -102,6 +121,9 @@ public class CommandHandler {
   /** 处理内部命令 */
   private boolean handleInternal(SlashCommand cmd) {
     if (cmd.is("/new")) {
+      // 转化为 AgentCommand 并派发
+      AgentCommand ac = cmd.toAgentCommand(sessionId(), traceId());
+      dispatchToAgent(ac);
       eventBridge.onChatMessage("System", "会话已重置");
       if (onReset != null) {
         onReset.accept(cmd.args());
@@ -118,6 +140,9 @@ public class CommandHandler {
     }
 
     if (cmd.is("/exit")) {
+      // 转化为 InterruptCmd 并派发
+      AgentCommand ac = cmd.toAgentCommand(sessionId(), traceId());
+      dispatchToAgent(ac);
       eventBridge.onChatMessage("System", "正在安全退出...");
       if (onExit != null) {
         onExit.run();
@@ -144,11 +169,15 @@ public class CommandHandler {
         Path path = Paths.get(cmd.args());
         String content = Files.readString(path);
         eventBridge.onChatMessage("System", "已加载提示词文件: " + path.toAbsolutePath());
-        // 将文件内容作为系统提示输出
         eventBridge.onChatMessage("System", "── 系统提示词 ──\n" + content);
         if (onCommandOutput != null) {
           onCommandOutput.accept(content);
         }
+        // 转化为 UpdateRulesCmd 并派发给 Agent
+        AgentCommand ac =
+            new org.cland.alice.agent.command.CapabilityCmd.UpdateRulesCmd(
+                path.toAbsolutePath().toString(), sessionId(), traceId());
+        dispatchToAgent(ac);
       } catch (IOException e) {
         eventBridge.onTaskError("读取文件失败: " + e.getMessage());
       }
@@ -156,7 +185,6 @@ public class CommandHandler {
     }
 
     if (cmd.is("/history")) {
-      // 历史记录由 ScreenManager 处理
       eventBridge.onChatMessage("System", "暂无可用的历史记录");
       return true;
     }
@@ -175,7 +203,11 @@ public class CommandHandler {
       String commandLine = cmd.args();
       eventBridge.onChatMessage("System", "执行命令: $ " + commandLine);
 
-      // 异步执行
+      // 转化为 ExecuteRawCmd 并派发
+      AgentCommand ac = cmd.toAgentCommand(sessionId(), traceId());
+      dispatchToAgent(ac);
+
+      // 异步执行 shell 并输出结果
       CompletableFuture.runAsync(
           () -> {
             try {
@@ -230,6 +262,10 @@ public class CommandHandler {
       String modelId = cmd.args();
       eventBridge.onChatMessage("System", "切换模型至: " + modelId);
 
+      // 转化为 SwitchModelCmd 并派发
+      AgentCommand ac = cmd.toAgentCommand(sessionId(), traceId());
+      dispatchToAgent(ac);
+
       if (onModelSwitch != null) {
         onModelSwitch.accept(modelId);
       }
@@ -242,5 +278,28 @@ public class CommandHandler {
     }
 
     return false;
+  }
+
+  /**
+   * 将 AgentCommand 派发给 Agent 核心。
+   *
+   * <p>通过回调将抽象指令传递给上层（AliceTuiLauncher / ScreenManager）， 最终由 Agent 核心执行或路由到相应处理器。
+   */
+  private void dispatchToAgent(AgentCommand cmd) {
+    if (onAgentCommand != null) {
+      onAgentCommand.accept(cmd);
+    } else {
+      logger.warn("No onAgentCommand callback registered. Command dropped: {}", cmd);
+    }
+  }
+
+  // ========== 辅助 ==========
+
+  private String sessionId() {
+    return sessionId;
+  }
+
+  private String traceId() {
+    return UUID.randomUUID().toString().substring(0, 12);
   }
 }

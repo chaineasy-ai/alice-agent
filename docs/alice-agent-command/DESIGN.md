@@ -70,7 +70,7 @@ sequenceDiagram
     participant Facade as Facade (CLI/ACP)
     participant Alice as AliceAgent (App/UC)
     participant Manager as ResourceLoader
-    participant Core as AgentCore (Kernel)
+    participant Core as Agent (Kernel)
     participant Planner as P (Planner)
 
     Facade->>Alice: dispatch(CapabilityCmd)

@@ -28,6 +28,7 @@ dependencies {
     implementation project(':alice-core-agent')
     implementation project(':alice-env-adapter')
     implementation project(':alice-model')
+    implementation project(':alice-agent-command')
 
     // Lanterna: cross-platform terminal UI library
     implementation 'com.googlecode.lanterna:lanterna:3.1.3'

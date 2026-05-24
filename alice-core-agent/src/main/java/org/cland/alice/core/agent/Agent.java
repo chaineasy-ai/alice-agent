@@ -11,7 +11,7 @@ import org.cland.alice.core.agent.result.StepResult;
 import org.cland.alice.core.planner.PlannerService;
 import org.cland.alice.env.adapter.EnvEvent;
 import org.cland.alice.guardrail.Verificator;
-import org.cland.alice.memory.AgentSession;
+import org.cland.alice.memory.agent.AgentSession;
 import org.cland.alice.model.Call;
 import org.cland.alice.model.ModelProvider;
 import org.cland.alice.tool.gateway.ToolRegistry;

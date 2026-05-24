@@ -3,7 +3,12 @@ package org.cland.alice.facade.tui;
 import com.googlecode.lanterna.input.KeyStroke;
 import com.googlecode.lanterna.input.KeyType;
 import java.io.IOException;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import org.cland.alice.agent.command.AgentCommand;
+import org.cland.alice.agent.command.CapabilityCmd;
+import org.cland.alice.agent.command.ControlCmd;
+import org.cland.alice.agent.command.ExecutionCmd;
 import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
 import org.cland.alice.facade.tui.bridge.EventBridge;
@@ -21,6 +26,9 @@ import org.slf4j.LoggerFactory;
  *   <li>建立事件监听链路
  *   <li>进入主事件循环
  * </ul>
+ *
+ * <p>基于 {@link AgentCommand} 抽象指令层：用户输入（自然语言 / 斜杠命令）统一解析为 AgentCommand，由 dispatchAgentCommand() 路由到
+ * Agent 核心或本地处理。
  */
 public class AliceTuiLauncher implements AutoCloseable {
 
@@ -33,6 +41,9 @@ public class AliceTuiLauncher implements AutoCloseable {
   private volatile boolean running;
   private volatile boolean shutdown;
 
+  /** 当前会话 ID */
+  private final String sessionId;
+
   // ========== 构造 ==========
 
   public AliceTuiLauncher() throws IOException {
@@ -40,6 +51,8 @@ public class AliceTuiLauncher implements AutoCloseable {
   }
 
   public AliceTuiLauncher(AgentConfig config) throws IOException {
+    this.sessionId = UUID.randomUUID().toString().substring(0, 8);
+
     // 1. 创建 Agent
     this.agent = new Agent(config);
 
@@ -59,6 +72,7 @@ public class AliceTuiLauncher implements AutoCloseable {
 
   /** 使用外部 Agent 实例构造 */
   public AliceTuiLauncher(Agent agent) throws IOException {
+    this.sessionId = UUID.randomUUID().toString().substring(0, 8);
     this.agent = agent;
     this.eventBridge = new EventBridge();
     this.screenManager = new ScreenManager(eventBridge);
@@ -71,11 +85,10 @@ public class AliceTuiLauncher implements AutoCloseable {
 
   private void setupCallbacks() {
     screenManager
-        .onTaskSubmit(this::submitTask)
+        .onTaskSubmit(this::submitAgentCommand)
         .onExit(() -> this.running = false)
         .onModelSwitch(
             modelId -> {
-              // 模型切换：仅更新显示，实际由 /model 命令处理
               logger.info("Model switch requested: {}", modelId);
             });
 
@@ -90,10 +103,7 @@ public class AliceTuiLauncher implements AutoCloseable {
    * bus）。
    */
   private void hookAgentEvents() {
-    // 注意：当前 Agent 使用同步/异步 API，尚未发布内部事件。
-    // 以下代码演示了如何桥接。在实际应用中，可以扩展现有 API
-    // 或监听 AgentExecutor 的 Future 回调。
-    // 暂不实现，待 AgentCore 发布完整事件后再完善。
+    // 待 AgentCore 发布完整事件后再完善
   }
 
   // ========== 启动 ==========
@@ -118,7 +128,6 @@ public class AliceTuiLauncher implements AutoCloseable {
 
     try {
       while (running) {
-        // 从键盘读取输入（阻塞式）
         KeyStroke keyStroke = screenManager.screen().readInput();
 
         if (keyStroke == null) {
@@ -126,13 +135,11 @@ public class AliceTuiLauncher implements AutoCloseable {
           continue;
         }
 
-        // EOF 完全忽略，不触发退出（仅 /exit 命令可退出）
         if (keyStroke.getKeyType() == KeyType.EOF) {
           Thread.sleep(100);
           continue;
         }
 
-        // 处理输入，返回 false 表示退出（Ctrl+Q, F10, /exit 命令）
         boolean shouldContinue = screenManager.handleInput(keyStroke);
         if (!shouldContinue) {
           logger.info("Exit requested via keyboard.");
@@ -149,32 +156,94 @@ public class AliceTuiLauncher implements AutoCloseable {
     }
   }
 
-  // ========== 任务提交 ==========
+  // ========== AgentCommand 分发 ==========
 
   /**
-   * 提交任务给 Agent 执行（异步）。
+   * 统一的 AgentCommand 分发入口。
    *
-   * @param input 用户输入
+   * <p>用户输入（自然语言 / 斜杠命令）由 ScreenManager → CommandHandler 解析后， 经此方法路由到对应处理器：
+   *
+   * <ul>
+   *   <li>{@link ExecutionCmd} → 提交给 Agent 核心执行
+   *   <li>{@link CapabilityCmd} → 执行能力装载（skill/rules/reload）
+   *   <li>{@link ControlCmd} → 处理会话/生命周期控制
+   *   <li>{@code null} → 静默忽略
+   * </ul>
    */
-  private void submitTask(String input) {
-    logger.info("Submitting task: {}", input);
+  void dispatchAgentCommand(AgentCommand cmd) {
+    if (cmd == null) return;
+
+    logger.debug(
+        "Dispatching AgentCommand: {} (session={})",
+        cmd.getClass().getSimpleName(),
+        cmd.sessionId());
+
+    switch (cmd) {
+      case ExecutionCmd.AcquireGoalCmd run -> submitTaskToAgent(run.task());
+      case ExecutionCmd.ExecuteRawCmd exec -> submitTaskToAgent(exec.task());
+      case CapabilityCmd.ReloadKernelCmd reload -> handleReload(reload);
+      case CapabilityCmd cmd2 -> handleCapability(cmd2);
+      case ControlCmd.ResetSessionCmd reset -> handleReset(reset);
+      case ControlCmd.InterruptCmd exit -> handleInterrupt(exit);
+      case null, default -> logger.warn("Unknown AgentCommand type: {}", cmd);
+    }
+  }
+
+  /** 提交任务给 Agent 核心执行 */
+  private void submitTaskToAgent(String task) {
+    logger.info("Submitting task: {}", task);
 
     CompletableFuture.runAsync(
         () -> {
           try {
-            // 同步执行 Agent 任务
-            String result = agent.ask(input);
-
-            // 任务完成
+            String result = agent.ask(task);
             eventBridge.onTaskComplete(result, "Agent 执行完成");
             screenManager.state().transitionTo(TuiState.State.IDLE);
-
           } catch (Exception e) {
             logger.error("Task execution failed", e);
             eventBridge.onTaskError(e.getMessage());
             screenManager.state().transitionTo(TuiState.State.ERROR);
           }
         });
+  }
+
+  /** 处理能力装载指令 */
+  private void handleCapability(CapabilityCmd cmd) {
+    logger.info(
+        "Handling capability: {} resource={}", cmd.getClass().getSimpleName(), cmd.resource());
+    eventBridge.onChatMessage("System", "能力装载: " + cmd.resource() + " (待实现完整 ResourceLoader)");
+  }
+
+  /** 处理热重载 */
+  private void handleReload(CapabilityCmd.ReloadKernelCmd reload) {
+    logger.info("Hot reload requested");
+    eventBridge.onChatMessage("System", "热重载触发中... (待实现完整 ReloadKernel)");
+  }
+
+  /** 处理会话重置 */
+  private void handleReset(ControlCmd.ResetSessionCmd reset) {
+    logger.info("Session reset requested: {}", reset.sessionId());
+    eventBridge.onChatMessage("System", "会话已重置，上下文已清空");
+  }
+
+  /** 处理中断/退出 */
+  private void handleInterrupt(ControlCmd.InterruptCmd interrupt) {
+    logger.info("Interrupt requested: {}", interrupt.cause());
+    if ("user-exit".equals(interrupt.cause()) || interrupt.cause().contains("exit")) {
+      this.running = false;
+    }
+  }
+
+  /**
+   * 将用户输入解析为 AgentCommand 并分发（ScreenManager 回调用）。
+   *
+   * <p>自然语言输入统一解析为 AcquireGoalCmd。
+   */
+  private void submitAgentCommand(String input) {
+    AgentCommand cmd = AgentCommand.parse(input, sessionId, traceId());
+    if (cmd != null) {
+      dispatchAgentCommand(cmd);
+    }
   }
 
   // ========== 关闭 ==========
@@ -207,28 +276,25 @@ public class AliceTuiLauncher implements AutoCloseable {
     shutdown();
   }
 
+  // ========== 辅助 ==========
+
+  private String traceId() {
+    return UUID.randomUUID().toString().substring(0, 12);
+  }
+
   // ========== Main 入口 ==========
 
-  /**
-   * alice-facade-tui 模块的主入口。
-   *
-   * <p>启动 TUI 界面，连接 Agent 核心。
-   */
   public static void main(String[] args) {
     try {
-      // 检查环境变量
       String apiKey = System.getenv("OPENAI_API_KEY");
       if (apiKey == null || apiKey.isEmpty()) {
         System.err.println("警告: 未设置 OPENAI_API_KEY，LLM 功能将不可用。");
         System.err.println("请设置环境变量后再运行。");
-        // 仍然可以启动 TUI，但 Agent 无法调用 LLM
       }
 
-      // 创建配置
       AgentConfig config =
           AgentConfig.builder().defaultModelId("gpt-4o-mini").maxIterations(10).build();
 
-      // 启动 TUI
       AliceTuiLauncher launcher = new AliceTuiLauncher(config);
       launcher.start();
       launcher.run();

@@ -1,6 +1,8 @@
 package org.cland.alice.facade.cmd.config;
 
+import java.util.UUID;
 import java.util.concurrent.Callable;
+import org.cland.alice.agent.command.AgentCommand;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
@@ -11,7 +13,8 @@ import picocli.CommandLine.Parameters;
 /**
  * CLI 命令参数解析器。
  *
- * <p>基于 picocli 实现，解析命令行参数并转换为 {@link RunConfig}。 对应设计文档中 {@code CommandParser} 组件的职责。
+ * <p>基于 picocli 实现，解析命令行参数并转换为 {@link RunConfig} / {@link AgentCommand}。 对应设计文档中 {@code
+ * CommandParser} 组件的职责。
  *
  * <p>子命令设计（picocli 多级命令）：
  *
@@ -22,12 +25,15 @@ import picocli.CommandLine.Parameters;
  *   <li>{@code alice config} — 配置管理（预留）
  * </ul>
  *
- * <p>解析失败时不会调用 {@code System.exit()}，而是抛出 {@link ParseException}， 由调用方（如 {@code
- * AliceCliLauncher}）处理退出码映射。
+ * <p>除 {@code run} 外，其他子命令通过 {@link AgentCommand} 抽象指令层与 Agent 核心交互。 解析失败时不会调用 {@code
+ * System.exit()}，而是抛出 {@link ParseException}， 由调用方（如 {@code AliceCliLauncher}）处理退出码映射。
  */
 public class CommandParser {
 
   private static final Logger logger = LoggerFactory.getLogger(CommandParser.class);
+
+  /** 当前会话 ID（CLI 单次执行自动生成） */
+  private String sessionId;
 
   /** 解析失败时抛出的异常，携带合适的退出码。 */
   public static final class ParseException extends RuntimeException {
@@ -41,6 +47,16 @@ public class CommandParser {
     public int exitCode() {
       return exitCode;
     }
+  }
+
+  public CommandParser() {
+    this.sessionId = UUID.randomUUID().toString().substring(0, 8);
+  }
+
+  /** 设置会话 ID（用于 AgentCommand 追踪）。 */
+  public CommandParser sessionId(String sessionId) {
+    this.sessionId = sessionId;
+    return this;
   }
 
   /**
@@ -82,7 +98,7 @@ public class CommandParser {
         throw new ParseException(2, "No subcommand given. Use 'alice run --task \"...\"'");
       }
 
-      // 检查子命令内的帮助/版本请求（必须在访问 userObject 之前）
+      // 检查子命令内的帮助/版本请求
       if (subResult.isUsageHelpRequested() || subResult.isVersionHelpRequested()) {
         subResult.commandSpec().commandLine().usage(System.out);
         return null;
@@ -116,6 +132,22 @@ public class CommandParser {
     }
   }
 
+  /**
+   * 将用户输入解析为 {@link AgentCommand} 抽象指令。
+   *
+   * <p>自然语言直接转为 AcquireGoalCmd；斜杠命令转为对应指令类型。 用于交互式会话场景（chat 模式）。
+   *
+   * @param input 用户原始输入
+   * @return 解析后的 AgentCommand，无法识别时返回 null
+   */
+  public AgentCommand parseToAgentCommand(String input) {
+    return AgentCommand.parse(input, sessionId, traceId());
+  }
+
+  private String traceId() {
+    return UUID.randomUUID().toString().substring(0, 12);
+  }
+
   // ========================================================================
   // 顶层 CLI 根命令
   // ========================================================================
@@ -131,7 +163,6 @@ public class CommandParser {
 
     @Override
     public Integer call() {
-      // 如果没有子命令，打印帮助
       new CommandLine(this).usage(System.err);
       return 2;
     }
@@ -168,7 +199,6 @@ public class CommandParser {
 
     @Override
     public Integer call() {
-      // 实际执行由 AliceCliLauncher 驱动
       return 0;
     }
 
@@ -186,10 +216,16 @@ public class CommandParser {
 
       return builder.build();
     }
+
+    /** 将 CLI 参数转换为 AgentCommand（AcquireGoalCmd） */
+    AgentCommand toAgentCommand(String sessionId) {
+      return new org.cland.alice.agent.command.ExecutionCmd.AcquireGoalCmd(
+          task, sessionId, UUID.randomUUID().toString().substring(0, 12));
+    }
   }
 
   // ========================================================================
-  // 预留子命令占位
+  // 预留子命令占位（可通过 AgentCommand 扩展）
   // ========================================================================
 
   @Command(

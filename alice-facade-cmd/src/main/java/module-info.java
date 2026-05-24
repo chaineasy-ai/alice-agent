@@ -5,6 +5,7 @@ module alice.agent.facade.cmd.main {
 
   requires alice.agent.alice.core.agent.main;
   requires alice.agent.alice.model.main;
+  requires alice.agent.command.main;
   requires info.picocli;
   requires com.fasterxml.jackson.databind;
   requires com.fasterxml.jackson.core;

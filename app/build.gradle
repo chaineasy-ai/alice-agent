@@ -24,6 +24,7 @@ dependencies {
     // Local submodule dependencies
     implementation project(':alice-core-agent')
     implementation project(':alice-model')
+    implementation project(':alice-agent-command')
     implementation project(':alice-facade-cmd')
     implementation project(':alice-facade-tui')
 

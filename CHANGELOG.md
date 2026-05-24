@@ -4,6 +4,38 @@ description: record your changes
 
 # Changelog
 
+## 20260525
+
+### Changes
+
+- **alice-agent-command/抽象指令层**：新增 `alice-agent-command` 模块，定义 `AgentCommand` 密封接口体系（对应 `docs/app/AgentCommand.md` 类图）。
+  - `AgentCommand` 顶层密封接口，含 `parse()` 工厂方法，支持自然语言 → AcquireGoalCmd 自动映射
+  - `ExecutionCmd` 任务驱动：`AcquireGoalCmd`（/run）和 `ExecuteRawCmd`（/exec）
+  - `CapabilityCmd` 能力装载：`RegisterSkillCmd`（/skill）、`UpdateRulesCmd`（/rules）、`ReloadKernelCmd`（/reload）
+  - `AlignmentCmd` 运行配置：`SwitchModelCmd`（/model）
+  - `ControlCmd` 控制与反馈：`ResetSessionCmd`（/new）、`FeedbackCmd`（/feedback）、`InterruptCmd`（/exit/Ctrl+C）
+  - 每条指令为 `sealed record`，携带 `sessionId`、`traceId`、`timestamp` 实现全链路追踪
+  - 模块 `alice.agent.command.main`，暴露单个导出包 `org.cland.alice.agent.command`
+- **alice-facade-cmd/AgentCommand 集成**：`CommandParser` 新增 `parseToAgentCommand()` 和 `RunCommand.toAgentCommand()` 方法；`AliceCliLauncher` 新增 `dispatchCommand()` 静态方法，通过 `AgentCommand.parse()` 将用户输入路由到完整密封 switch 分支。
+- **alice-facade-tui/AgentCommand 集成**：`SlashCommand` 新增 `toAgentCommand()` 转换方法；`CommandHandler` 新增 `onAgentCommand` 回调分发机制，IO/System/Config 命令执行后统一转化为 AgentCommand 派发给 Agent 核心；`AliceTuiLauncher` 新增 `dispatchAgentCommand()` 模式匹配分发器，覆盖 9 种具体子类型的路由处理。
+- **alice-core-agent/AgentSession import 修复**：修复 `Agent.java` 中 `import org.cland.alice.memory.AgentSession` 为正确的子包路径 `org.cland.alice.memory.agent.AgentSession`，解决前次 flat-package 重构导致的编译错误。
+- **alice-agent-command/测试**：新增 56 个 Spock 测试用例，覆盖：
+  - `AgentCommandParseSpec` (17 tests): 自然语言与全部 `/` 斜杠命令解析、null/空输入、未知命令、时间戳、toString
+  - `ExecutionCmdSpec` (8 tests): 构造/null 拒绝/自定义时间戳/密封约束/record 相等性
+  - `CapabilityCmdSpec` (6 tests): 构造/null 拒绝/密封约束/record 相等性
+  - `AlignmentCmdSpec` (6 tests): 构造/null 拒绝/密封约束/record 相等性
+  - `ControlCmdSpec` (7 tests): 构造/null 拒绝/reason 格式化/密封约束/record 相等性
+  - `AgentCommandSealedHierarchySpec` (5 tests): instanceof 分类、跨分支排他性、全部 9 种具体类型确认
+
+### Build
+
+- settings.gradle: 新增 `include('alice-agent-command')`
+- alice-agent-command/build.gradle: 新增 `groovy` 和 `java-library` 插件、Spock 测试依赖
+- alice-facade-cmd/build.gradle: 新增 `implementation project(':alice-agent-command')`
+- alice-facade-tui/build.gradle: 新增 `implementation project(':alice-agent-command')`
+- app/build.gradle: 新增 `implementation project(':alice-agent-command')`
+- 所有相关 module-info.java 添加 `requires alice.agent.command.main`
+
 ## 20260524
 
 ### Changes
