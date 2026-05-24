@@ -71,11 +71,6 @@ public final class AliceAgent implements AutoCloseable {
     this.running = true;
     logger.info("AliceAgent [{}] starting {} facade...", agent.agentId(), facadeType);
 
-    if (agent.agentCore() == null) {
-      logger.error("AgentCore not initialized");
-      return AliceApp.EXIT_RUNTIME_ERROR;
-    }
-
     return FacadeSelector.launch(facadeType, agent, args);
   }
 

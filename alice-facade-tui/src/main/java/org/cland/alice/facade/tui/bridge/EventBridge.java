@@ -5,7 +5,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
-import org.cland.alice.core.agent.AgentCore;
+import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.lifecycle.Action;
 import org.cland.alice.env.adapter.EnvEvent;
 import org.slf4j.Logger;
@@ -17,7 +17,7 @@ import org.slf4j.LoggerFactory;
  * <p>对应设计文档 §5 数据流图中的 EventBridge 组件。 负责：
  *
  * <ul>
- *   <li>监听 AgentCore 产生的 PPAO 事件
+ *   <li>监听 Agent 产生的 PPAO 事件
  *   <li>将事件转换为 {@link TuiEvent} 并分发给已注册的监听器
  *   <li>在独立线程中消费事件，不阻塞 UI 渲染循环
  * </ul>
@@ -30,8 +30,8 @@ public class EventBridge implements AutoCloseable {
   private final ExecutorService eventThread;
   private volatile boolean closed;
 
-  /** AgentCore 引用（可选，用于提交任务） */
-  private AgentCore agentCore;
+  /** Agent 引用（可选，用于提交任务） */
+  private Agent agent;
 
   public EventBridge() {
     this.listeners = new CopyOnWriteArrayList<>();
@@ -45,9 +45,9 @@ public class EventBridge implements AutoCloseable {
     this.closed = false;
   }
 
-  /** 绑定 AgentCore 实例，此后可以通过 bridge 提交任务。 */
-  public EventBridge bind(AgentCore agentCore) {
-    this.agentCore = agentCore;
+  /** 绑定 Agent 实例，此后可以通过 bridge 提交任务。 */
+  public EventBridge bind(Agent agent) {
+    this.agent = agent;
     return this;
   }
 

@@ -5,9 +5,9 @@ import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import java.util.Map;
 import java.util.Objects;
+import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
 import org.cland.alice.core.agent.AgentContext;
-import org.cland.alice.core.agent.AgentCore;
 import org.cland.alice.core.agent.lifecycle.Action;
 import org.cland.alice.core.agent.lifecycle.Observation;
 import org.cland.alice.core.agent.result.StepResult;
@@ -42,13 +42,13 @@ public class AgentExecutor {
   private static final Logger logger = LoggerFactory.getLogger(AgentExecutor.class);
 
   private final Vertx vertx;
-  private final AgentCore agentCore;
+  private final Agent agent;
   private final AgentConfig config;
 
-  public AgentExecutor(Vertx vertx, AgentCore agentCore) {
+  public AgentExecutor(Vertx vertx, Agent agent) {
     this.vertx = Objects.requireNonNull(vertx, "vertx must not be null");
-    this.agentCore = Objects.requireNonNull(agentCore, "agentCore must not be null");
-    this.config = agentCore.config();
+    this.agent = Objects.requireNonNull(agent, "agent must not be null");
+    this.config = agent.config();
   }
 
   // ========================================================================
@@ -88,9 +88,7 @@ public class AgentExecutor {
    */
   private Future<AgentContext> executeLoop(String input, AgentContext context) {
     logger.info(
-        "Agent {} starting PPAO loop (maxIterations={})",
-        agentCore.agentId(),
-        config.maxIterations());
+        "Agent {} starting PPAO loop (maxIterations={})", agent.agentId(), config.maxIterations());
 
     return perceive(input, context)
         .compose(this::loopBody)
@@ -105,9 +103,9 @@ public class AgentExecutor {
    */
   private Future<AgentContext> loopBody(AgentContext context) {
     // 检查是否应提前终止
-    if (agentCore.shouldFinish(context, null)) {
+    if (agent.shouldFinish(context, null)) {
       logger.info(
-          "Agent {} PPAO loop finished early (iter={})", agentCore.agentId(), context.iteration());
+          "Agent {} PPAO loop finished early (iter={})", agent.agentId(), context.iteration());
       return Future.succeededFuture(context);
     }
 
@@ -121,9 +119,9 @@ public class AgentExecutor {
         .compose(
             ctx -> {
               // 递归：如果不应终止则继续下一轮 Macro 迭代
-              if (agentCore.shouldFinish(ctx, null)) {
+              if (agent.shouldFinish(ctx, null)) {
                 logger.info(
-                    "Agent {} PPAO loop finished (iter={})", agentCore.agentId(), ctx.iteration());
+                    "Agent {} PPAO loop finished (iter={})", agent.agentId(), ctx.iteration());
                 return Future.succeededFuture(ctx);
               }
               return loopBody(ctx);
@@ -176,9 +174,9 @@ public class AgentExecutor {
     context.transitionTo(AgentContext.Phase.PLANNING);
 
     Action nextAction;
-    if (agentCore.plannerService() != null) {
+    if (agent.plannerService() != null) {
       // PlannerService.plan() 返回 Plan，转为意图 Map
-      Plan plan = agentCore.plannerService().plan(context.asMap());
+      Plan plan = agent.plannerService().plan(context.asMap());
       Map<String, Object> intent = planToIntent(plan, context.asMap());
       nextAction = mapToAction(intent);
     } else {
@@ -205,7 +203,7 @@ public class AgentExecutor {
     logger.debug("[Verify/Pre] action={}", action);
     ctx.transitionTo(AgentContext.Phase.VERIFYING_PRE);
 
-    if (agentCore.verifyPre(action)) {
+    if (agent.verifyPre(action)) {
       logger.debug("[Verify/Pre] approved");
       return Future.succeededFuture(stepWithCtx);
     }
@@ -253,7 +251,7 @@ public class AgentExecutor {
       case FINISH ->
           Future.succeededFuture(
               new StepWithContext(
-                  ctx,
+                  ctx.put("result", action.target() != null ? action.target() : ""),
                   new StepResult.Finish(
                       action.target() != null ? action.target() : "",
                       "Agent finished by explicit FINISH action")));
@@ -343,7 +341,7 @@ public class AgentExecutor {
           }
 
           // === Reason (基于观察推理下一步微意图) ===
-          if (agentCore.plannerService() == null) {
+          if (agent.plannerService() == null) {
             // 没有规划器，默认以 FINISH 退出 Micro-ReAct
             return Future.succeededFuture(
                 new StepWithContext(updatedCtx, new StepResult.Continue(Action.finish())));
@@ -355,7 +353,7 @@ public class AgentExecutor {
           microCtx.put("__micro_original_prompt", originalPrompt);
 
           // PlannerService.plan() 作为 Reason：基于观察结果生成下一步微意图
-          Plan microPlan = agentCore.plannerService().plan(microCtx);
+          Plan microPlan = agent.plannerService().plan(microCtx);
           Map<String, Object> nextIntent = planToIntent(microPlan, microCtx);
           Action nextAction = mapToAction(nextIntent);
 
@@ -437,7 +435,7 @@ public class AgentExecutor {
 
   /** Dispatch TOOL_CALL */
   private Future<StepWithContext> dispatchToolCall(AgentContext ctx, Action action) {
-    if (agentCore.toolRegistry() == null) {
+    if (agent.toolRegistry() == null) {
       logger.warn("[Micro-ReAct/Tool] no ToolRegistry available");
       return Future.succeededFuture(
           new StepWithContext(
@@ -454,7 +452,7 @@ public class AgentExecutor {
             () -> {
               try {
                 boolean success =
-                    agentCore.toolRegistry().execute(action.target(), action.parameters());
+                    agent.toolRegistry().execute(action.target(), action.parameters());
                 if (success) {
                   return new StepResult.Continue(
                       Action.llmInference(
@@ -503,10 +501,10 @@ public class AgentExecutor {
     }
 
     // 持久化到 Memory
-    if (agentCore.memory() != null) {
+    if (agent.memory() != null) {
       vertx.executeBlocking(
           () -> {
-            agentCore.memory().persist(ctx.sessionId(), result.toString());
+            agent.memory().persist(ctx.sessionId(), result.toString());
             return null;
           });
     }
@@ -522,9 +520,9 @@ public class AgentExecutor {
 
     logger.debug("[Verify/Post] result={}", result);
 
-    if (agentCore.verifyPost(result)) {
+    if (agent.verifyPost(result)) {
       logger.debug("[Verify/Post] audit passed");
-      if (agentCore.shouldFinish(ctx, result)) {
+      if (agent.shouldFinish(ctx, result)) {
         ctx.transitionTo(AgentContext.Phase.FINISH);
       }
       return Future.succeededFuture(stepWithCtx);
@@ -577,8 +575,12 @@ public class AgentExecutor {
 
   /** 处理 PPAO 循环中的致命错误。 将错误信息记录到上下文中，设置终态，返回 context 而非抛出。 */
   private AgentContext handleFatalError(Throwable error, AgentContext context) {
-    logger.error("Agent {} fatal error in PPAO loop", agentCore.agentId(), error);
-    context.put("error", error.getMessage());
+    logger.error("Agent {} fatal error in PPAO loop", agent.agentId(), error);
+    context.put(
+        "error",
+        error.getMessage() != null
+            ? error.getMessage()
+            : error.getClass().getSimpleName() + " (no message)");
     context.put("status", "FATAL_ERROR");
     context.transitionTo(AgentContext.Phase.FINISH);
     return context;

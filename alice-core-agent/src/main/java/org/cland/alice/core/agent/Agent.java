@@ -1,12 +1,20 @@
 package org.cland.alice.core.agent;
 
 import io.vertx.core.Vertx;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.cland.alice.core.agent.executor.AgentExecutor;
+import org.cland.alice.core.agent.lifecycle.Action;
+import org.cland.alice.core.agent.result.StepResult;
+import org.cland.alice.core.planner.PlannerService;
+import org.cland.alice.env.adapter.EnvEvent;
+import org.cland.alice.guardrail.Verificator;
+import org.cland.alice.memory.AgentSession;
 import org.cland.alice.model.Call;
 import org.cland.alice.model.ModelProvider;
+import org.cland.alice.tool.gateway.ToolRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,6 +23,15 @@ import org.slf4j.LoggerFactory;
  *
  * <p>基于 PPAO (Perceive-Plan-Act-Observe-Verify) 核心循环。 通过 ModelProvider 与底层模型交互，通过 AgentExecutor
  * 驱动响应式执行循环。
+ *
+ * <p>Agent 同时承担了 {@code AgentCore} 的角色，作为 PPAO 循环的核心协调者， 持有所有子模块（规划器、安全校验、工具注册中心、记忆、环境适配器）的引用。
+ *
+ * <p>生命周期状态机：
+ *
+ * <pre>
+ *   START -> PERCEIVING -> PLANNING -> VERIFYING_PRE -> ACTING (Micro-ReAct)
+ *       -> OBSERVING -> VERIFYING_POST -> REFLECTING -> (loop|FINISH)
+ * </pre>
  *
  * <p>使用示例：
  *
@@ -29,10 +46,17 @@ public class Agent {
   private static final Logger logger = LoggerFactory.getLogger(Agent.class);
 
   private final String agentId;
-  private final AgentCore agentCore;
   private final AgentConfig config;
   private final Vertx vertx;
   private final AgentExecutor executor;
+
+  // ========== 子模块引用（原 AgentCore 字段） ==========
+
+  private PlannerService plannerService;
+  private Verificator guardrail;
+  private ToolRegistry toolRegistry;
+  private AgentSession memory;
+  private EnvEvent envAdapter;
 
   // ========== 构造 ==========
 
@@ -48,13 +72,12 @@ public class Agent {
     this(null, config);
   }
 
-  private Agent(String agentId, AgentConfig config) {
+  Agent(String agentId, AgentConfig config) {
     this.agentId =
         agentId != null ? agentId : java.util.UUID.randomUUID().toString().substring(0, 8);
     this.config = config;
-    this.agentCore = new AgentCore(this.agentId, config);
     this.vertx = Vertx.vertx();
-    this.executor = new AgentExecutor(vertx, agentCore);
+    this.executor = new AgentExecutor(vertx, this);
   }
 
   // ========== 属性 ==========
@@ -63,12 +86,62 @@ public class Agent {
     return agentId;
   }
 
-  public AgentCore agentCore() {
-    return agentCore;
-  }
-
   public AgentConfig config() {
     return config;
+  }
+
+  public Vertx vertx() {
+    return vertx;
+  }
+
+  // ========== 依赖注入（原 AgentCore 的 with* 方法） ==========
+
+  /** 注入 {@link PlannerService} — 规划器引擎。 */
+  public Agent withPlannerService(PlannerService plannerService) {
+    this.plannerService = plannerService;
+    return this;
+  }
+
+  public Agent withGuardrail(Verificator guardrail) {
+    this.guardrail = guardrail;
+    return this;
+  }
+
+  public Agent withToolRegistry(ToolRegistry toolRegistry) {
+    this.toolRegistry = toolRegistry;
+    return this;
+  }
+
+  public Agent withMemory(AgentSession memory) {
+    this.memory = memory;
+    return this;
+  }
+
+  public Agent withEnvAdapter(EnvEvent envAdapter) {
+    this.envAdapter = envAdapter;
+    return this;
+  }
+
+  // ========== 子模块 Getters（原 AgentCore getters） ==========
+
+  public PlannerService plannerService() {
+    return plannerService;
+  }
+
+  public Verificator guardrail() {
+    return guardrail;
+  }
+
+  public ToolRegistry toolRegistry() {
+    return toolRegistry;
+  }
+
+  public AgentSession memory() {
+    return memory;
+  }
+
+  public EnvEvent envAdapter() {
+    return envAdapter;
   }
 
   // ========== 同步 API ==========
@@ -210,9 +283,56 @@ public class Agent {
     return executor.execute(prompt, context);
   }
 
-  /** 获取底层的 Vertx 实例，便于调用方集成。 */
-  public Vertx vertx() {
-    return vertx;
+  // ========== 验证钩子（原 AgentCore 方法，供 AgentExecutor 调用） ==========
+
+  /**
+   * Pre-Verify: 在执行 Action 前拦截检查安全性和策略合规性。
+   *
+   * @param action 待验证的 Action
+   * @return true 表示通过，false 表示被拦截
+   */
+  public boolean verifyPre(Action action) {
+    if (!config.preVerifyEnabled() || guardrail == null) {
+      return true;
+    }
+    logger.debug("Pre-verify action: {}", action);
+    return guardrail.intercept(
+        Map.of(
+            "type", action.type().name(),
+            "target", action.target() != null ? action.target() : "",
+            "actionId", action.actionId()));
+  }
+
+  /**
+   * Post-Verify: 执行完成后审计观测结果。
+   *
+   * @param stepResult 当前步骤的结果
+   * @return true 表示通过，false 表示需要 Revision
+   */
+  public boolean verifyPost(StepResult stepResult) {
+    if (!config.postVerifyEnabled() || guardrail == null) {
+      return true;
+    }
+    logger.debug("Post-verify result: {}", stepResult);
+    return guardrail.audit(stepResult);
+  }
+
+  /** 判断 PPAO 循环是否需要终止。 */
+  public boolean shouldFinish(AgentContext context, StepResult result) {
+    if (result instanceof StepResult.Finish) {
+      return true;
+    }
+    if (result instanceof StepResult.Failure) {
+      return true;
+    }
+    if (context.currentPhase() == AgentContext.Phase.FINISH) {
+      return true;
+    }
+    if (context.isMaxIterationsReached()) {
+      logger.warn("Agent {} reached max iterations ({})", agentId, config.maxIterations());
+      return true;
+    }
+    return false;
   }
 
   /** 关闭 Agent 释放资源。 */

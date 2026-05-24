@@ -114,6 +114,10 @@ public class AgentContext {
 
   /** 安全转换阶段，违反状态机规则时抛出异常。 */
   public synchronized void transitionTo(Phase target) {
+    // 允许自转换（idempotent），避免 PPAO 循环中重复设置同一阶段
+    if (currentPhase == target) {
+      return;
+    }
     if (!canTransitionTo(currentPhase, target)) {
       throw new IllegalStateException(
           "Invalid phase transition: " + currentPhase + " -> " + target);
@@ -131,8 +135,9 @@ public class AgentContext {
       case ACTING ->
           to == Phase.ACTING // Micro-ReAct 自循环
               || to == Phase.OBSERVING // Macro: 退出 Micro 进入 Observe
-              || to == Phase.REVISION; // Micro 内 Revision 跳出
-      case OBSERVING -> to == Phase.VERIFYING_POST || to == Phase.REVISION;
+              || to == Phase.REVISION // Micro 内 Revision 跳出
+              || to == Phase.FINISH; // 致命错误时直接结束
+      case OBSERVING -> to == Phase.VERIFYING_POST || to == Phase.REVISION || to == Phase.FINISH;
       case VERIFYING_POST -> to == Phase.REFLECTING || to == Phase.FINISH || to == Phase.REVISION;
       case REFLECTING -> to == Phase.PLANNING || to == Phase.FINISH;
       case REVISION -> to == Phase.PLANNING;

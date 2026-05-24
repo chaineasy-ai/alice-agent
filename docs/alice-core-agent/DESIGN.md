@@ -53,8 +53,8 @@ classDiagram
 
 ```mermaid
 sequenceDiagram
+    participant A as Agent
     participant M as MemoryVault
-    participant A as AgentCore
     participant P as Planner
     participant V as Guardrail
     participant T as ToolGateway

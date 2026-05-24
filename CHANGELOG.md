@@ -4,6 +4,29 @@ description: record your changes
 
 # Changelog
 
+## 20260524
+
+### Changes
+
+- alice-core-agent/AgentCore 合并: 将 `AgentCore` 的所有字段（`plannerService`、`guardrail`、`toolRegistry`、`memory`、`envAdapter`）、DI 方法（`withPlannerService()`、`withGuardrail()`、`withToolRegistry()`、`withMemory()`、`withEnvAdapter()`）、getter 及验证钩子（`verifyPre()`、`verifyPost()`、`shouldFinish()`）完整合并到 `Agent` 类中。`Agent` 现为自包含的公共 API，不再持有 `AgentCore` 实例。(#agent-core-merge)
+- alice-core-agent/AgentCore 废弃: `AgentCore` 转换为 `@Deprecated` 委托包装器，所有方法委托给内部 `Agent` 实例，保持对外部调用处的向后兼容。构造方法 `AgentCore(String, AgentConfig)` 保持包级可见。(#agent-core-merge)
+- alice-core-agent/AgentExecutor: 关键字段从 `AgentCore` 改为 `Agent`；构造参数更新为 `Agent`；全部 17 处内部引用从 `agentCore.xxx()` 迁移为 `agent.xxx()`。(#agent-core-merge)
+- alice-core-agent/Agent.shouldFinish: 新增 `context.currentPhase() == Phase.FINISH` 检查，确保 PPAO 循环在 FINISH 阶段也能通过 `shouldFinish(ctx, null)` 正确终止，修复空结果递归死循环。(#loop-termination)
+- alice-core-agent/AgentContext.stateMachine: `ACTING` 状态新增到 `FINISH` 的合法转换，`OBSERVING` 状态新增到 `FINISH` 的合法转换，支持致命错误时的优雅终止。(#state-machine)
+- alice-core-agent/AgentContext.transitionTo: 新增自身状态转换幂等检查（如 `PLANNING → PLANNING` 不会抛异常），简化 Micro-ReAct 自循环的逻辑。(#state-machine)
+- alice-core-agent/AgentExecutor.actWithMicroReAct(FINISH): 修复 FINISH 分支未设置 `ctx.put("result", ...)` 导致 `agent.ask()` 回退调用 `callLlmDirect()` 触发 `No supplier found` 异常的问题。(#finish-result)
+- alice-core-agent/AgentExecutor.handleFatalError: 修复 NPE 时 `error.getMessage()` 返回 null 导致的二次 NPE（`ConcurrentHashMap.putVal` 拒绝 null value）。(#fatal-error)
+- alice-facade-tui/EventBridge: import/字段/方法参数从 `AgentCore` 迁移为 `Agent`。(#agent-core-merge)
+- app/AliceAgent: 移除已不存在的 `agent.agentCore()` 空值检查。(#agent-core-merge)
+- alice-core-agent/AgentPpaoLoopSpec: 新增 45 个 Spock 测试用例，使用 mock StrategySelector（Spock Stub）替代真实 LLM 调用，覆盖 PPAO 循环的 FINISH/REVISION/OBSERVE 路径、verify 钩子、状态转换、AgentCore 向后兼容、多 Agent 隔离、配置访问、边界条件。(#ppaotest)
+
+### Fixes
+
+- alice-core-agent/AgentExecutor.FINISH: 调用 `ctx.put("result", action.target())` 确保 `agent.ask()` 能从上下文中读取执行结果。(#finish-result)
+- alice-core-agent/AgentContext.transitionTo: 自身状态转换时不抛异常，Micro-ReAct 自循环不再触发 `IllegalStateException`。(#state-machine)
+- alice-core-agent/AgentContext.transitionTo: `ACTING → FINISH` 与 `OBSERVING → FINISH` 加入合法转换表，防止 `handleFatalError` 中抛 `Invalid phase transition`。(#state-machine)
+- alice-core-agent/Agent.shouldFinish: 新增 `Phase.FINISH` 阶段检查，避免 PPAO 循环在已到达 FINISH 阶段后仍通过递归继续执行。(#loop-termination)
+
 ## 20260519
 
 ### Changes

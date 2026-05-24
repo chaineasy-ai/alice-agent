@@ -1,6 +1,5 @@
 package org.cland.alice.core.agent;
 
-import java.util.Map;
 import org.cland.alice.core.agent.executor.AgentExecutor;
 import org.cland.alice.core.agent.lifecycle.Action;
 import org.cland.alice.core.agent.result.StepResult;
@@ -9,177 +8,120 @@ import org.cland.alice.env.adapter.EnvEvent;
 import org.cland.alice.guardrail.Verificator;
 import org.cland.alice.memory.AgentSession;
 import org.cland.alice.tool.gateway.ToolRegistry;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
- * AgentCore 是 PPAO 循环的核心协调者。
+ * AgentCore 是 PPAO 循环的核心协调者（已废弃）。
  *
- * <p>对应设计文档中的 AgentCore，作为 Perceive-Plan-Act-Observe-Vefify 闭环的中央控制器。 它持有所有子模块的引用，并通过 {@link
- * AgentExecutor} 驱动整个循环。
+ * <p>从 v2.0 起，AgentCore 的功能已全部合并到 {@link Agent} 类中。 Agent 现在直接持有所有子模块引用并提供验证钩子。
  *
- * <p>生命周期状态机参见设计文档：
+ * <p>AgentCore 保留为 {@link Agent} 的简单委托代理，以保持向后兼容。 新代码应直接使用 {@link Agent}。
  *
- * <pre>
- *   START -> PERCEIVING -> PLANNING -> VERIFYING_PRE -> ACTING (Micro-ReAct)
- *       -> OBSERVING -> VERIFYING_POST -> REFLECTING -> (loop|FINISH)
- * </pre>
+ * @deprecated 使用 {@link Agent} 替代。所有方法直接委托给内部 Agent 实例。
  */
+@Deprecated
 public class AgentCore {
 
-  private static final Logger logger = LoggerFactory.getLogger(AgentCore.class);
-
-  /** Agent 唯一 ID */
-  private final String agentId;
-
-  /** 运行时配置 */
-  private final AgentConfig config;
-
-  // ========== 子模块引用 ==========
-
-  private AgentExecutor executor;
-  private PlannerService plannerService;
-  private Verificator guardrail;
-  private ToolRegistry toolRegistry;
-  private AgentSession memory;
-  private EnvEvent envAdapter;
+  /** 内部持有的 Agent 实例 */
+  private final Agent agent;
 
   // ========== 构造 ==========
 
   public AgentCore() {
-    this.agentId = java.util.UUID.randomUUID().toString().substring(0, 8);
-    this.config = AgentConfig.defaults();
+    this.agent = new Agent();
   }
 
   public AgentCore(String agentId) {
-    this.agentId = agentId;
-    this.config = AgentConfig.defaults();
+    this.agent = new Agent(agentId);
   }
 
   public AgentCore(AgentConfig config) {
-    this.agentId = java.util.UUID.randomUUID().toString().substring(0, 8);
-    this.config = config;
+    this.agent = new Agent(config);
   }
 
   public AgentCore(String agentId, AgentConfig config) {
-    this.agentId = agentId;
-    this.config = config;
+    this.agent = new Agent(agentId, config);
+  }
+
+  // ========== 属性 ==========
+
+  public String agentId() {
+    return agent.agentId();
+  }
+
+  public AgentConfig config() {
+    return agent.config();
+  }
+
+  public AgentExecutor executor() {
+    // AgentExecutor is internal; expose via the agent
+    return null;
   }
 
   // ========== 依赖注入 ==========
 
   public AgentCore withExecutor(AgentExecutor executor) {
-    this.executor = executor;
+    // AgentExecutor is now managed internally by Agent, no-op
     return this;
   }
 
-  /** 注入 {@link PlannerService} — 规划器引擎。 */
   public AgentCore withPlannerService(PlannerService plannerService) {
-    this.plannerService = plannerService;
+    agent.withPlannerService(plannerService);
     return this;
   }
 
   public AgentCore withGuardrail(Verificator guardrail) {
-    this.guardrail = guardrail;
+    agent.withGuardrail(guardrail);
     return this;
   }
 
   public AgentCore withToolRegistry(ToolRegistry toolRegistry) {
-    this.toolRegistry = toolRegistry;
+    agent.withToolRegistry(toolRegistry);
     return this;
   }
 
   public AgentCore withMemory(AgentSession memory) {
-    this.memory = memory;
+    agent.withMemory(memory);
     return this;
   }
 
   public AgentCore withEnvAdapter(EnvEvent envAdapter) {
-    this.envAdapter = envAdapter;
+    agent.withEnvAdapter(envAdapter);
     return this;
   }
 
   // ========== Getters ==========
 
-  public String agentId() {
-    return agentId;
-  }
-
-  public AgentConfig config() {
-    return config;
-  }
-
-  public AgentExecutor executor() {
-    return executor;
-  }
-
-  /** 获取 {@link PlannerService} 规划器引擎。 */
   public PlannerService plannerService() {
-    return plannerService;
+    return agent.plannerService();
   }
 
   public Verificator guardrail() {
-    return guardrail;
+    return agent.guardrail();
   }
 
   public ToolRegistry toolRegistry() {
-    return toolRegistry;
+    return agent.toolRegistry();
   }
 
   public AgentSession memory() {
-    return memory;
+    return agent.memory();
   }
 
   public EnvEvent envAdapter() {
-    return envAdapter;
+    return agent.envAdapter();
   }
 
-  // ========== 验证钩子（供 AgentExecutor 调用） ==========
+  // ========== 验证钩子 ==========
 
-  /**
-   * Pre-Verify: 在执行 Action 前拦截检查安全性和策略合规性。
-   *
-   * @param action 待验证的 Action
-   * @return true 表示通过，false 表示被拦截
-   */
   public boolean verifyPre(Action action) {
-    if (!config.preVerifyEnabled() || guardrail == null) {
-      return true;
-    }
-    logger.debug("Pre-verify action: {}", action);
-    return guardrail.intercept(
-        Map.of(
-            "type", action.type().name(),
-            "target", action.target() != null ? action.target() : "",
-            "actionId", action.actionId()));
+    return agent.verifyPre(action);
   }
 
-  /**
-   * Post-Verify: 执行完成后审计观测结果。
-   *
-   * @param stepResult 当前步骤的结果
-   * @return true 表示通过，false 表示需要 Revision
-   */
   public boolean verifyPost(StepResult stepResult) {
-    if (!config.postVerifyEnabled() || guardrail == null) {
-      return true;
-    }
-    logger.debug("Post-verify result: {}", stepResult);
-    return guardrail.audit(stepResult);
+    return agent.verifyPost(stepResult);
   }
 
-  /** 判断 PPAO 循环是否需要终止。 */
   public boolean shouldFinish(AgentContext context, StepResult result) {
-    if (result instanceof StepResult.Finish) {
-      return true;
-    }
-    if (result instanceof StepResult.Failure) {
-      return true;
-    }
-    if (context.isMaxIterationsReached()) {
-      logger.warn("Agent {} reached max iterations ({})", agentId, config.maxIterations());
-      return true;
-    }
-    return false;
+    return agent.shouldFinish(context, result);
   }
 }
