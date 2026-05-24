@@ -1,13 +1,21 @@
-package org.cland.alice.env.adapter.model;
+package org.cland.alice.tool.gateway.model;
 
 import java.util.Map;
 import java.util.Objects;
 
 /**
- * MCP 2.0 Tool definition, representing a callable tool exposed by an MCP server.
+ * Abstract tool descriptor — describes a callable tool by its name, description, and input schema.
  *
- * <p>Corresponds to the {@code Tool} type in the MCP 2.0 specification. Each tool has a name,
- * description, and an input schema describing expected parameters.
+ * <p>This is the universal tool representation used across the agent system. It is produced by:
+ *
+ * <ul>
+ *   <li>{@code alice-env-adapter} — when discovering tools from MCP servers via {@code tools/list}
+ *   <li>Java annotation scanning — when registering {@code @AgentTool} annotated methods
+ * </ul>
+ *
+ * <p>Once obtained, these descriptors are converted into {@link
+ * org.cland.alice.tool.gateway.metadata.ToolMetadata} and registered into the {@link
+ * org.cland.alice.tool.gateway.ToolRegistry} for runtime execution.
  */
 public final class Tool {
 

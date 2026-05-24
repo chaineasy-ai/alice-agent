@@ -10,12 +10,12 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
-import org.cland.alice.env.adapter.model.Tool;
-import org.cland.alice.env.adapter.model.ToolResult;
 import org.cland.alice.env.adapter.snapshot.EnvSnapshot;
 import org.cland.alice.env.adapter.snapshot.SnapshotManager;
 import org.cland.alice.env.adapter.state.EnvState;
 import org.cland.alice.env.adapter.transport.McpTransport;
+import org.cland.alice.tool.gateway.model.Tool;
+import org.cland.alice.tool.gateway.model.ToolResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -1,13 +1,14 @@
-package org.cland.alice.env.adapter.model;
+package org.cland.alice.tool.gateway.model;
 
 import java.util.Map;
 import java.util.Objects;
 
 /**
- * Result of reading a resource from an MCP server.
+ * Result of reading a resource — carries the resource content (as text or structured data),
+ * metadata, and the MIME type.
  *
- * <p>Contains the resource content (as text or structured data), metadata, and the MIME type of the
- * resource.
+ * <p>Produced by {@code alice-env-adapter} when reading a resource from an MCP server via {@code
+ * resources/read}.
  */
 public final class ResourceResult {
 

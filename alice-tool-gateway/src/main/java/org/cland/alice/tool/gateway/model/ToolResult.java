@@ -1,13 +1,24 @@
-package org.cland.alice.env.adapter.model;
+package org.cland.alice.tool.gateway.model;
 
 import java.util.Map;
 import java.util.Objects;
 
 /**
- * Result of calling a tool on an MCP server.
+ * Tool call result — represents the response from invoking a tool, regardless of the invocation
+ * mechanism (direct Java method call, MCP {@code tools/call}, HTTP, etc.).
  *
- * <p>Contains the tool's return data as a map of key-value pairs, along with an optional text
- * summary and error information.
+ * <p>This is the universal result type used across the agent system. It carries:
+ *
+ * <ul>
+ *   <li>{@code status} — SUCCESS, ERROR, or TIMEOUT
+ *   <li>{@code content} — structured key-value data
+ *   <li>{@code text} — optional plain-text summary
+ *   <li>{@code error} — error message if applicable
+ * </ul>
+ *
+ * <p>Distinct from {@link org.cland.alice.tool.gateway.engine.ToolResult} which is the
+ * execution-engine-specific result with {@code summary} / {@code rawData} / {@code metadata}
+ * fields. The model-level {@code ToolResult} is the MCP wire-format compatible representation.
  */
 public final class ToolResult {
 

@@ -52,7 +52,7 @@ classDiagram
 
 ```mermaid
 sequenceDiagram
-    participant A as AgentCore
+    participant A as Agent
     participant E as EnvManager
     participant C as McpClient
     participant S as McpServer (External)

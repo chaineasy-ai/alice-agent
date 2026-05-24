@@ -15,6 +15,9 @@ repositories {
 }
 
 dependencies {
+    // === Internal module dependency: tool abstraction ===
+    implementation project(':alice-tool-gateway')
+
     // === SLF4J + Logback (replaces System.getLogger) ===
     implementation 'org.slf4j:slf4j-api:2.0.16'
     implementation 'ch.qos.logback:logback-classic:1.5.16'
@@ -37,6 +40,9 @@ dependencies {
     testImplementation "org.apache.groovy:groovy-json:4.0.30"
     testImplementation "org.apache.groovy:groovy-templates:4.0.30"
     testImplementation 'org.slf4j:slf4j-api:2.0.16'
+
+    // JUnit Platform Launcher (Spock needs this)
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 java {

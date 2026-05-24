@@ -19,6 +19,18 @@ description: record your changes
 - alice-facade-tui/EventBridge: import/字段/方法参数从 `AgentCore` 迁移为 `Agent`。(#agent-core-merge)
 - app/AliceAgent: 移除已不存在的 `agent.agentCore()` 空值检查。(#agent-core-merge)
 - alice-core-agent/AgentPpaoLoopSpec: 新增 45 个 Spock 测试用例，使用 mock StrategySelector（Spock Stub）替代真实 LLM 调用，覆盖 PPAO 循环的 FINISH/REVISION/OBSERVE 路径、verify 钩子、状态转换、AgentCore 向后兼容、多 Agent 隔离、配置访问、边界条件。(#ppaotest)
+- **alice-env-adapter/模块重构**: `alice-env-adapter` 的 Tool、ToolResult、Resource、ResourceResult 四个 MCP 协议数据模型从 `env.adapter.model` 包迁移至 `alice-tool-gateway.model` 包，成为全系统通用的抽象类型定义。`alice-env-adapter` 通过 `implementation project(':alice-tool-gateway')` 依赖网关模块，ModuleInfo 添加 `requires alice.agent.alice.tool.gateway.main`。删除原有的 `model` 包，消除重复定义。(#tool-gateway-model)
+- **alice-tool-gateway/model**: 新增 `model` 包（`org.cland.alice.tool.gateway.model`），内含 Tool（工具描述符）、ToolResult（工具调用结果）、Resource（资源描述符）、ResourceResult（资源读取结果）四个通用抽象类型。`module-info.java` 新增 `exports`/`opens` 指令。(#tool-gateway-model)
+- **alice-env-adapter/测试**: 新增 108 个 Spock 测试用例，覆盖：
+  - `McpClientSpec` (22 tests): MCP 协议握手、工具/资源发现、工具调用（成功/错误/isError）、资源读取、订阅、通知转发、属性管理、生命周期状态转换、Stdio/SSE 传输层构造、网关模型类型使用验证
+  - `EnvManagerSpec` (18 tests): 客户端连接/断开、去重拒绝、工具执行（tool call / resource read）、前置快照捕获、回滚、提交、执行失败自动回滚、事件监听器（连接/执行）、多客户端工具聚合、shutdown
+  - `SnapshotManagerSpec` (16 tests): 保存/检索、LIFO 回滚（空/有历史）、按 ID 回滚、commit（空/有历史）、maxHistorySize 驱逐/校验、clear、diff（资源变更/文件变更/不可逆副作用/无变化/null）
+  - `EnvSnapshotSpec` (11 tests): 空快照、全字段构建、addIrreversibleEffect、null 校验、不可变 map、副作用（含补偿/默认时间/非空 action）、toString
+  - `EnvStateSpec` (4 tests): canExecute、isTerminal、isTransitional、全部枚举值
+  - `EnvEventSpec` (7 tests): 构造/默认时间/null 数据/不可变/null 类型/toString/全部事件类型
+  - `FakeTransportSpec` (8 tests): 连接/断开/failOnConnect/响应路由/消息记录/failOnSend/未连接发送/通知监听器/动态 handler
+  - `FakeMcpTransport`（测试基础设施）: 内存假传输层，支持静态/动态响应 handler、消息记录、连接/发送失败模拟、通知模拟
+  - (#env-adapter-tests)
 
 ### Fixes
 

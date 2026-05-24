@@ -8,11 +8,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
-import org.cland.alice.env.adapter.model.Resource;
-import org.cland.alice.env.adapter.model.ResourceResult;
-import org.cland.alice.env.adapter.model.Tool;
-import org.cland.alice.env.adapter.model.ToolResult;
 import org.cland.alice.env.adapter.transport.McpTransport;
+import org.cland.alice.tool.gateway.model.Resource;
+import org.cland.alice.tool.gateway.model.ResourceResult;
+import org.cland.alice.tool.gateway.model.Tool;
+import org.cland.alice.tool.gateway.model.ToolResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

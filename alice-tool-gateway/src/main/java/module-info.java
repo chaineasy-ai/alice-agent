@@ -7,6 +7,7 @@ module alice.agent.alice.tool.gateway.main {
   exports org.cland.alice.tool.gateway;
   exports org.cland.alice.tool.gateway.annotation;
   exports org.cland.alice.tool.gateway.metadata;
+  exports org.cland.alice.tool.gateway.model;
   exports org.cland.alice.tool.gateway.sandbox;
   exports org.cland.alice.tool.gateway.schema;
   exports org.cland.alice.tool.gateway.engine;
@@ -15,6 +16,7 @@ module alice.agent.alice.tool.gateway.main {
   opens org.cland.alice.tool.gateway;
   opens org.cland.alice.tool.gateway.annotation;
   opens org.cland.alice.tool.gateway.metadata;
+  opens org.cland.alice.tool.gateway.model;
   opens org.cland.alice.tool.gateway.sandbox;
   opens org.cland.alice.tool.gateway.schema;
   opens org.cland.alice.tool.gateway.engine;

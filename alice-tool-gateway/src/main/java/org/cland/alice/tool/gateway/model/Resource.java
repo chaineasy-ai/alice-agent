@@ -1,13 +1,17 @@
-package org.cland.alice.env.adapter.model;
+package org.cland.alice.tool.gateway.model;
 
 import java.util.Objects;
 
 /**
- * MCP 2.0 Resource descriptor, representing an external resource that can be read or subscribed to
- * via an MCP server.
+ * Abstract resource descriptor — describes an addressable resource by its URI, MIME type, name, and
+ * description.
  *
- * <p>Resources are the primary mechanism for the environment to expose stateful data (files,
- * database entries, API responses) to the Agent.
+ * <p>This is the universal resource representation used across the agent system. Resources are the
+ * primary mechanism for the environment to expose stateful data (files, database entries, API
+ * responses) to the Agent.
+ *
+ * <p>Produced by {@code alice-env-adapter} when discovering resources from MCP servers via {@code
+ * resources/list}.
  */
 public final class Resource {
 
