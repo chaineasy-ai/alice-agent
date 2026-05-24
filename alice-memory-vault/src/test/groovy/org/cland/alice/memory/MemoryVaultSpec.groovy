@@ -1,5 +1,16 @@
 package org.cland.alice.memory
 
+import org.cland.alice.memory.agent.Context
+import org.cland.alice.memory.controller.VaultController
+import org.cland.alice.memory.core.Experience
+import org.cland.alice.memory.core.Knowledge
+import org.cland.alice.memory.core.MemorySet
+import org.cland.alice.memory.core.SOP
+import org.cland.alice.memory.core.Step
+import org.cland.alice.memory.core.Summary
+import org.cland.alice.memory.storage.InMemoryStorageBackend
+import org.cland.alice.memory.vault.EpisodicVault
+
 import spock.lang.Specification
 import spock.lang.Subject
 

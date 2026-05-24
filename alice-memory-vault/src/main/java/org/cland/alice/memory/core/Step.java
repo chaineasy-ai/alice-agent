@@ -1,4 +1,4 @@
-package org.cland.alice.memory;
+package org.cland.alice.memory.core;
 
 /**
  * 一次交互步骤的原始记录，是 EpisodicVault 的基本存储单元。

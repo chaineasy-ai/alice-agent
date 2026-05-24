@@ -1,4 +1,4 @@
-package org.cland.alice.memory;
+package org.cland.alice.memory.core;
 
 import java.util.ArrayList;
 import java.util.Collections;

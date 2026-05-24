@@ -1,9 +1,11 @@
-package org.cland.alice.memory;
+package org.cland.alice.memory.router;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import org.cland.alice.memory.core.Step;
+import org.cland.alice.memory.core.Summary;
 
 /**
  * 默认记忆提炼器实现。

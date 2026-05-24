@@ -1,4 +1,4 @@
-package org.cland.alice.memory;
+package org.cland.alice.memory.storage;
 
 /**
  * 记忆存储后端的抽象接口。

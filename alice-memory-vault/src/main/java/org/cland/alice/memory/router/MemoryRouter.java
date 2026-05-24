@@ -1,7 +1,15 @@
-package org.cland.alice.memory;
+package org.cland.alice.memory.router;
 
 import java.util.List;
 import java.util.Objects;
+import org.cland.alice.memory.agent.Context;
+import org.cland.alice.memory.core.Knowledge;
+import org.cland.alice.memory.core.MemorySet;
+import org.cland.alice.memory.core.SOP;
+import org.cland.alice.memory.core.Step;
+import org.cland.alice.memory.vault.EpisodicVault;
+import org.cland.alice.memory.vault.ProceduralVault;
+import org.cland.alice.memory.vault.SemanticVault;
 
 /**
  * 记忆路由器——分析查询上下文，将请求分发到合适的 Vault。

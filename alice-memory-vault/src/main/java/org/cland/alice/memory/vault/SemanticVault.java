@@ -1,13 +1,15 @@
-package org.cland.alice.memory;
+package org.cland.alice.memory.vault;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
+import org.cland.alice.memory.core.Knowledge;
 
 /**
  * 语义记忆（Semantic Memory）Vault。
@@ -168,10 +170,10 @@ public final class SemanticVault {
     var tokens2 = tokenize(text2);
 
     // Jaccard 相似度
-    var intersection = new java.util.HashSet<>(tokens1);
+    var intersection = new HashSet<>(tokens1);
     intersection.retainAll(tokens2);
 
-    var union = new java.util.HashSet<>(tokens1);
+    var union = new HashSet<>(tokens1);
     union.addAll(tokens2);
 
     if (union.isEmpty()) return 0.0;
@@ -187,7 +189,7 @@ public final class SemanticVault {
   }
 
   private java.util.Set<String> tokenize(String text) {
-    var tokens = new java.util.HashSet<String>();
+    var tokens = new HashSet<String>();
     var sb = new StringBuilder();
     for (char c : text.toLowerCase().toCharArray()) {
       if (Character.isLetterOrDigit(c)) {

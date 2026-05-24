@@ -1,4 +1,4 @@
-package org.cland.alice.memory;
+package org.cland.alice.memory.vault;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -7,26 +7,36 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
+import org.cland.alice.memory.core.Step;
 
 /**
- * 情节记忆（Episodic Memory）Vault。
+ * 情景记忆（Episodic Memory）Vault。
  *
- * <p>负责按 {@code sessionId} 存储和检索原始交互 Trace。 实现"遗忘策略"——基于 LRU + 重要度评分进行自动清理。
+ * <p>负责存储 Agent 与环境的交互历史（原始 Traces）， 支持按 sessionId 检索、遗忘策略（FIFO + 重要度评分）。
  *
- * <p>对应设计文档：EpisodicVault / TraceLogger 角色。 物理载体建议：Redis / PostgreSQL（当前提供内存实现）。
+ * <p>对应设计文档：EpisodicVault / TraceStore 角色。 物理载体建议：SQLite / PostgreSQL（当前提供内存实现）。
+ *
+ * <p>核心特性：
+ *
+ * <ul>
+ *   <li>单 session 内遗忘：超过 maxStepsPerSession 时， 保留重要度最高的步骤（按重要度升序淘汰）
+ *   <li>全局遗忘：超过 maxSessions 时， 淘汰最久未访问（Last Access Time）的 session
+ *   <li>Step 重要度惩罚：支持降低特定 Step 的重要度（用于纠正错误推理）
+ * </ul>
  */
 public final class EpisodicVault {
 
-  /** 每个 session 的最大 step 数量，超出后触发遗忘策略 */
-  private static final int DEFAULT_MAX_STEPS_PER_SESSION = 200;
+  private static final int DEFAULT_MAX_STEPS_PER_SESSION = 50;
+  private static final int DEFAULT_MAX_SESSIONS = 10;
 
-  /** 全局最大 session 数量 */
-  private static final int DEFAULT_MAX_SESSIONS = 100;
-
-  private final Map<String, List<Step>> traces = new ConcurrentHashMap<>();
-  private final Map<String, Long> lastAccessTime = new ConcurrentHashMap<>();
   private final int maxStepsPerSession;
   private final int maxSessions;
+
+  /** sessionId → ordered steps */
+  private final Map<String, CopyOnWriteArrayList<Step>> traces = new ConcurrentHashMap<>();
+
+  /** sessionId → last access timestamp */
+  private final Map<String, Long> lastAccessTime = new ConcurrentHashMap<>();
 
   public EpisodicVault() {
     this(DEFAULT_MAX_STEPS_PER_SESSION, DEFAULT_MAX_SESSIONS);
@@ -41,7 +51,12 @@ public final class EpisodicVault {
   // 写操作
   // ---------------------------------------------------------------
 
-  /** 记录一个 Step 到指定 session 的 Trace 中。 写入后自动触发遗忘策略检查。 */
+  /**
+   * 向指定会话追加一条交互步骤。
+   *
+   * @param sessionId 会话 ID
+   * @param step 交互步骤
+   */
   public void appendStep(String sessionId, Step step) {
     traces.computeIfAbsent(sessionId, k -> new CopyOnWriteArrayList<>()).add(step);
     lastAccessTime.put(sessionId, System.currentTimeMillis());
@@ -53,24 +68,40 @@ public final class EpisodicVault {
   // 读操作
   // ---------------------------------------------------------------
 
-  /** 获取指定 session 的完整 Trace（按时间正序）。 */
+  /**
+   * 获取指定会话的完整 Trace。
+   *
+   * @param sessionId 会话 ID
+   * @return 会话的步骤列表（按添加顺序）
+   */
   public List<Step> getTrace(String sessionId) {
     List<Step> steps = traces.get(sessionId);
-    if (steps == null) return List.of();
     lastAccessTime.put(sessionId, System.currentTimeMillis());
-    return List.copyOf(steps);
+    return steps != null ? List.copyOf(steps) : List.of();
   }
 
-  /** 获取指定 session 最近的 N 个 Step。 */
+  /**
+   * 获取指定会话最近的 N 个步骤。
+   *
+   * @param sessionId 会话 ID
+   * @param n 需要的步骤数
+   * @return 最近的 N 个步骤（按时间正序）
+   */
   public List<Step> getRecentSteps(String sessionId, int n) {
     List<Step> steps = traces.get(sessionId);
-    if (steps == null || steps.isEmpty()) return List.of();
     lastAccessTime.put(sessionId, System.currentTimeMillis());
-    int from = Math.max(0, steps.size() - n);
-    return List.copyOf(steps.subList(from, steps.size()));
+    if (steps == null || steps.isEmpty()) return List.of();
+    int start = Math.max(0, steps.size() - n);
+    return List.copyOf(steps.subList(start, steps.size()));
   }
 
-  /** 获取指定 session 中重要度高于阈值的 Step。 */
+  /**
+   * 获取指定会话中重要度超过阈值的步骤。
+   *
+   * @param sessionId 会话 ID
+   * @param minImportance 最低重要度阈值
+   * @return 重要度 >= minImportance 的步骤列表
+   */
   public List<Step> getImportantSteps(String sessionId, double minImportance) {
     List<Step> steps = traces.get(sessionId);
     if (steps == null) return List.of();
@@ -79,27 +110,27 @@ public final class EpisodicVault {
         .collect(Collectors.toUnmodifiableList());
   }
 
-  /** 获取所有活跃的 session ID。 */
-  public List<String> getActiveSessionIds() {
-    return List.copyOf(traces.keySet());
-  }
-
-  /** 获取 session 的 Step 数量。 */
+  /** 获取指定会话的步骤数量。 */
   public int stepCount(String sessionId) {
     List<Step> steps = traces.get(sessionId);
     return steps != null ? steps.size() : 0;
   }
 
-  /** 获取 vault 中的 session 数量。 */
+  /** 获取当前活跃的 session 数量。 */
   public int sessionCount() {
     return traces.size();
   }
 
+  /** 获取所有活跃 session ID 的列表。 */
+  public List<String> getActiveSessionIds() {
+    return List.copyOf(traces.keySet());
+  }
+
   // ---------------------------------------------------------------
-  // 删除 / 遗忘
+  // 删除
   // ---------------------------------------------------------------
 
-  /** 清除指定 session 的所有 Trace。 */
+  /** 清除指定会话的所有步骤。 */
   public void clearSession(String sessionId) {
     traces.remove(sessionId);
     lastAccessTime.remove(sessionId);

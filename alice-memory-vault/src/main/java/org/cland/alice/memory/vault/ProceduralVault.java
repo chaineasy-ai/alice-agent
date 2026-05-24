@@ -1,4 +1,4 @@
-package org.cland.alice.memory;
+package org.cland.alice.memory.vault;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -8,6 +8,8 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
+import org.cland.alice.memory.agent.Context;
+import org.cland.alice.memory.core.SOP;
 
 /**
  * 程序记忆（Procedural Memory）Vault。
