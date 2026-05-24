@@ -22,9 +22,7 @@ import org.slf4j.LoggerFactory;
  * Agent 核心类，代表一个 AI Agent 实例。
  *
  * <p>基于 PPAO (Perceive-Plan-Act-Observe-Verify) 核心循环。 通过 ModelProvider 与底层模型交互，通过 AgentExecutor
- * 驱动响应式执行循环。
- *
- * <p>Agent 同时承担了 {@code AgentCore} 的角色，作为 PPAO 循环的核心协调者， 持有所有子模块（规划器、安全校验、工具注册中心、记忆、环境适配器）的引用。
+ * 驱动响应式执行循环。持有所有子模块（规划器、安全校验、工具注册中心、记忆、环境适配器）的引用。
  *
  * <p>生命周期状态机：
  *

@@ -263,25 +263,6 @@ class AgentPpaoLoopSpec extends Specification {
     }
 
     // ========================================================================
-    // Tests for AgentCore backward compatibility
-    // ========================================================================
-
-    def "deprecated AgentCore should delegate to Agent"() {
-        given:
-        def config = AgentConfig.builder().maxIterations(5).build()
-        def planner = makePlanner(finishStrategy())
-        def agentCore = new AgentCore("core-test", config)
-        agentCore.withPlannerService(planner)
-
-        expect:
-        agentCore.agentId() == "core-test"
-        agentCore.config().maxIterations() == 5
-        agentCore.plannerService() != null
-        agentCore.verifyPre(Action.finish())
-        !agentCore.shouldFinish(new AgentContext(5), null)
-    }
-
-    // ========================================================================
     // Tests for Agent identity and configuration
     // ========================================================================
 
