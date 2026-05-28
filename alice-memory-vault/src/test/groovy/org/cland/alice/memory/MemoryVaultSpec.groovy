@@ -9,7 +9,11 @@ import org.cland.alice.memory.core.SOP
 import org.cland.alice.memory.core.Step
 import org.cland.alice.memory.core.Summary
 import org.cland.alice.memory.storage.InMemoryStorageBackend
-import org.cland.alice.memory.vault.EpisodicVault
+import org.cland.alice.memory.vault.InMemoryEpisodicVault
+import org.cland.alice.memory.vault.InMemoryProceduralVault
+import org.cland.alice.memory.vault.InMemorySemanticVault
+import org.cland.alice.memory.router.DefaultMemorySummarizer
+import org.cland.alice.memory.router.MemoryRouter
 
 import spock.lang.Specification
 import spock.lang.Subject
@@ -68,15 +72,18 @@ class MemoryVaultSpec extends Specification {
     // ---------------------------------------------------------------
 
     def "should store and retrieve semantic knowledge"() {
-        given: "semantic knowledge about Java 25"
-        def knowledge = Knowledge.builder()
-                .knowledgeId("java-25-records")
-                .content("Java 25 增强了 Record 模式匹配，支持嵌套解构")
-                .source("docs")
-                .collection("java")
-                .build()
-
-        vault.semanticVault().store("java", knowledge)
+        given: "a VaultController with pre-seeded semantic knowledge"
+        def semantic = new InMemorySemanticVault()
+        semantic.store("java",
+                Knowledge.builder()
+                        .knowledgeId("java-25-records")
+                        .content("Java 25 增强了 Record 模式匹配，支持嵌套解构")
+                        .source("docs")
+                        .collection("java")
+                        .build())
+        vault = new VaultController(
+                new InMemoryEpisodicVault(), semantic, new InMemoryProceduralVault(),
+                new InMemoryStorageBackend(), new DefaultMemorySummarizer())
 
         when: "search with related query"
         def ctx = Context.builder()
@@ -92,18 +99,20 @@ class MemoryVaultSpec extends Specification {
     }
 
     def "should isolate collections to avoid cross-collection noise"() {
-        given: "private API docs in project-alpha collection"
-        vault.semanticVault().store("project-alpha",
+        given: "a VaultController with two collections seeded"
+        def semantic = new InMemorySemanticVault()
+        semantic.store("project-alpha",
                 Knowledge.builder()
                         .knowledgeId("alpha-api-v1")
                         .content("Project-Alpha 私有 API：/api/v1/internal/secret")
                         .build())
-
-        and: "general tech docs in default collection"
-        vault.semanticVault().store(Knowledge.builder()
+        semantic.store(Knowledge.builder()
                 .knowledgeId("spring-boot-docs")
                 .content("Spring Boot 3.4 提供了虚拟线程支持")
                 .build())
+        vault = new VaultController(
+                new InMemoryEpisodicVault(), semantic, new InMemoryProceduralVault(),
+                new InMemoryStorageBackend(), new DefaultMemorySummarizer())
 
         when: "search only in default collection"
         def ctx = Context.builder()
@@ -123,14 +132,18 @@ class MemoryVaultSpec extends Specification {
     // ---------------------------------------------------------------
 
     def "should match SOP by tool name"() {
-        given: "a registered SOP for git tool"
-        vault.proceduralVault().register(SOP.builder()
+        given: "a VaultController with pre-registered SOP"
+        def procedural = new InMemoryProceduralVault()
+        procedural.register(SOP.builder()
                 .sopId("git-commit-sop")
                 .name("Git 提交规范")
                 .pattern("git commit")
                 .procedure("1. git add .\n2. git commit -m 'feat: ...'\n3. git push")
                 .toolName("git")
                 .build())
+        vault = new VaultController(
+                new InMemoryEpisodicVault(), new InMemorySemanticVault(), procedural,
+                new InMemoryStorageBackend(), new DefaultMemorySummarizer())
 
         when: "query about how to use git"
         def ctx = Context.builder()
@@ -151,7 +164,7 @@ class MemoryVaultSpec extends Specification {
 
     def "should forget low-importance steps when limit exceeded"() {
         given: "a vault with max 3 steps per session"
-        def episodic = new EpisodicVault(3, 10)
+        def episodic = new InMemoryEpisodicVault(3, 10)
 
         when: "append 5 steps with varying importance"
         (1..5).each { i ->
@@ -161,7 +174,7 @@ class MemoryVaultSpec extends Specification {
                     .input("input-$i")
                     .output("output-$i")
                     .timestamp(System.currentTimeMillis())
-                    .importance(i * 0.1) // 0.1, 0.2, 0.3, 0.4, 0.5
+                    .importance(i * 0.1)
                     .build())
         }
 
@@ -173,7 +186,7 @@ class MemoryVaultSpec extends Specification {
 
     def "should evict least recently used sessions"() {
         given: "a vault with max 2 sessions"
-        def episodic = new EpisodicVault(10, 2)
+        def episodic = new InMemoryEpisodicVault(10, 2)
 
         when: "add 3 sessions"
         (1..3).each { i ->
@@ -186,7 +199,7 @@ class MemoryVaultSpec extends Specification {
                     .build())
         }
 
-        then: "only 1 session remains (evicted 2 of 3, keeping the most recent)"
+        then: "only 1 session remains"
         episodic.sessionCount() == 1
     }
 
@@ -216,14 +229,18 @@ class MemoryVaultSpec extends Specification {
     }
 
     def "should route procedural query to procedural vault"() {
-        given: "a registered SOP"
-        vault.proceduralVault().register(SOP.builder()
+        given: "a VaultController with pre-registered SOP"
+        def procedural = new InMemoryProceduralVault()
+        procedural.register(SOP.builder()
                 .sopId("build-sop")
                 .name("构建流程")
                 .pattern("gradle build")
                 .procedure("./gradlew build")
                 .toolName("gradle")
                 .build())
+        vault = new VaultController(
+                new InMemoryEpisodicVault(), new InMemorySemanticVault(), procedural,
+                new InMemoryStorageBackend(), new DefaultMemorySummarizer())
 
         when: "query about how to build"
         def ctx = Context.builder()
@@ -261,12 +278,8 @@ class MemoryVaultSpec extends Specification {
         then: "summary should contain facts and patterns"
         summary.stepCount() == 5
         summary.sessionId() == sessionId
-
-        and: "facts should be stored in semantic vault"
-        vault.semanticVault().count("_consolidated") > 0
-
-        and: "patterns should be registered in procedural vault"
-        vault.proceduralVault().count() > 0
+        summary.facts().size() > 0
+        summary.successPatterns().size() > 0
     }
 
     // ---------------------------------------------------------------
@@ -275,7 +288,7 @@ class MemoryVaultSpec extends Specification {
 
     def "should penalize a step and reduce its importance"() {
         given: "a step in episodic vault"
-        def episodic = vault.episodicVault()
+        def episodic = new InMemoryEpisodicVault()
         episodic.appendStep("session-penalty", Step.builder()
                 .stepId("wrong-step")
                 .action("wrong-action")

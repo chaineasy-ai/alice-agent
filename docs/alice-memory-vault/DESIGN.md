@@ -80,7 +80,7 @@ Agent 不应只会被动读取，更应在后台进行“睡眠式”处理（Co
 
 ```mermaid
 sequenceDiagram
-    participant A as AgentCore
+    participant A as Agent
     participant M as VaultController
     participant E as EpisodicVault
     participant S as SemanticVault

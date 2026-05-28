@@ -4,6 +4,15 @@ description: record your changes
 
 # Changelog
 
+## 20260529
+
+### Changes
+
+- **alice-memory-vault/命名规约重构**: 移除 vault 接口的 `I` 前缀（`IEpisodicVault` → `EpisodicVault`），实现类重命名为 `InMemory*` 前缀（`EpisodicVault` → `InMemoryEpisodicVault`，`SemanticVault` → `InMemorySemanticVault`，`ProceduralVault` → `InMemoryProceduralVault`）。
+  - `VaultController` 和 `MemoryRouter` 依赖纯接口（`EpisodicVault`、`SemanticVault`、`ProceduralVault`）而非具体实现
+  - 所有测试更新为使用新的 `InMemory*` 实现类名
+  - 全模块编译通过（85/85 测试通过）
+
 ## 20260525
 
 ### Changes

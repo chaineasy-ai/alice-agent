@@ -43,12 +43,10 @@ public final class MemoryRouter {
   public MemorySet route(Context ctx) {
     Objects.requireNonNull(ctx, "ctx must not be null");
 
-    // 统计路由倾向
     boolean needsEpisodic = ctx.isEpisodicQuery() || ctx.sessionId() != null;
-    boolean needsSemantic = ctx.isSemanticQuery() || ctx.isEpisodicQuery(); // episodic 也常伴随语义
+    boolean needsSemantic = ctx.isSemanticQuery() || ctx.isEpisodicQuery();
     boolean needsProcedural = ctx.isProceduralQuery();
 
-    // 如果没有任何明确倾向，执行全检索（知识融合）
     if (!needsEpisodic && !needsSemantic && !needsProcedural) {
       return fuseAll(ctx);
     }
@@ -104,7 +102,7 @@ public final class MemoryRouter {
     }
 
     for (Knowledge k : results) {
-      builder.addSemantic(k.knowledgeId(), k.content(), 0.9); // score from search
+      builder.addSemantic(k.knowledgeId(), k.content(), 0.9);
     }
   }
 
@@ -113,22 +111,6 @@ public final class MemoryRouter {
     for (SOP sop : matches) {
       builder.addProcedural(sop.sopId(), sop.pattern(), sop.procedure(), 0.9);
     }
-  }
-
-  // ---------------------------------------------------------------
-  // 组件访问（供 VaultController 使用）
-  // ---------------------------------------------------------------
-
-  public EpisodicVault episodicVault() {
-    return episodicVault;
-  }
-
-  public SemanticVault semanticVault() {
-    return semanticVault;
-  }
-
-  public ProceduralVault proceduralVault() {
-    return proceduralVault;
   }
 
   @Override
