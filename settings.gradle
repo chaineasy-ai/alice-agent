@@ -4,7 +4,7 @@
  */
 
 rootProject.name = 'alice-agent'
-include('app')
+include('alice-bootstrap')
 include('alice-agent-command')
 include('alice-facade-tui')
 include('alice-facade-cmd')

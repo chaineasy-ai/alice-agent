@@ -4,9 +4,16 @@ A modular Java agent framework built with Gradle and Spock.
 
 See [project.tree](./project.tree) for the full project structure (sourced from Git history).
 
+
 ## Using the project: 
 1. Add any dependencies to build.gradle.
 2. Add logic to AliceAgent.java.
+
+## Proj Structure
+Generate Proj Structure
+```bash
+struct -i ".git" -i ".gradle" -i "build" -i ".idea" -i ".lazybones" -i "*.class" -i "*.jar" -i ".vscode" -i ".bevel" -i "docs/*" -i "test" -i "resources" -i "logs" -s -o project.tree 
+```
 
 ## Format
 Format java code:
@@ -23,7 +30,7 @@ Gradle HTML report is located in app/build/reports/tests.
 
 Run the sample application with Gradle:
 ```
-./gradlew :app:run
+./gradlew :alice-bootstrap:run
 ```
 
 ## Building the Application
