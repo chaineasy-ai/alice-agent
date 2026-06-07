@@ -41,3 +41,10 @@ alice-facade-tui/build
 build
 .bevel
 .vscode
+
+# Python e2e test artifacts
+__pycache__/
+*.pyc
+*.pyo
+e2e/**/__pycache__/
+e2e/**/*.egg-info/

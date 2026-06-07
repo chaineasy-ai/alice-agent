@@ -4,6 +4,18 @@ description: record your changes
 
 # Changelog
 
+## 20260607
+
+### Changes
+
+- **e2e/gemma4/新增 E2E 测试套件**: 针对本地 Gemma4 模型 API（http://192.168.1.14:10303/v1）创建完整的端到端 Python 测试套件。
+  - `gemma_4_client.py` — 轻量级 OpenAI 兼容客户端，支持流式与非流式调用
+  - `gemma4_e2e_test.py` — 10 个测试用例覆盖：基础对话、多轮上下文、日语、流式、System Prompt、Token 用量、错误处理、延迟验证
+  - `run_e2e.py` / `run_e2e.sh` / `run_e2e.bat` — 跨平台运行脚本
+  - `requirements.txt` / `pyproject.toml` — 依赖管理
+  - 通过环境变量 `GEMMA4_BASE_URL`、`GEMMA4_MODEL`、`GEMMA4_TIMEOUT` 灵活配置
+  - 测试包含服务健康检查，未启动时自动跳过（SkipTest）
+
 ## 20260529
 
 ### Changes
