@@ -1,0 +1,40 @@
+{
+  "fixtures": [
+    {
+      "match": { "toolName": "get_weather", "model": "gpt-4o" },
+      "response": {
+        "content": "{\"city\": \"Beijing\", \"temperature\": 22, \"condition\": \"Sunny\", \"humidity\": \"45%\"}"
+      }
+    },
+    {
+      "match": { "toolName": "get_weather", "model": "gpt-4o-mini" },
+      "response": {
+        "content": "{\"temperature\": 22, \"condition\": \"Sunny\"}"
+      }
+    },
+    {
+      "match": { "toolName": "search/web", "model": "gpt-4o" },
+      "response": {
+        "content": "{\"results\": [{\"title\": \"Alice Agent\", \"url\": \"https://github.com/example/alice-agent\", \"snippet\": \"A modular Java agent framework\"}], \"total\": 1}"
+      }
+    },
+    {
+      "match": { "toolName": "filesystem/read", "model": "gpt-4o" },
+      "response": {
+        "content": "{\"success\": true, \"content\": \"mock file content for testing\"}"
+      }
+    },
+    {
+      "match": { "toolName": "database/query", "model": "gpt-4o" },
+      "response": {
+        "content": "{\"rows\": [{\"id\": 1, \"name\": \"Alice\"}], \"count\": 1}"
+      }
+    },
+    {
+      "match": { "hasToolResult": true, "model": "gpt-4o" },
+      "response": {
+        "content": "Tool call completed. Based on the result, here is the summary: the operation was successful."
+      }
+    }
+  ]
+}

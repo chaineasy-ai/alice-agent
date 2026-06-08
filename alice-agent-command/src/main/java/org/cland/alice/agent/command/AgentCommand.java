@@ -88,6 +88,9 @@ public sealed interface AgentCommand permits ExecutionCmd, CapabilityCmd, Alignm
       case "/new" -> new ControlCmd.ResetSessionCmd(sessionId, traceId);
       case "/feedback" -> new ControlCmd.FeedbackCmd(args, sessionId, traceId);
       case "/exit" -> new ControlCmd.InterruptCmd("user-exit", sessionId, traceId);
+      case "/clear" -> new ControlCmd.ClearContextCmd(sessionId, traceId);
+      case "/context" -> new ControlCmd.ViewContextCmd(sessionId, traceId);
+      case "/compact" -> new ControlCmd.CompactContextCmd(sessionId, traceId);
 
       // 非斜杠命令（上文已处理），或未知斜杠命令
       default -> null;

@@ -7,7 +7,10 @@ import spock.lang.Title
  * 测试 {@link ControlCmd} 及其子类型：
  * {@link ControlCmd.ResetSessionCmd},
  * {@link ControlCmd.FeedbackCmd},
- * {@link ControlCmd.InterruptCmd}.
+ * {@link ControlCmd.InterruptCmd},
+ * {@link ControlCmd.ClearContextCmd},
+ * {@link ControlCmd.ViewContextCmd},
+ * {@link ControlCmd.CompactContextCmd}.
  */
 @Title("ControlCmd 密封接口")
 class ControlCmdSpec extends Specification {
@@ -129,5 +132,135 @@ class ControlCmdSpec extends Specification {
         expect:
         new ControlCmd.InterruptCmd("exit", SESSION, TRACE) !=
         new ControlCmd.InterruptCmd("cancel", SESSION, TRACE)
+    }
+
+    // ========================================================================
+    // ClearContextCmd (/clear)
+    // ========================================================================
+
+    def "ClearContextCmd 应记录 sessionId, traceId, reason"() {
+        given:
+        def cmd = new ControlCmd.ClearContextCmd(SESSION, TRACE)
+
+        expect:
+        cmd.sessionId() == SESSION
+        cmd.traceId()   == TRACE
+        cmd.reason()    == "clear-context"
+        cmd.timestamp() != null
+    }
+
+    def "ClearContextCmd 拒绝 null sessionId"() {
+        when:
+        new ControlCmd.ClearContextCmd(null, TRACE)
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    def "ClearContextCmd 拒绝 null traceId"() {
+        when:
+        new ControlCmd.ClearContextCmd(SESSION, null)
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    // ========================================================================
+    // ViewContextCmd (/context)
+    // ========================================================================
+
+    def "ViewContextCmd 应记录 sessionId, traceId, reason"() {
+        given:
+        def cmd = new ControlCmd.ViewContextCmd(SESSION, TRACE)
+
+        expect:
+        cmd.sessionId() == SESSION
+        cmd.traceId()   == TRACE
+        cmd.reason()    == "view-context"
+        cmd.timestamp() != null
+    }
+
+    def "ViewContextCmd 拒绝 null sessionId"() {
+        when:
+        new ControlCmd.ViewContextCmd(null, TRACE)
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    def "ViewContextCmd 拒绝 null traceId"() {
+        when:
+        new ControlCmd.ViewContextCmd(SESSION, null)
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    // ========================================================================
+    // CompactContextCmd (/compact)
+    // ========================================================================
+
+    def "CompactContextCmd 应记录 sessionId, traceId, reason"() {
+        given:
+        def cmd = new ControlCmd.CompactContextCmd(SESSION, TRACE)
+
+        expect:
+        cmd.sessionId() == SESSION
+        cmd.traceId()   == TRACE
+        cmd.reason()    == "compact-context"
+        cmd.timestamp() != null
+    }
+
+    def "CompactContextCmd 拒绝 null sessionId"() {
+        when:
+        new ControlCmd.CompactContextCmd(null, TRACE)
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    def "CompactContextCmd 拒绝 null traceId"() {
+        when:
+        new ControlCmd.CompactContextCmd(SESSION, null)
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    // ========================================================================
+    // Record 相等性（新类型）
+    // ========================================================================
+
+    def "相同字段的两个 ClearContextCmd 应相等"() {
+        given:
+        def ts = java.time.Instant.now()
+        def a = new ControlCmd.ClearContextCmd(SESSION, TRACE, ts)
+        def b = new ControlCmd.ClearContextCmd(SESSION, TRACE, ts)
+
+        expect:
+        a == b
+        a.hashCode() == b.hashCode()
+    }
+
+    def "相同字段的两个 ViewContextCmd 应相等"() {
+        given:
+        def ts = java.time.Instant.now()
+        def a = new ControlCmd.ViewContextCmd(SESSION, TRACE, ts)
+        def b = new ControlCmd.ViewContextCmd(SESSION, TRACE, ts)
+
+        expect:
+        a == b
+        a.hashCode() == b.hashCode()
+    }
+
+    def "相同字段的两个 CompactContextCmd 应相等"() {
+        given:
+        def ts = java.time.Instant.now()
+        def a = new ControlCmd.CompactContextCmd(SESSION, TRACE, ts)
+        def b = new ControlCmd.CompactContextCmd(SESSION, TRACE, ts)
+
+        expect:
+        a == b
+        a.hashCode() == b.hashCode()
     }
 }

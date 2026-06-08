@@ -1,0 +1,28 @@
+{
+  "fixtures": [
+    {
+      "match": { "userMessage": "hello", "model": "gpt-4o" },
+      "response": {
+        "content": "Hello! I am Alice Agent, a modular Java agent framework built with Gradle and Spock. I can help you with task planning, tool integration, memory management, and guardrail validation.",
+        "latency": 500,
+        "chunkSize": 10
+      }
+    },
+    {
+      "match": { "userMessage": "tell me a story*" },
+      "response": {
+        "content": "Once upon a time, there was a Java agent framework called Alice Agent. It was designed to help developers build intelligent, modular AI applications with ease. The end.",
+        "latency": 300,
+        "chunkSize": 15
+      }
+    },
+    {
+      "match": { "userMessage": "hello", "model": "gemma-4" },
+      "response": {
+        "content": "Hello from the local Gemma-4 model, running at high speed with zero cloud dependency.",
+        "latency": 100,
+        "chunkSize": 5
+      }
+    }
+  ]
+}

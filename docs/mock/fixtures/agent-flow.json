@@ -1,0 +1,34 @@
+{
+  "fixtures": [
+    {
+      "match": { "userMessage": "execute plan to deploy*", "model": "gpt-4o" },
+      "response": {
+        "toolCalls": [{ "name": "filesystem/read", "arguments": { "path": "/config/deploy.yaml" } }]
+      }
+    },
+    {
+      "match": { "turnIndex": 1, "hasToolResult": true, "model": "gpt-4o" },
+      "response": {
+        "toolCalls": [{ "name": "database/query", "arguments": { "query": "SELECT * FROM deployments" } }]
+      }
+    },
+    {
+      "match": { "turnIndex": 2, "hasToolResult": true, "model": "gpt-4o" },
+      "response": {
+        "content": "Deployment plan executed successfully. All services are running."
+      }
+    },
+    {
+      "match": { "userMessage": "run*agent*test*" },
+      "response": {
+        "content": "Running agent tests... All PPAO loop phases passed validation. Memory operations verified. Guardrail rules enforced correctly."
+      }
+    },
+    {
+      "match": { "userMessage": "what is the weather*" },
+      "response": {
+        "toolCalls": [{ "name": "get_weather", "arguments": { "city": "Beijing" } }]
+      }
+    }
+  ]
+}

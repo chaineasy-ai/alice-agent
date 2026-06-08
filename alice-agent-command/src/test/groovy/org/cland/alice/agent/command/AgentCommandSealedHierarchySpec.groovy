@@ -9,7 +9,7 @@ import spock.lang.Title
  * <p>确保：
  * <ul>
  *   <li>instanceof 检查能覆盖所有分支</li>
- *   <li>所有 9 个具体子类型可被正确分类</li>
+ *   <li>所有 12 个具体子类型可被正确分类</li>
  * </ul>
  */
 @Title("AgentCommand 密封层级完整性")
@@ -19,10 +19,10 @@ class AgentCommandSealedHierarchySpec extends Specification {
     static final String TRACE  = "trace-xyz"
 
     // ========================================================================
-    // instanceof 分类 —— 确保所有 9 个具体子类型可被正确识别
+    // instanceof 分类 —— 确保所有 12 个具体子类型可被正确识别
     // ========================================================================
 
-    def "instanceof 应正确分类所有 9 个子类型"() {
+    def "instanceof 应正确分类所有 12 个子类型"() {
         given:
         def cmds = [
             new ExecutionCmd.AcquireGoalCmd("goal", SESSION, TRACE),
@@ -34,6 +34,9 @@ class AgentCommandSealedHierarchySpec extends Specification {
             new ControlCmd.ResetSessionCmd(SESSION, TRACE),
             new ControlCmd.FeedbackCmd("fb", SESSION, TRACE),
             new ControlCmd.InterruptCmd("exit", SESSION, TRACE),
+            new ControlCmd.ClearContextCmd(SESSION, TRACE),
+            new ControlCmd.ViewContextCmd(SESSION, TRACE),
+            new ControlCmd.CompactContextCmd(SESSION, TRACE),
         ]
 
         expect:
@@ -46,6 +49,9 @@ class AgentCommandSealedHierarchySpec extends Specification {
         cmds[6] instanceof ControlCmd.ResetSessionCmd
         cmds[7] instanceof ControlCmd.FeedbackCmd
         cmds[8] instanceof ControlCmd.InterruptCmd
+        cmds[9] instanceof ControlCmd.ClearContextCmd
+        cmds[10] instanceof ControlCmd.ViewContextCmd
+        cmds[11] instanceof ControlCmd.CompactContextCmd
 
         // 父接口 instanceof 也成立
         cmds[0] instanceof ExecutionCmd
@@ -68,6 +74,9 @@ class AgentCommandSealedHierarchySpec extends Specification {
         new ControlCmd.ResetSessionCmd(SESSION, TRACE) instanceof ControlCmd
         new ControlCmd.FeedbackCmd("f", SESSION, TRACE) instanceof ControlCmd
         new ControlCmd.InterruptCmd("i", SESSION, TRACE) instanceof ControlCmd
+        new ControlCmd.ClearContextCmd(SESSION, TRACE) instanceof ControlCmd
+        new ControlCmd.ViewContextCmd(SESSION, TRACE) instanceof ControlCmd
+        new ControlCmd.CompactContextCmd(SESSION, TRACE) instanceof ControlCmd
     }
 
     // ========================================================================
@@ -103,5 +112,8 @@ class AgentCommandSealedHierarchySpec extends Specification {
         new ControlCmd.ResetSessionCmd(SESSION, TRACE) instanceof AgentCommand
         new ControlCmd.FeedbackCmd("f", SESSION, TRACE) instanceof AgentCommand
         new ControlCmd.InterruptCmd("i", SESSION, TRACE) instanceof AgentCommand
+        new ControlCmd.ClearContextCmd(SESSION, TRACE) instanceof AgentCommand
+        new ControlCmd.ViewContextCmd(SESSION, TRACE) instanceof AgentCommand
+        new ControlCmd.CompactContextCmd(SESSION, TRACE) instanceof AgentCommand
     }
 }

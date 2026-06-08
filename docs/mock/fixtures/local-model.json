@@ -1,0 +1,34 @@
+{
+  "fixtures": [
+    {
+      "match": { "model": "gemma-4" },
+      "response": {
+        "content": "Hello from Gemma 4 (local deployment mock at 192.168.1.14:10303)!"
+      }
+    },
+    {
+      "match": { "model": "deepseek-chat" },
+      "response": {
+        "content": "Mock response from DeepSeek Chat."
+      }
+    },
+    {
+      "match": { "model": "deepseek-reasoner" },
+      "response": {
+        "content": "Mock response from DeepSeek Reasoner."
+      }
+    },
+    {
+      "match": { "model": "qwen-max" },
+      "response": {
+        "content": "Mock response from Qwen Max."
+      }
+    },
+    {
+      "match": { "model": "qwen-plus" },
+      "response": {
+        "content": "Mock response from Qwen Plus."
+      }
+    }
+  ]
+}

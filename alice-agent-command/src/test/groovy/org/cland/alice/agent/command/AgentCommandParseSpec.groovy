@@ -174,6 +174,60 @@ class AgentCommandParseSpec extends Specification {
         (cmd as ControlCmd.InterruptCmd).reason().contains("user-exit")
     }
 
+    def "/clear 应转换为 ClearContextCmd"() {
+        when:
+        def cmd = AgentCommand.parse("/clear", SESSION, TRACE)
+
+        then:
+        cmd instanceof ControlCmd.ClearContextCmd
+        (cmd as ControlCmd.ClearContextCmd).reason() == "clear-context"
+        (cmd as ControlCmd.ClearContextCmd).sessionId() == SESSION
+    }
+
+    def "/clear 忽略额外参数"() {
+        when:
+        def cmd = AgentCommand.parse("/clear all", SESSION, TRACE)
+
+        then:
+        cmd instanceof ControlCmd.ClearContextCmd
+    }
+
+    def "/context 应转换为 ViewContextCmd"() {
+        when:
+        def cmd = AgentCommand.parse("/context", SESSION, TRACE)
+
+        then:
+        cmd instanceof ControlCmd.ViewContextCmd
+        (cmd as ControlCmd.ViewContextCmd).reason() == "view-context"
+        (cmd as ControlCmd.ViewContextCmd).sessionId() == SESSION
+    }
+
+    def "/context 忽略额外参数"() {
+        when:
+        def cmd = AgentCommand.parse("/context full", SESSION, TRACE)
+
+        then:
+        cmd instanceof ControlCmd.ViewContextCmd
+    }
+
+    def "/compact 应转换为 CompactContextCmd"() {
+        when:
+        def cmd = AgentCommand.parse("/compact", SESSION, TRACE)
+
+        then:
+        cmd instanceof ControlCmd.CompactContextCmd
+        (cmd as ControlCmd.CompactContextCmd).reason() == "compact-context"
+        (cmd as ControlCmd.CompactContextCmd).sessionId() == SESSION
+    }
+
+    def "/compact 忽略额外参数"() {
+        when:
+        def cmd = AgentCommand.parse("/compact now", SESSION, TRACE)
+
+        then:
+        cmd instanceof ControlCmd.CompactContextCmd
+    }
+
     // ========================================================================
     // 未知命令
     // ========================================================================
@@ -201,6 +255,9 @@ class AgentCommandParseSpec extends Specification {
             AgentCommand.parse("/model x", SESSION, TRACE),
             AgentCommand.parse("/new", SESSION, TRACE),
             AgentCommand.parse("/exit", SESSION, TRACE),
+            AgentCommand.parse("/clear", SESSION, TRACE),
+            AgentCommand.parse("/context", SESSION, TRACE),
+            AgentCommand.parse("/compact", SESSION, TRACE),
         ]
 
         then:

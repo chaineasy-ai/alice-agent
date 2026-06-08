@@ -1,0 +1,94 @@
+{
+  "fixtures": [
+    {
+      "match": { "userMessage": "hello", "model": "gpt-4o" },
+      "response": {
+        "content": "Hello! I am Alice Agent, a modular Java agent framework. I can help you with:\n- Task planning via PPAO loop\n- Tool integration through MCP\n- Memory management (episodic, semantic, procedural)\n- Guardrail validation\n- Multi-facade interaction (CLI / TUI)"
+      }
+    },
+    {
+      "match": { "userMessage": "hello", "model": "gpt-4o-mini" },
+      "response": {
+        "content": "Hi there! Alice Agent v0.1.0 ready to assist."
+      }
+    },
+    {
+      "match": { "userMessage": "hello", "model": "gemma-4" },
+      "response": {
+        "content": "Hello from Gemma 4 (local deployment mock)!"
+      }
+    },
+    {
+      "match": { "userMessage": "hello", "model": "o1" },
+      "response": {
+        "content": "Hello. Alice Agent is ready."
+      }
+    },
+    {
+      "match": { "userMessage": "hello", "model": "claude-3-5-sonnet-latest" },
+      "response": {
+        "content": "Greetings! I am Alice Agent, running with Anthropic Claude. How may I assist you today?"
+      }
+    },
+    {
+      "match": { "userMessage": "what can you do", "model": "gpt-4o" },
+      "response": {
+        "content": "I can:\n1. Plan and execute multi-step tasks\n2. Call external tools via MCP protocol\n3. Store and retrieve memories\n4. Validate actions through guardrails\n5. Reason with thinking trees\n\nWhat would you like to do?"
+      }
+    },
+    {
+      "match": { "userMessage": "weather", "model": "gpt-4o" },
+      "response": {
+        "toolCalls": [{ "name": "get_weather", "arguments": { "city": "Beijing" } }]
+      }
+    },
+    {
+      "match": { "userMessage": "search*", "model": "gpt-4o" },
+      "response": {
+        "toolCalls": [{ "name": "search/web", "arguments": { "query": "default" } }]
+      }
+    },
+    {
+      "match": { "userMessage": "remember*", "model": "gpt-4o" },
+      "response": {
+        "content": "I have recorded that information in memory."
+      }
+    },
+    {
+      "match": { "userMessage": "plan*", "model": "gpt-4o" },
+      "response": {
+        "content": "I've analyzed the task. Here's my plan:\n1. First, gather necessary information\n2. Then, execute the appropriate tools\n3. Finally, summarize the results\n\nShall I proceed?"
+      }
+    },
+    {
+      "match": { "hasToolResult": true, "model": "gpt-4o" },
+      "response": {
+        "content": "Based on the tool results, the operation completed successfully. What would you like to do next?"
+      }
+    },
+    {
+      "match": { "hasToolResult": true, "model": "gpt-4o-mini" },
+      "response": {
+        "content": "Tool execution finished. Proceeding with the next step."
+      }
+    },
+    {
+      "match": { "userMessage": "*", "model": "gpt-4o" },
+      "response": {
+        "content": "I understand your request. Let me process that through my PPAO loop."
+      }
+    },
+    {
+      "match": { "userMessage": "*", "model": "gpt-4o-mini" },
+      "response": {
+        "content": "Okay, processing your request."
+      }
+    },
+    {
+      "match": { "userMessage": "*", "model": "gemma-4" },
+      "response": {
+        "content": "This is a mock response from the local Gemma-4 model."
+      }
+    }
+  ]
+}

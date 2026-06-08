@@ -74,7 +74,7 @@ tasks.withType(GroovyCompile).configureEach {
 
 jar {
     // archive name before version
-    archiveBaseName = 'alice-core-planner'
+    archiveBaseName = 'alice-model'
 }
 
 

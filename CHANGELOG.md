@@ -4,6 +4,19 @@ description: record your changes
 
 # Changelog
 
+## 20260608
+
+### Changes
+
+- **alice-agent-command/新增三条上下文指令**: 在 `ControlCmd` 密封体系下新增三个上下文管理指令，完善 Agent 指令集（共 12 种具体子类型）。
+  - `ClearContextCmd`（/clear）— 清空 Session 的 M (Memory) 缓存，保留 System Prompt/Rules，重置 Token 计数器
+  - `ViewContextCmd`（/context）— 从 M (Memory) 拉取当前滑动窗口内的线索、对话历史及 Token 占用统计
+  - `CompactContextCmd`（/compact）— 强制触发 M (Memory) 总结机制，通过 LLM 将历史对话提炼为 Summary 事实快照，释放 Context Window
+  - 三个新指令均为 `sealed record`，继承 `ControlCmd`，遵循 `reason()`、`sessionId`、`traceId`、`timestamp` 契约
+  - `AgentCommand.parse()` 已扩展三条新 switch 分支
+  - 测试更新：`ControlCmdSpec` (+9 tests)、`AgentCommandParseSpec` (+6 tests)、`AgentCommandSealedHierarchySpec` (12 subtypes)
+  - 对应设计文档：`docs/alice-agent-command/v0.0.1.md`
+
 ## 20260607
 
 ### Changes

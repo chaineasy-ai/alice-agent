@@ -1,0 +1,5 @@
+{
+  "llm": {
+    "fixtures": "./docs/mock/fixtures/chat.json"
+  }
+}
