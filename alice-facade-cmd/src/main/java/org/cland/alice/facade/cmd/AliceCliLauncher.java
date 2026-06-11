@@ -158,6 +158,24 @@ public final class AliceCliLauncher {
         System.out.println("Resetting session: " + reset.sessionId());
         yield EXIT_SUCCESS;
       }
+      case org.cland.alice.agent.command.ControlCmd.ClearContextCmd clear -> {
+        System.out.println("Clearing context (session=" + clear.sessionId() + ")");
+        System.out.println("上下文已清除");
+        yield EXIT_SUCCESS;
+      }
+      case org.cland.alice.agent.command.ControlCmd.ViewContextCmd view -> {
+        System.out.println("Viewing context (session=" + view.sessionId() + ")");
+        System.out.println("── 上下文状态 ──");
+        System.out.println("会话 ID: " + view.sessionId());
+        System.out.println("Token 占用: N/A (Memory 模块待集成)");
+        System.out.println("消息滑动窗口: N/A");
+        yield EXIT_SUCCESS;
+      }
+      case org.cland.alice.agent.command.ControlCmd.CompactContextCmd compact -> {
+        System.out.println("Compacting context (session=" + compact.sessionId() + ")");
+        System.out.println("上下文压缩请求已提交（待 Memory 模块提供总结接口）");
+        yield EXIT_SUCCESS;
+      }
       case ControlCmd.FeedbackCmd fb -> {
         System.out.println("Feedback received: " + fb.message());
         yield EXIT_SUCCESS;

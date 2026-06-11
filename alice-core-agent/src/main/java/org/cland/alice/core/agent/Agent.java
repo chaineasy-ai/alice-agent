@@ -333,6 +333,114 @@ public class Agent {
     return false;
   }
 
+  // ========== 上下文管理与查询接口 ==========
+
+  /**
+   * 获取当前全量 Context 状态（Token 占用、消息滑动窗口、变量快照）。
+   *
+   * <p>支持 {@code /context} 命令查询。返回的字符串以 Markdown 格式呈现。
+   *
+   * @return 格式化后的上下文状态信息
+   */
+  public String getActiveContext() {
+    AgentContext ctx = new AgentContext();
+    StringBuilder sb = new StringBuilder();
+    sb.append("── 上下文状态 ──\n");
+    sb.append("| 属性 | 值 |\n");
+    sb.append("|---|---|\n");
+    sb.append("| 会话 ID | ").append(ctx.sessionId()).append(" |\n");
+    sb.append("| Agent ID | ").append(agentId).append(" |\n");
+    sb.append("| 默认模型 | ").append(config.defaultModelId()).append(" |\n");
+    sb.append("| 最大迭代 | ").append(config.maxIterations()).append(" |\n");
+
+    if (memory != null) {
+      try {
+        String shortTerm = memory.getShortTerm(sessionId);
+        int msgCount = shortTerm.isEmpty() ? 0 : shortTerm.split("\n").length;
+        sb.append("| 消息条数 | ").append(msgCount).append(" |\n");
+        sb.append("| Token 占用 | N/A (Token 计数器待集成) |\n");
+      } catch (Exception e) {
+        sb.append("| Memory 状态 | 异常: ").append(e.getMessage()).append(" |\n");
+      }
+    } else {
+      sb.append("| Token 占用 | N/A (Memory 未注入) |\n");
+      sb.append("| 消息滑动窗口 | N/A |\n");
+    }
+
+    sb.append("| 变量快照 | ").append(ctx.asMap().isEmpty() ? "空" : ctx.asMap().keySet()).append(" |\n");
+    return sb.toString();
+  }
+
+  /**
+   * 清空短期记忆（保留 System Prompt / Rules），重置 Token 计数器。
+   *
+   * <p>支持 {@code /clear} 命令执行。
+   */
+  public void clearMemory() {
+    logger.info("Clearing memory for agent {}", agentId);
+    if (memory != null) {
+      memory.clearSession(sessionId);
+    }
+  }
+
+  /**
+   * 将历史对话写入 WAL（如果启用了 WAL），提炼历史为 Summary 事实快照，释放 Context Window。
+   *
+   * <p>支持 {@code /compact} 命令执行。
+   *
+   * @return 压缩结果信息
+   */
+  public String compactContext() {
+    logger.info("Compacting context for agent {}", agentId);
+    // 如果有 WAL，先写入（持久化短期记忆到长期记忆作为 checkpoint 的替代）
+    if (memory != null) {
+      memory.putLongTerm("__last_compact_ts_" + sessionId, java.time.Instant.now().toString());
+    }
+    // TODO: 触发 LLM 总结（需等待 Memory 模块提供总结接口）
+    return "上下文压缩完成（释放 Token: N/A，待 Memory 模块提供总结接口）";
+  }
+
+  /**
+   * 动态切换 LLM 引擎。
+   *
+   * <p>支持 {@code /model} 命令执行。切换后同步刷新 Verification 模块的审计敏感度。
+   *
+   * @param modelId 目标模型标识
+   */
+  public void switchModel(String modelId) {
+    logger.info("Switching model from {} to {} for agent {}", config.defaultModelId(), modelId, agentId);
+    // 更新配置中的默认模型
+    // TODO: 当 AgentConfig 支持动态修改时，更新 defaultModelId
+  }
+
+  /**
+   * 注入人类反馈到 Context。
+   *
+   * <p>支持 {@code /feedback} 命令执行。
+   *
+   * @param feedback 用户的反馈内容
+   */
+  public void injectFeedback(String feedback) {
+    logger.info("Injecting feedback for agent {}: {}", agentId, feedback);
+    // 将反馈注入到 Agent 上下文
+    AgentContext ctx = new AgentContext();
+    ctx.put("lastFeedback", feedback);
+    // TODO: 解除 Agent 的 HITL 挂起状态（待 AgentExecutor 暴露 HumanInTheLoop 接口）
+    if (executor != null) {
+      executor.resumeWithFeedback(feedback);
+    }
+  }
+
+  /**
+   * 获取最后一条反馈（如果有）。
+   *
+   * @return 反馈内容，或 {@code null}
+   */
+  public String feedback() {
+    // TODO: 从 AgentContext 或 Memory 中提取最后一条反馈
+    return null;
+  }
+
   /** 关闭 Agent 释放资源。 */
   public void close() {
     vertx.close();

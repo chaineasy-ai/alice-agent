@@ -54,6 +54,9 @@ public record SlashCommand(String command, String args, Type type, String descri
       case "/clear" -> new SlashCommand(cmd, args, Type.INTERNAL, "清屏：仅清空 UI 显示内容");
       case "/exit" -> new SlashCommand(cmd, args, Type.INTERNAL, "安全退出：保存会话后关闭 TUI");
       case "/help" -> new SlashCommand(cmd, args, Type.INTERNAL, "命令帮助：列出所有斜杠命令");
+      case "/context" -> new SlashCommand(cmd, args, Type.INTERNAL, "查看上下文：展示当前会话的 Token 占用与消息快照");
+      case "/compact" -> new SlashCommand(cmd, args, Type.INTERNAL, "压缩上下文：提炼历史为摘要，释放 Context Window");
+      case "/feedback" -> new SlashCommand(cmd, args, Type.INTERNAL, "反馈：向 Agent 注入人类反馈（HITL）");
       case "/prompt" -> new SlashCommand(cmd, args, Type.IO, "加载提示词：读取外部文件作为系统提示");
       case "/history" -> new SlashCommand(cmd, args, Type.IO, "历史回溯：展示最近执行记录快照");
       case "/exec" -> new SlashCommand(cmd, args, Type.SYSTEM, "执行指令：运行 Shell 命令并将结果传给 Agent");
@@ -94,6 +97,9 @@ public record SlashCommand(String command, String args, Type type, String descri
             ── 斜杠命令 (Slash Commands) ──────────────────────────
             /new         重置会话：清空上下文，开启新对话
             /clear       清屏：仅清空 UI 显示内容
+            /context     查看上下文：展示当前 Token 占用与消息快照
+            /compact     压缩上下文：提炼历史摘要，释放 Context Window
+            /feedback    反馈：向 Agent 注入人类反馈（HITL）
             /exit        安全退出：保存会话后关闭 TUI
             /help        命令帮助：列出所有斜杠命令
             /prompt <f>  加载提示词：读取外部文件作为系统提示

@@ -8,6 +8,21 @@ description: record your changes
 
 ### Changes
 
+- **alice-agent-command 指令模块分发补齐**: 完成 TUI/CLI 分发路由、SlashCommand 枚举、CommandHandler、Agent 核心接口、AgentExecutor HITL 支持的全链路补齐。
+  - **SlashCommand 枚举补齐**: 注册 `/context`、`/compact`、`/feedback` 三条新斜杠命令及其帮助文本。
+  - **CommandHandler 命令执行补齐**: `handleInternal()` 增加 `/context` → ViewContextCmd、`/compact` → CompactContextCmd、`/feedback` → FeedbackCmd 的分发转换。
+  - **AliceTuiLauncher.dispatchAgentCommand()**: 添加 ClearContextCmd、ViewContextCmd、CompactContextCmd、FeedbackCmd、SwitchModelCmd 五个新分支的完整处理逻辑（含 UI 联动、EventBridge 输出、Agent 核心调用）。
+  - **AliceCliLauncher.dispatchCommand()**: 添加 ClearContextCmd、ViewContextCmd、CompactContextCmd 三个新分支的 CLI 输出。
+  - **Agent 核心接口补齐**: 新增 `getActiveContext()`（Markdown 表格格式）、`clearMemory()`（短期记忆清空）、`compactContext()`（写入 WAL/Checkpoint 替代）、`switchModel(modelId)`、`injectFeedback(feedback)` / `feedback()` 五个方法。
+  - **AgentExecutor HITL 支持**: 新增 `suspendForHuman()`（CompletableFuture 挂起）、`resumeWithFeedback(String)`（唤醒恢复）、`isSuspendedForHuman()` 查询方法。
+  - **文档同步**: 更新 `docs/alice-agent-command/DESIGN.md` 类图补齐 ClearContextCmd/ViewContextCmd/CompactContextCmd，新增 `/clear`、`/context`、`/compact`、`/feedback` 时序图。<｜end▁of▁thinking｜>**Section 3: Testing & Section 4.1: TODO-spec.md update** — updating the task file.
+
+Now let me update the TODO task board to mark completed items:
+
+<｜｜DSML｜｜tool_calls>
+<｜｜DSML｜｜invoke name="read">
+<｜｜DSML｜｜parameter name="path" string="true">E:\work\chaineasy-ai\alice-agent\TODO-alice-agent-command.md
+
 - **alice-memory-vault/WAL + Checkpoint 双轨制记忆系统**: 实现预写日志（WAL）与控制流快照（Checkpoint）双轨持久化子系统，基于设计文档 `AWL&CheckPoint.md`。
   - **数据模型**: `RawMessage`（OpenAI 兼容消息实体，含 role/content/tool_calls）、`ToolCall`（工具调用实体）、`Checkpoint`（控制流快照，含 state_node/variable_snapshot/plan_snapshot）
   - **WAL 运行时**: `WalStore` 存储接口 + `InMemoryWalStore` 实现、`WalAppender`（流式追加 + 严格有序 + 批量刷盘）

@@ -42,6 +42,9 @@ classDiagram
     ControlCmd <|-- ResetSessionCmd : /new (重置会话)
     ControlCmd <|-- FeedbackCmd : /feedback (人类在环响应)
     ControlCmd <|-- InterruptCmd : Ctrl+C (强制终止)
+    ControlCmd <|-- ClearContextCmd : /clear (清除上下文)
+    ControlCmd <|-- ViewContextCmd : /context (查看上下文)
+    ControlCmd <|-- CompactContextCmd : /compact (压缩上下文)
 
 ```
 
@@ -57,6 +60,9 @@ classDiagram
 | **执行 (Execution)** | **`/run`** | 目标驱动 | 开启 P-E-M-T-V 循环。 |
 | **执行 (Execution)** | **`/exec`** | 原生驱动 | 直接执行 `ls`, `git`, `nvidia-smi` 等底层指令。 |
 | **对齐 (Alignment)** | **`/model`** | 引擎驱动 | 切换 LLM 后，同步刷新 **V (Verification)** 模块的审计敏感度。 |
+| **控制 (Control)** | **`/clear`** | 上下文管理 | 清空 Session 的短期记忆（保留 System Prompt/Rules），重置 Token 计数器。 |
+| **控制 (Control)** | **`/context`** | 上下文管理 | 从 Memory 拉取当前全量滑动窗口内的消息及 Token 占用统计，格式化输出。 |
+| **控制 (Control)** | **`/compact`** | 上下文管理 | 将历史对话写入 WAL，提炼为 Summary 事实快照，释放 Context Window。 |
 | **控制 (Control)** | **`/feedback`** | HITL 驱动 | 响应内核的 `AskHumanCmd`，解锁挂起状态。 |
 
 ---
@@ -90,5 +96,82 @@ sequenceDiagram
     end
     
     Core-->>Facade: AckCommand (Ready: /rules 或 /skill 生效)
+
+```
+
+---
+
+## 4. 时序图：上下文管理驱动流 (/clear, /context, /compact)
+
+```mermaid
+sequenceDiagram
+    participant User as User (TUI/CLI)
+    participant Facade as Facade (TUI/CLI)
+    participant Handler as CommandHandler
+    participant Agent as Agent (Kernel)
+    participant Memory as Memory (AgentSession)
+
+    %% /clear
+    User->>Facade: /clear
+    Facade->>Handler: parse("/clear") → ClearContextCmd
+    Handler->>Agent: dispatch(ClearContextCmd)
+    Agent->>Memory: clearSession(sessionId)
+    Memory-->>Agent: done
+    Agent-->>Facade: context cleared
+    Facade-->>User: "上下文已清除" + UI clear
+
+    Note over User,Memory: ─────────────────────────
+
+    %% /context
+    User->>Facade: /context
+    Facade->>Handler: parse("/context") → ViewContextCmd
+    Handler->>Agent: dispatch(ViewContextCmd)
+    Agent->>Agent: buildContextState()
+    Agent->>Memory: getShortTerm(sessionId)
+    Memory-->>Agent: short-term data
+    Agent-->>Facade: formatted context info
+    Facade-->>User: Markdown 表格 (Token/消息/变量)
+
+    Note over User,Memory: ─────────────────────────
+
+    %% /compact
+    User->>Facade: /compact
+    Facade->>Handler: parse("/compact") → CompactContextCmd
+    Handler->>Agent: dispatch(CompactContextCmd)
+    Agent->>Memory: putLongTerm(compact timestamp)
+    Note over Agent: TODO: 触发 LLM 总结<br/>将历史提炼为 Summary
+    Agent-->>Facade: "上下文压缩完成"
+    Facade-->>User: "上下文压缩完成，释放 Token: xxxx"
+
+```
+
+---
+
+## 5. 时序图：HITL 反馈流 (/feedback)
+
+```mermaid
+sequenceDiagram
+    participant User as User (TUI/CLI)
+    participant Facade as Facade (TUI/CLI)
+    participant Agent as Agent (Kernel)
+    participant Executor as AgentExecutor
+
+    %% Agent 在 PPAO 循环中需要人工反馈
+    Executor->>Agent: HITL 需要反馈
+    Agent->>Executor: suspendForHuman()
+    Note over Executor: CompletableFuture 挂起
+    Executor-->>Agent: await feedback...
+
+    Note over User,Executor: ─── 外部：用户输入 /feedback ───
+
+    User->>Facade: /feedback <内容>
+    Facade->>Agent: dispatch(FeedbackCmd)
+    Agent->>Executor: resumeWithFeedback(feedback)
+    Executor->>Executor: complete CompletableFuture
+    Executor-->>Agent: feedback delivered
+    Agent-->>Facade: "反馈已注入"
+    Facade-->>User: "反馈已提交"
+
+    Note over User,Executor: ─── Agent 继续 PPAO 循环 ───
 
 ```

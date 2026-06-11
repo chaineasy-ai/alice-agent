@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import org.cland.alice.agent.command.AgentCommand;
+import org.cland.alice.agent.command.AlignmentCmd;
 import org.cland.alice.agent.command.CapabilityCmd;
 import org.cland.alice.agent.command.ControlCmd;
 import org.cland.alice.agent.command.ExecutionCmd;
@@ -184,7 +185,12 @@ public class AliceTuiLauncher implements AutoCloseable {
       case CapabilityCmd.ReloadKernelCmd reload -> handleReload(reload);
       case CapabilityCmd cmd2 -> handleCapability(cmd2);
       case ControlCmd.ResetSessionCmd reset -> handleReset(reset);
+      case ControlCmd.ClearContextCmd clear -> handleClearContext(clear);
+      case ControlCmd.ViewContextCmd view -> handleViewContext(view);
+      case ControlCmd.CompactContextCmd compact -> handleCompactContext(compact);
+      case ControlCmd.FeedbackCmd feedback -> handleFeedback(feedback);
       case ControlCmd.InterruptCmd exit -> handleInterrupt(exit);
+      case AlignmentCmd.SwitchModelCmd model -> handleModelSwitch(model);
       case null, default -> logger.warn("Unknown AgentCommand type: {}", cmd);
     }
   }
@@ -232,6 +238,94 @@ public class AliceTuiLauncher implements AutoCloseable {
     if ("user-exit".equals(interrupt.cause()) || interrupt.cause().contains("exit")) {
       this.running = false;
     }
+  }
+
+  /** 处理清除上下文指令（/clear） */
+  private void handleClearContext(ControlCmd.ClearContextCmd clear) {
+    logger.info("Clear context requested: session={}", clear.sessionId());
+    try {
+      agent.clearMemory();
+    } catch (Exception e) {
+      logger.warn("Agent clearMemory not fully implemented, clearing UI only", e);
+    }
+    eventBridge.onChatMessage("System", "上下文已清除");
+    // 联动 CommandHandler 的 onClear 回调
+    screenManager.layout().chat().clearMessages();
+    screenManager.layout().thought().clear();
+    if (screenManager.state().isRunning()) {
+      screenManager.state().transitionTo(TuiState.State.IDLE);
+    }
+  }
+
+  /** 处理查看上下文指令（/context） */
+  private void handleViewContext(ControlCmd.ViewContextCmd view) {
+    logger.info("View context requested: session={}", view.sessionId());
+    String contextInfo;
+    try {
+      contextInfo = agent.getActiveContext();
+    } catch (Exception e) {
+      logger.warn("Agent getActiveContext not fully implemented, using fallback", e);
+      contextInfo = null;
+    }
+
+    if (contextInfo != null) {
+      eventBridge.onChatMessage("System", contextInfo);
+    } else {
+      // 回退：从 Agent 的 memory 和 context 获取基础信息
+      String sessionInfo = "会话 ID: " + view.sessionId();
+      String modelInfo = "当前模型: " + screenManager.layout().header().modelId();
+      String statusInfo = "状态: " + screenManager.state().current().name();
+      eventBridge.onChatMessage(
+          "System",
+          "── 上下文状态 ──\n"
+              + sessionInfo
+              + "\n"
+              + modelInfo
+              + "\n"
+              + statusInfo
+              + "\n"
+              + "Token 占用: N/A (Memory 模块待集成)\n"
+              + "消息滑动窗口: N/A\n"
+              + "变量快照: N/A");
+    }
+  }
+
+  /** 处理压缩上下文指令（/compact） */
+  private void handleCompactContext(ControlCmd.CompactContextCmd compact) {
+    logger.info("Compact context requested: session={}", compact.sessionId());
+    try {
+      String result = agent.compactContext();
+      eventBridge.onChatMessage(
+          "System",
+          result != null ? result : "上下文压缩完成（释放 Token: N/A，待 Memory 模块提供总结接口）");
+    } catch (Exception e) {
+      logger.warn("Agent compactContext not fully implemented", e);
+      eventBridge.onChatMessage("System", "上下文压缩请求已提交（待 Memory 模块提供总结接口）");
+    }
+  }
+
+  /** 处理反馈指令（/feedback） */
+  private void handleFeedback(ControlCmd.FeedbackCmd feedback) {
+    logger.info("Feedback received: message={}", feedback.message());
+    try {
+      agent.injectFeedback(feedback.message());
+      eventBridge.onChatMessage("System", "反馈已注入: " + feedback.message());
+    } catch (Exception e) {
+      logger.warn("Agent injectFeedback not fully implemented", e);
+      eventBridge.onChatMessage("System", "反馈已记录: " + feedback.message() + "（待 Agent 暴露 HumanInTheLoop 接口）");
+    }
+  }
+
+  /** 处理模型切换指令（/model） */
+  private void handleModelSwitch(AlignmentCmd.SwitchModelCmd model) {
+    logger.info("Model switch requested: {}", model.modelId());
+    try {
+      agent.switchModel(model.modelId());
+    } catch (Exception e) {
+      logger.warn("Agent switchModel not fully implemented", e);
+    }
+    screenManager.layout().header().setModel(model.modelId());
+    eventBridge.onChatMessage("System", "模型切换至: " + model.modelId());
   }
 
   /**

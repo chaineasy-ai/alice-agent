@@ -139,6 +139,30 @@ public class CommandHandler {
       return true;
     }
 
+    if (cmd.is("/context")) {
+      AgentCommand ac = cmd.toAgentCommand(sessionId(), traceId());
+      dispatchToAgent(ac);
+      return true;
+    }
+
+    if (cmd.is("/compact")) {
+      AgentCommand ac = cmd.toAgentCommand(sessionId(), traceId());
+      dispatchToAgent(ac);
+      eventBridge.onChatMessage("System", "上下文压缩请求已提交...");
+      return true;
+    }
+
+    if (cmd.is("/feedback")) {
+      if (!cmd.hasArgs()) {
+        eventBridge.onChatMessage("System", "用法: /feedback <反馈内容>");
+        return true;
+      }
+      AgentCommand ac = cmd.toAgentCommand(sessionId(), traceId());
+      dispatchToAgent(ac);
+      eventBridge.onChatMessage("System", "反馈已提交: " + cmd.args());
+      return true;
+    }
+
     if (cmd.is("/exit")) {
       // 转化为 InterruptCmd 并派发
       AgentCommand ac = cmd.toAgentCommand(sessionId(), traceId());

@@ -5,6 +5,7 @@ import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
 import org.cland.alice.core.agent.AgentContext;
@@ -707,6 +708,54 @@ public class AgentExecutor {
     }
 
     return context;
+  }
+
+  // ========================================================================
+  // HumanInTheLoop 支持
+  // ========================================================================
+
+  /** 挂起信号：用于 suspendForHuman 和 resumeWithFeedback 之间的协调。 */
+  private CompletableFuture<String> humanFeedbackFuture;
+
+  /**
+   * 挂起 Agent 执行，等待人类反馈。
+   *
+   * <p>Agent 在 HITL 场景中调用此方法，返回一个 Future。当人类通过 {@link #resumeWithFeedback(String)} 提供反馈后，
+   * Future 完成，Agent 继续执行。
+   *
+   * @return 包含人类反馈内容的 CompletableFuture
+   */
+  public CompletableFuture<String> suspendForHuman() {
+    logger.info("[HITL] Agent {} suspended for human feedback", agent.agentId());
+    this.humanFeedbackFuture = new CompletableFuture<>();
+    return this.humanFeedbackFuture;
+  }
+
+  /**
+   * 注入人类反馈并唤醒挂起的 Agent。
+   *
+   * <p>当用户在 TUI/CLI 中输入 {@code /feedback <内容>} 时调用此方法，传入反馈内容。
+   * CompletableFuture 完成，Agent 继续 PPAO 循环。
+   *
+   * @param feedback 人类的反馈内容
+   */
+  public void resumeWithFeedback(String feedback) {
+    if (humanFeedbackFuture != null && !humanFeedbackFuture.isDone()) {
+      logger.info("[HITL] Resuming agent {} with feedback: {}", agent.agentId(), feedback);
+      humanFeedbackFuture.complete(feedback);
+      humanFeedbackFuture = null;
+    } else {
+      logger.warn("[HITL] No pending human feedback request for agent {}", agent.agentId());
+    }
+  }
+
+  /**
+   * 检查当前是否有挂起的人类反馈请求。
+   *
+   * @return true 如果有挂起的反馈请求
+   */
+  public boolean isSuspendedForHuman() {
+    return humanFeedbackFuture != null && !humanFeedbackFuture.isDone();
   }
 
   // ========================================================================
