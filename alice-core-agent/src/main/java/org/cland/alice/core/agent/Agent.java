@@ -355,7 +355,7 @@ public class Agent {
 
     if (memory != null) {
       try {
-        String shortTerm = memory.getShortTerm(agentId);
+        String shortTerm = memory.getShortTerm(sessionId);
         int msgCount = shortTerm.isEmpty() ? 0 : shortTerm.split("\n").length;
         sb.append("| 消息条数 | ").append(msgCount).append(" |\n");
         sb.append("| Token 占用 | N/A (Token 计数器待集成) |\n");
@@ -367,9 +367,7 @@ public class Agent {
       sb.append("| 消息滑动窗口 | N/A |\n");
     }
 
-    sb.append("| 变量快照 | ")
-        .append(ctx.asMap().isEmpty() ? "空" : ctx.asMap().keySet())
-        .append(" |\n");
+    sb.append("| 变量快照 | ").append(ctx.asMap().isEmpty() ? "空" : ctx.asMap().keySet()).append(" |\n");
     return sb.toString();
   }
 
@@ -381,7 +379,7 @@ public class Agent {
   public void clearMemory() {
     logger.info("Clearing memory for agent {}", agentId);
     if (memory != null) {
-      memory.clearSession(agentId);
+      memory.clearSession(sessionId);
     }
   }
 
@@ -396,7 +394,7 @@ public class Agent {
     logger.info("Compacting context for agent {}", agentId);
     // 如果有 WAL，先写入（持久化短期记忆到长期记忆作为 checkpoint 的替代）
     if (memory != null) {
-      memory.putLongTerm("__last_compact_ts_" + agentId, java.time.Instant.now().toString());
+      memory.putLongTerm("__last_compact_ts_" + sessionId, java.time.Instant.now().toString());
     }
     // TODO: 触发 LLM 总结（需等待 Memory 模块提供总结接口）
     return "上下文压缩完成（释放 Token: N/A，待 Memory 模块提供总结接口）";
@@ -410,8 +408,7 @@ public class Agent {
    * @param modelId 目标模型标识
    */
   public void switchModel(String modelId) {
-    logger.info(
-        "Switching model from {} to {} for agent {}", config.defaultModelId(), modelId, agentId);
+    logger.info("Switching model from {} to {} for agent {}", config.defaultModelId(), modelId, agentId);
     // 更新配置中的默认模型
     // TODO: 当 AgentConfig 支持动态修改时，更新 defaultModelId
   }
