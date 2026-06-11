@@ -31,6 +31,7 @@ public final class RunConfig {
 
   private final String task;
   private final String model;
+  private final boolean chat;
   private final boolean jsonOutput;
   private final boolean verbose;
   private final long timeoutSeconds;
@@ -39,6 +40,7 @@ public final class RunConfig {
   private RunConfig(Builder builder) {
     this.task = Objects.requireNonNull(builder.task, "task must not be null");
     this.model = builder.model != null ? builder.model : DEFAULT_MODEL;
+    this.chat = builder.chat;
     this.jsonOutput = builder.jsonOutput;
     this.verbose = builder.verbose;
     this.timeoutSeconds =
@@ -56,6 +58,11 @@ public final class RunConfig {
   /** 模型 ID */
   public String model() {
     return model;
+  }
+
+  /** 是否进入交互式 chat 模式 */
+  public boolean chat() {
+    return chat;
   }
 
   /** 是否启用 JSON 输出 */
@@ -87,6 +94,7 @@ public final class RunConfig {
   public static final class Builder {
     private String task;
     private String model;
+    private boolean chat;
     private boolean jsonOutput;
     private boolean verbose;
     private long timeoutSeconds;
@@ -101,6 +109,11 @@ public final class RunConfig {
 
     public Builder model(String model) {
       this.model = model;
+      return this;
+    }
+
+    public Builder chat(boolean chat) {
+      this.chat = chat;
       return this;
     }
 

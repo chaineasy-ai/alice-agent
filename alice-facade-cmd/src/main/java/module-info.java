@@ -7,6 +7,9 @@ module alice.agent.facade.cmd.main {
   requires alice.agent.alice.model.main;
   requires alice.agent.command.main;
   requires info.picocli;
+  requires org.jline.reader;
+  requires org.jline.terminal;
+  requires org.jline.utils;
   requires com.fasterxml.jackson.databind;
   requires com.fasterxml.jackson.core;
   requires com.fasterxml.jackson.datatype.jsr310;

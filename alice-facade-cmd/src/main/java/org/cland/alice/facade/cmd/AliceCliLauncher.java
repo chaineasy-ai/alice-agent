@@ -126,6 +126,25 @@ public final class AliceCliLauncher {
       return EXIT_PARAM_ERROR;
     }
 
+    return dispatchCommand(cmd);
+  }
+
+  /**
+   * 分发已解析的 {@link AgentCommand}。
+   *
+   * <p>由 {@link JLineChatSession} 等已预先解析的调用方使用，避免重复解析。
+   *
+   * @param cmd 已解析的 AgentCommand
+   * @return 退出码
+   */
+  public static int dispatchCommand(AgentCommand cmd) {
+    if (cmd == null) {
+      System.err.println("Cannot dispatch null command");
+      return EXIT_PARAM_ERROR;
+    }
+
+    String sessionId = cmd.sessionId() != null ? cmd.sessionId() : UUID.randomUUID().toString().substring(0, 8);
+
     logger.info(
         "Dispatching AgentCommand: {} (session={})", cmd.getClass().getSimpleName(), sessionId);
 

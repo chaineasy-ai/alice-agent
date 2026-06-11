@@ -64,23 +64,37 @@ public final class ExecutionCoordinator {
       AgentConfig agentConfig =
           AgentConfig.builder().defaultModelId(config.model()).debug(config.verbose()).build();
 
-      // 2. 创建 Agent
+      // 2. 检查 chat 模式
+      if (config.chat()) {
+        try {
+          org.cland.alice.facade.cmd.chat.JLineChatSession chatSession =
+              new org.cland.alice.facade.cmd.chat.JLineChatSession(agentConfig);
+          chatSession.run();
+        } catch (Exception e) {
+          logger.error("Chat session failed", e);
+          System.err.println("Chat session error: " + e.getMessage());
+          return 1;
+        }
+        return 0;
+      }
+
+      // 3. 创建 Agent
       Agent agent = new Agent(agentConfig);
       logger.debug("Agent created: {}", agent.agentId());
 
-      // 3. 构建上下文
+      // 5. 构建上下文
       AgentContext context = new AgentContext();
       context.put("prompt", config.task());
       context.put("model", config.model());
 
-      // 4. 检查 stdin 是否有管道输入
+      // 6. 检查 stdin 是否有管道输入
       String stdinInput = readStdin();
       if (stdinInput != null && !stdinInput.isBlank()) {
         context.put("stdin", stdinInput);
         logger.debug("Stdin input captured: {} chars", stdinInput.length());
       }
 
-      // 5. 同步执行
+      // 7. 同步执行
       CountDownLatch latch = new CountDownLatch(1);
       AtomicReference<AgentContext> resultRef = new AtomicReference<>();
       AtomicReference<Throwable> errorRef = new AtomicReference<>();
@@ -117,7 +131,7 @@ public final class ExecutionCoordinator {
         return 1;
       }
 
-      // 6. 获取结果并输出
+      // 8. 获取结果并输出
       AgentContext resultCtx = resultRef.get();
       if (resultCtx != null) {
         Object resultObj = resultCtx.get("result");

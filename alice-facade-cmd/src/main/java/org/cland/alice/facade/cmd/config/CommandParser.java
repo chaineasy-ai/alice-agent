@@ -109,8 +109,8 @@ public class CommandParser {
         return run.toRunConfig();
       }
 
-      if (sub instanceof ChatCommand) {
-        throw new ParseException(1, "'chat' subcommand is not yet implemented. Use 'run' instead.");
+      if (sub instanceof ChatCommand chat) {
+        return RunConfig.builder().task("chat").chat(true).build();
       }
 
       if (sub instanceof ToolsCommand) {
@@ -235,8 +235,15 @@ public class CommandParser {
   private static class ChatCommand implements Callable<Integer> {
     @Override
     public Integer call() {
-      System.err.println("Chat mode not yet implemented");
-      return 1;
+      try {
+        org.cland.alice.facade.cmd.chat.JLineChatSession chatSession =
+            new org.cland.alice.facade.cmd.chat.JLineChatSession();
+        chatSession.run();
+        return 0;
+      } catch (Exception e) {
+        System.err.println("Failed to start chat session: " + e.getMessage());
+        return 1;
+      }
     }
   }
 
