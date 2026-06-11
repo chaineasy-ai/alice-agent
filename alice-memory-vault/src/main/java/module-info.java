@@ -5,6 +5,7 @@ module alice.agent.alice.memory.vault.main {
   exports org.cland.alice.memory.storage;
   exports org.cland.alice.memory.router;
   exports org.cland.alice.memory.controller;
+  exports org.cland.alice.memory.wal;
 
   requires org.slf4j;
   requires ch.qos.logback.classic;

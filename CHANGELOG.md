@@ -6,6 +6,10 @@ description: record your changes
 
 ## 20260612
 
+### Changes
+
+- alice-memory-vault/module-info: `exports org.cland.alice.memory.wal` 导出 WAL 会话包，供 `alice-core-agent` 和其他模块使用双轨制持久化与崩溃恢复能力。
+
 ### Fixes
 
 - alice-core-agent/AgentExecutor: 修复 `dispatchLlmInference` 和 `dispatchToolCall` 在异常时返回 `Continue(revision)` 导致 Micro-ReAct 无限循环的问题。异常（如 `No supplier found for modelId`）现直接返回 `Failure` 熔断退出循环，避免反复重试同一失败模型。(#loop-termination)
