@@ -4,9 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.List;
 import java.util.UUID;
-import java.util.function.Consumer;
 import org.cland.alice.agent.command.AgentCommand;
 import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
@@ -16,7 +14,6 @@ import org.jline.reader.Completer;
 import org.jline.reader.Highlighter;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
-import org.jline.reader.ParsedLine;
 import org.jline.reader.impl.DefaultHighlighter;
 import org.jline.reader.impl.completer.AggregateCompleter;
 import org.jline.reader.impl.completer.ArgumentCompleter;
@@ -30,9 +27,8 @@ import org.slf4j.LoggerFactory;
 /**
  * JLineChatSession：基于 JLine 3 的交互式 CLI 聊天会话引擎。
  *
- * <p>提供行编辑、命令历史持久化、Tab 补全、多行输入、信号处理等能力。
- * 用户输入统一通过 {@link AgentCommand#parse(String, String, String)} 解析，
- * 然后由 {@link AliceCliLauncher#dispatchCommand(String)} 分发执行。
+ * <p>提供行编辑、命令历史持久化、Tab 补全、多行输入、信号处理等能力。 用户输入统一通过 {@link AgentCommand#parse(String, String, String)}
+ * 解析， 然后由 {@link AliceCliLauncher#dispatchCommand(String)} 分发执行。
  */
 public class JLineChatSession implements AutoCloseable {
 
@@ -56,9 +52,7 @@ public class JLineChatSession implements AutoCloseable {
 
   public JLineChatSession(AgentConfig config) throws IOException {
     // 1. 初始化 Terminal
-    this.terminal = TerminalBuilder.builder()
-        .system(true)
-        .build();
+    this.terminal = TerminalBuilder.builder().system(true).build();
 
     // 2. 初始化 Agent
     this.agent = new Agent(config);
@@ -99,28 +93,39 @@ public class JLineChatSession implements AutoCloseable {
   /** 构建 Tab 补全器 */
   private Completer buildCompleter() {
     // 斜杠命令补全
-    StringsCompleter slashCommands = new StringsCompleter(
-        "/run", "/exec", "/skill", "/rules", "/reload",
-        "/model", "/new", "/feedback", "/exit",
-        "/clear", "/context", "/compact", "/help",
-        "/prompt", "/history", "/tools");
+    StringsCompleter slashCommands =
+        new StringsCompleter(
+            "/run",
+            "/exec",
+            "/skill",
+            "/rules",
+            "/reload",
+            "/model",
+            "/new",
+            "/feedback",
+            "/exit",
+            "/clear",
+            "/context",
+            "/compact",
+            "/help",
+            "/prompt",
+            "/history",
+            "/tools");
 
     // /model 后补全模型 ID
-    StringsCompleter modelIds = new StringsCompleter(
-        "gpt-4o", "gpt-4o-mini", "claude-3.5-sonnet", "gemma4", "o3-mini");
+    StringsCompleter modelIds =
+        new StringsCompleter("gpt-4o", "gpt-4o-mini", "claude-3.5-sonnet", "gemma4", "o3-mini");
 
-    ArgumentCompleter modelCompleter = new ArgumentCompleter(
-        new StringsCompleter("/model"),
-        modelIds);
+    ArgumentCompleter modelCompleter =
+        new ArgumentCompleter(new StringsCompleter("/model"), modelIds);
 
     // /prompt 后补全文件路径
-    ArgumentCompleter promptCompleter = new ArgumentCompleter(
-        new StringsCompleter("/prompt"),
-        new Completers.FileNameCompleter());
+    ArgumentCompleter promptCompleter =
+        new ArgumentCompleter(new StringsCompleter("/prompt"), new Completers.FileNameCompleter());
 
     // 模型 ID 补全（也可用于 /model <TAB>）
-    StringsCompleter modelArgCompleter = new StringsCompleter(
-        "gpt-4o", "gpt-4o-mini", "claude-3.5-sonnet");
+    StringsCompleter modelArgCompleter =
+        new StringsCompleter("gpt-4o", "gpt-4o-mini", "claude-3.5-sonnet");
 
     return new AggregateCompleter(
         slashCommands,
@@ -128,11 +133,7 @@ public class JLineChatSession implements AutoCloseable {
         promptCompleter,
         // 兜底：如果第一个词是 /model，第二个词补全模型 ID
         new ArgumentCompleter(
-            new StringsCompleter("/model"),
-            modelArgCompleter,
-            NullCompleter.INSTANCE
-        )
-    );
+            new StringsCompleter("/model"), modelArgCompleter, NullCompleter.INSTANCE));
   }
 
   // ========== 主循环 ==========
@@ -141,6 +142,7 @@ public class JLineChatSession implements AutoCloseable {
    * 运行交互式聊天会话。
    *
    * <p>主循环流程：
+   *
    * <ol>
    *   <li>打印欢迎信息
    *   <li>循环读取用户输入
@@ -155,9 +157,11 @@ public class JLineChatSession implements AutoCloseable {
     printWelcome();
 
     // 设置 Ctrl+C 处理
-    terminal.handle(Terminal.Signal.INT, signal -> {
-      System.out.println("\n收到中断信号 (Ctrl+C)，输入 /exit 退出或继续输入。");
-    });
+    terminal.handle(
+        Terminal.Signal.INT,
+        signal -> {
+          System.out.println("\n收到中断信号 (Ctrl+C)，输入 /exit 退出或继续输入。");
+        });
 
     String prompt = "alice> ";
 
@@ -205,9 +209,7 @@ public class JLineChatSession implements AutoCloseable {
     }
   }
 
-  /**
-   * 处理多行输入：检测未闭合的引号或花括号，自动进入多行模式。
-   */
+  /** 处理多行输入：检测未闭合的引号或花括号，自动进入多行模式。 */
   private String handleMultilineInput(String input) {
     String result = input;
     while (hasUnclosedBrackets(result) || hasUnclosedQuotes(result)) {
@@ -280,11 +282,12 @@ public class JLineChatSession implements AutoCloseable {
   private void dispatchAndRender(AgentCommand cmd) {
     // 对于 ExecutionCmd，输出思考提示
     if (cmd instanceof org.cland.alice.agent.command.ExecutionCmd) {
-      String taskDesc = switch (cmd) {
-        case org.cland.alice.agent.command.ExecutionCmd.AcquireGoalCmd g -> g.goal();
-        case org.cland.alice.agent.command.ExecutionCmd.ExecuteRawCmd e -> e.command();
-        default -> cmd.toString();
-      };
+      String taskDesc =
+          switch (cmd) {
+            case org.cland.alice.agent.command.ExecutionCmd.AcquireGoalCmd g -> g.goal();
+            case org.cland.alice.agent.command.ExecutionCmd.ExecuteRawCmd e -> e.command();
+            default -> cmd.toString();
+          };
       System.out.println("🤔 Agent 思考中... (" + taskDesc + ")");
     }
 
@@ -353,27 +356,18 @@ public class JLineChatSession implements AutoCloseable {
   // 高亮器：斜杠命令着色
   // ========================================================================
 
-  /**
-   * 命令高亮器，为斜杠命令提供视觉区分。
-   */
+  /** 命令高亮器，为斜杠命令提供视觉区分。 */
   static class CommandHighlighter extends DefaultHighlighter {
 
     @Override
-    public String highlight(String buffer) {
+    public org.jline.utils.AttributedString highlight(LineReader reader, String buffer) {
       if (buffer == null || buffer.isBlank()) {
-        return buffer;
+        return super.highlight(reader, buffer);
       }
 
-      // 仅对斜杠命令进行高亮（使用 ANSI 转义序列）
-      String trimmed = buffer.trim();
-      if (trimmed.startsWith("/")) {
-        int spaceIdx = trimmed.indexOf(' ');
-        String cmd = spaceIdx < 0 ? trimmed : trimmed.substring(0, spaceIdx);
-        // 返回原始内容（JLine 的 DefaultHighlighter 已处理）
-        // 实际的高亮由 Terminal 的 StyleResolver 处理
-      }
-
-      return super.highlight(buffer);
+      // 对于斜杠命令，可以返回自定义着色
+      // 目前委托给 DefaultHighlighter 处理（错误模式高亮等）
+      return super.highlight(reader, buffer);
     }
   }
 }

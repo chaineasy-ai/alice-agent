@@ -143,7 +143,8 @@ public final class AliceCliLauncher {
       return EXIT_PARAM_ERROR;
     }
 
-    String sessionId = cmd.sessionId() != null ? cmd.sessionId() : UUID.randomUUID().toString().substring(0, 8);
+    String sessionId =
+        cmd.sessionId() != null ? cmd.sessionId() : UUID.randomUUID().toString().substring(0, 8);
 
     logger.info(
         "Dispatching AgentCommand: {} (session={})", cmd.getClass().getSimpleName(), sessionId);

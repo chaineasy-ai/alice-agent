@@ -720,8 +720,8 @@ public class AgentExecutor {
   /**
    * 挂起 Agent 执行，等待人类反馈。
    *
-   * <p>Agent 在 HITL 场景中调用此方法，返回一个 Future。当人类通过 {@link #resumeWithFeedback(String)} 提供反馈后，
-   * Future 完成，Agent 继续执行。
+   * <p>Agent 在 HITL 场景中调用此方法，返回一个 Future。当人类通过 {@link #resumeWithFeedback(String)} 提供反馈后， Future
+   * 完成，Agent 继续执行。
    *
    * @return 包含人类反馈内容的 CompletableFuture
    */
@@ -734,8 +734,8 @@ public class AgentExecutor {
   /**
    * 注入人类反馈并唤醒挂起的 Agent。
    *
-   * <p>当用户在 TUI/CLI 中输入 {@code /feedback <内容>} 时调用此方法，传入反馈内容。
-   * CompletableFuture 完成，Agent 继续 PPAO 循环。
+   * <p>当用户在 TUI/CLI 中输入 {@code /feedback <内容>} 时调用此方法，传入反馈内容。 CompletableFuture 完成，Agent 继续 PPAO
+   * 循环。
    *
    * @param feedback 人类的反馈内容
    */
