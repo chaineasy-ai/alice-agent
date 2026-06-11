@@ -2,7 +2,11 @@
 
 A modular Java agent framework built with Gradle and Spock.
 
+## project structure
 See [project.tree](./project.tree) for the full project structure (sourced from Git history).
+
+## project tech stack
+See 
 
 
 ## Using the project: 
