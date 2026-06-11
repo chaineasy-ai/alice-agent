@@ -8,7 +8,20 @@ description: record your changes
 
 ### Changes
 
-- alice-memory-vault/module-info: `exports org.cland.alice.memory.wal` 导出 WAL 会话包，供 `alice-core-agent` 和其他模块使用双轨制持久化与崩溃恢复能力。
+- **alice-memory-vault/WAL + Checkpoint 双轨制记忆系统**: 实现预写日志（WAL）与控制流快照（Checkpoint）双轨持久化子系统，基于设计文档 `AWL&CheckPoint.md`。
+  - **数据模型**: `RawMessage`（OpenAI 兼容消息实体，含 role/content/tool_calls）、`ToolCall`（工具调用实体）、`Checkpoint`（控制流快照，含 state_node/variable_snapshot/plan_snapshot）
+  - **WAL 运行时**: `WalStore` 存储接口 + `InMemoryWalStore` 实现、`WalAppender`（流式追加 + 严格有序 + 批量刷盘）
+  - **Checkpoint 管理器**: `CheckpointManager`（5 个安全边界触发器：onReActCycleEnd/onUserInput/onToolReturn/onError/熔断，幂等性保证）、`RecoveryEngine`（崩溃恢复：加载最新 Checkpoint → 脏 WAL 差量重放 → 生成新快照）
+  - **上下文熔炼**: `PromptMelter`（三段式 Prompt 组装：静态主干 + 快照状态 + 短消息尾部，含 cacheKey 缓存支持）
+  - **集成门面**: `WalSession`（统一包装 WalAppender + CheckpointManager）、`module-info` 导出 `org.cland.alice.memory.wal` 包
+  - **测试**: 6 个 Spock Spec 共 63 个测试用例，覆盖实体校验、存储读写、Checkpoint 触发与幂等、恢复重放（clean/dirty/full）、Prompt 熔炼、集成门面全链路
+  - **文档**: 新增 `docs/alice-memory-vault/AWL&CheckPoint.md` 设计文档
+- **TODO 跟踪文件**: 新增 `TODO-alice-agent-command.md`、`TODO-alice-facade.md`、`TODO-memory-vault.md`、`TODO-spec.md` 四个 GFM 格式任务看板，track 当前开发阶段 backlog。
+- **README/TECH_STACK**: 更新 README 添加 project structure/tech stack 章节，新增 `TECH_STACK.md`（JLine 3）。
+
+### Tests
+
+- alice-bootstrap/CommandDispatchLoopSpec: 新增 bootstrap → facade → cmd 完整分发链路测试（249 行），覆盖 FacadeSelector 选型、AliceCliLauncher.dispatchCommand()、AliceTuiLauncher.dispatchAgentCommand() 对全部 12 种 AgentCommand 子类型的路由验证。
 
 ### Fixes
 
