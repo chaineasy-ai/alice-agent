@@ -12,6 +12,7 @@ import org.cland.alice.core.agent.lifecycle.Action;
 import org.cland.alice.core.agent.lifecycle.Observation;
 import org.cland.alice.core.agent.result.StepResult;
 import org.cland.alice.core.planner.Plan;
+import org.cland.alice.memory.wal.WalSession;
 import org.cland.alice.model.Call;
 import org.cland.alice.model.ModelProvider;
 import org.slf4j.Logger;
@@ -45,10 +46,49 @@ public class AgentExecutor {
   private final Agent agent;
   private final AgentConfig config;
 
+  /** 可选的 WAL 会话，注入后启用双轨制持久化与崩溃恢复 */
+  private WalSession wal;
+
   public AgentExecutor(Vertx vertx, Agent agent) {
     this.vertx = Objects.requireNonNull(vertx, "vertx must not be null");
     this.agent = Objects.requireNonNull(agent, "agent must not be null");
     this.config = agent.config();
+  }
+
+  // ========================================================================
+  // WAL 注入
+  // ========================================================================
+
+  /**
+   * 注入 {@link WalSession}，启用 WAL + Checkpoint 双轨制持久化与崩溃恢复。
+   *
+   * <p>注入后，AgentExecutor 会在以下生命周期点自动写入 WAL/Checkpoint：
+   *
+   * <ul>
+   *   <li><b>Perceive</b> — append user 消息 + onUserInput Checkpoint
+   *   <li><b>Micro-ReAct Dispatch (LLM)</b> — 在 LLM 响应后 append assistant 消息
+   *   <li><b>Micro-ReAct Dispatch (Tool)</b> — 执行前 append assistant_tool_calls，执行后 append tool 结果
+   *   <li><b>Observe (Macro)</b> — 每个 Macro ReAct 循环结束时触发 onReActCycleEnd Checkpoint
+   *   <li><b>Fatal Error</b> — 触发 onError 紧急 Checkpoint
+   * </ul>
+   *
+   * @param wal 已配置的 WalSession 实例
+   * @return this（链式调用）
+   */
+  public AgentExecutor withWal(WalSession wal) {
+    this.wal = Objects.requireNonNull(wal, "wal must not be null");
+    logger.info("[WAL] WAL integration enabled for AgentExecutor");
+    return this;
+  }
+
+  /** 检查 WAL 是否已注入。 */
+  public boolean isWalEnabled() {
+    return wal != null;
+  }
+
+  /** 获取注入的 WalSession（可能为 null）。 */
+  public WalSession wal() {
+    return wal;
   }
 
   // ========================================================================
@@ -159,6 +199,12 @@ public class AgentExecutor {
   private Future<AgentContext> perceive(String input, AgentContext context) {
     logger.debug("[Perceive] input={}", input);
     context.transitionTo(AgentContext.Phase.PERCEIVING);
+
+    // WAL: 记录用户输入 + 用户输入 Checkpoint
+    if (wal != null) {
+      wal.user(context.sessionId(), input);
+      wal.checkpointOnUserInput(context.sessionId());
+    }
 
     context.put("input", input);
     context.put("prompt", input);
@@ -306,6 +352,13 @@ public class AgentExecutor {
     if (depth >= maxDepth) {
       logger.warn("[Micro-ReAct] circuit breaker triggered at depth={}", depth);
       ctx.appendThought("[Micro-ReAct] Circuit breaker: max depth reached");
+
+      // WAL: 熔断紧急 Checkpoint
+      if (wal != null) {
+        wal.checkpointOnError(
+            ctx.sessionId(), "CIRCUIT_BREAKER", "Micro-ReAct circuit breaker at depth " + depth);
+      }
+
       return Future.succeededFuture(
           new StepWithContext(ctx, new StepResult.Continue(Action.finish())));
     }
@@ -362,6 +415,13 @@ public class AgentExecutor {
             logger.debug("[Micro-ReAct] FINISH received, exiting micro loop");
             updatedCtx.put(
                 "result", obs != null ? obs.summary() : "Sub-goal completed via Micro-ReAct");
+
+            // WAL: Micro-ReAct 结束 Checkpoint
+            if (wal != null) {
+              wal.checkpointOnReActEnd(
+                  updatedCtx.sessionId(), "ACTING_FINISHED", updatedCtx.asMap(), "");
+            }
+
             return Future.succeededFuture(
                 new StepWithContext(
                     updatedCtx,
@@ -376,6 +436,12 @@ public class AgentExecutor {
                 nextAction.parameters().getOrDefault("feedback", "Micro revision").toString();
             updatedCtx.put("lastFeedback", feedback);
             updatedCtx.appendThought("[Micro-ReAct] Revision: " + feedback);
+
+            // WAL: Revision Checkpoint
+            if (wal != null) {
+              wal.checkpointOnReActEnd(updatedCtx.sessionId(), "REVISION", updatedCtx.asMap(), "");
+            }
+
             return Future.succeededFuture(
                 new StepWithContext(updatedCtx, new StepResult.Continue(nextAction)));
           }
@@ -408,17 +474,27 @@ public class AgentExecutor {
                   String content = call.result().content();
                   ctx.put("result", content);
                   logger.debug("[Micro-ReAct/LLM] response length={}", content.length());
+
+                  // WAL: 记录 assistant 回复
+                  if (wal != null) {
+                    wal.assistant(ctx.sessionId(), content);
+                  }
+
                   return new StepResult.Continue(Action.finish(), Observation.success(content));
                 } else {
+                  // WAL: 记录失败的 LLM 回复
+                  if (wal != null) {
+                    wal.assistant(ctx.sessionId(), "[LLM Error: " + call.status() + "]");
+                  }
+
                   return new StepResult.Continue(
                       Action.revision("LLM call failed: " + call.status()),
                       Observation.failure("LLM call failed: " + call.status()));
                 }
               } catch (Exception e) {
                 logger.error("[Micro-ReAct/LLM] error", e);
-                return new StepResult.Continue(
-                    Action.revision("LLM call error: " + e.getMessage()),
-                    Observation.failure("LLM call error: " + e.getMessage()));
+                // 不可恢复的错误（如 supplier 未注册），直接熔断退出循环，避免无限重试
+                return new StepResult.Failure("LLM call error: " + e.getMessage());
               }
             })
         .onComplete(
@@ -447,12 +523,32 @@ public class AgentExecutor {
 
     Promise<StepWithContext> promise = Promise.promise();
 
+    // WAL: 在执行前记录工具调用
+    if (wal != null) {
+      wal.assistantToolCalls(
+          ctx.sessionId(),
+          java.util.List.of(
+              org.cland.alice.memory.wal.ToolCall.of(
+                  action.actionId(), action.target(), action.parameters())));
+    }
+
     vertx
         .<StepResult>executeBlocking(
             () -> {
               try {
                 boolean success =
                     agent.toolRegistry().execute(action.target(), action.parameters());
+
+                // WAL: 记录工具执行结果
+                if (wal != null) {
+                  String resultContent =
+                      success
+                          ? "Tool " + action.target() + " executed successfully"
+                          : "Tool " + action.target() + " returned failure";
+                  wal.toolResult(ctx.sessionId(), action.actionId(), resultContent);
+                  wal.checkpointOnToolReturn(ctx.sessionId(), action.target(), success);
+                }
+
                 if (success) {
                   return new StepResult.Continue(
                       Action.llmInference(
@@ -464,9 +560,15 @@ public class AgentExecutor {
                       Observation.failure("Tool " + action.target() + " returned failure"));
                 }
               } catch (Exception e) {
-                return new StepResult.Continue(
-                    Action.revision("Tool error: " + e.getMessage()),
-                    Observation.failure("Tool error: " + e.getMessage()));
+                // WAL: 工具异常
+                if (wal != null) {
+                  wal.toolResult(
+                      ctx.sessionId(), action.actionId(), "[Tool Error: " + e.getMessage() + "]");
+                  wal.checkpointOnError(ctx.sessionId(), "TOOL_ERROR", e.getMessage());
+                }
+
+                // 工具调用异常，直接熔断退出循环，避免无限重试
+                return new StepResult.Failure("Tool call error: " + e.getMessage());
               }
             })
         .onComplete(
@@ -509,6 +611,12 @@ public class AgentExecutor {
           });
     }
 
+    // WAL: Macro ReAct 循环结束，触发 Checkpoint
+    if (wal != null) {
+      String stateNode = ctx.currentPhase().name();
+      wal.checkpointOnReActEnd(ctx.sessionId(), stateNode, ctx.asMap(), "");
+    }
+
     ctx.transitionTo(AgentContext.Phase.VERIFYING_POST);
     return Future.succeededFuture(stepWithCtx);
   }
@@ -530,6 +638,12 @@ public class AgentExecutor {
 
     logger.warn("[Verify/Post] audit failed, forcing revision");
     ctx.appendThought("Post-verify failed");
+
+    // WAL: Post-verify 失败
+    if (wal != null) {
+      wal.checkpointOnError(ctx.sessionId(), "POST_VERIFY_FAIL", "Post-verify audit rejected");
+    }
+
     Action revision = Action.revision("Post-verify audit rejected: " + result);
     return Future.succeededFuture(
         new StepWithContext(
@@ -583,6 +697,15 @@ public class AgentExecutor {
             : error.getClass().getSimpleName() + " (no message)");
     context.put("status", "FATAL_ERROR");
     context.transitionTo(AgentContext.Phase.FINISH);
+
+    // WAL: 致命错误 — 紧急 Checkpoint
+    if (wal != null) {
+      wal.checkpointOnError(
+          context.sessionId(),
+          "FATAL_ERROR",
+          error.getMessage() != null ? error.getMessage() : "Unknown fatal error");
+    }
+
     return context;
   }
 
