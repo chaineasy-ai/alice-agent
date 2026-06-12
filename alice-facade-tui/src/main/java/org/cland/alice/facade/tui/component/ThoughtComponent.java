@@ -1,75 +1,81 @@
 package org.cland.alice.facade.tui.component;
 
-import com.googlecode.lanterna.TextColor;
-import com.googlecode.lanterna.graphics.TextGraphics;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 思考流面板组件。
+ * 滚动日志区组件（上方滚动区）。
  *
- * <p>实时展示 Agent 的思考过程。 边框和分隔线由 {@link org.cland.alice.facade.tui.ScreenManager} 统一绘制， 本组件只负责绘制内容区域。
+ * <p>对应 Layout.md §7.1 中三条区域的第一块——"上方滚动区"。 集中展示业务日志、思考/动作/观测流输出，内容正常向上滚动。
+ *
+ * <p>前缀规范（参考 Layout.md 示例）：
+ *
+ * <ul>
+ *   <li>[T Thought]: 思考过程
+ *   <li>[A Action ]: 动作执行
+ *   <li>[O Observe]: 观测反馈
+ *   <li>[User]: 用户消息
+ *   <li>[System]: 系统消息
+ * </ul>
  */
 public class ThoughtComponent extends Component {
 
-  private static final int MAX_THOUGHTS = 200;
+  private static final int MAX_LINES = 1000;
 
-  private final List<ThoughtEntry> thoughts;
+  private final List<String> logLines;
   private int scrollOffset;
 
   public ThoughtComponent() {
     super("Thought");
-    this.thoughts = new ArrayList<>();
+    this.logLines = new ArrayList<>();
     this.scrollOffset = 0;
   }
 
-  // ========== 思考管理 ==========
+  // ========== 日志管理 ==========
 
-  /**
-   * 追加思考片段。
-   *
-   * @param thought 思考内容
-   * @param step 步骤编号
-   */
+  /** 追加原始日志行 */
+  public void appendLine(String line) {
+    if (line == null) return;
+    if (logLines.size() >= MAX_LINES) {
+      logLines.remove(0);
+    }
+    logLines.add(line);
+    scrollToBottom();
+    markDirty();
+  }
+
+  /** 追加思考片段：[T Thought] */
   public void addThought(String thought, int step) {
-    if (thoughts.size() >= MAX_THOUGHTS) {
-      thoughts.remove(0);
-    }
-    thoughts.add(new ThoughtEntry(step, thought));
-    scrollToBottom();
-    markDirty();
+    appendLine("[T Thought]: " + thought);
   }
 
-  /**
-   * 追加动作执行记录。
-   *
-   * @param actionDescription 动作描述
-   */
+  /** 追加动作执行：[A Action] */
   public void addAction(String actionDescription) {
-    if (thoughts.size() >= MAX_THOUGHTS) {
-      thoughts.remove(0);
-    }
-    thoughts.add(new ThoughtEntry(-1, "\u26A1 " + actionDescription));
-    scrollToBottom();
-    markDirty();
+    appendLine("[A Action ]: " + actionDescription);
   }
 
-  /**
-   * 追加观测反馈。
-   *
-   * @param observation 观测结果
-   */
+  /** 追加观测反馈：[O Observe] */
   public void addObservation(String observation) {
-    if (thoughts.size() >= MAX_THOUGHTS) {
-      thoughts.remove(0);
-    }
-    thoughts.add(new ThoughtEntry(-1, "\u25C9 " + observation));
-    scrollToBottom();
-    markDirty();
+    appendLine("[O Observe]: " + observation);
+  }
+
+  /** 追加用户消息 */
+  public void addUserMessage(String content) {
+    appendLine("[User]: " + content);
+  }
+
+  /** 追加系统消息 */
+  public void addSystemMessage(String content) {
+    appendLine("[System]: " + content);
+  }
+
+  /** 追加 Agent 消息 */
+  public void addAgentMessage(String content) {
+    appendLine("[Agent]: " + content);
   }
 
   public void clear() {
-    thoughts.clear();
+    logLines.clear();
     scrollOffset = 0;
     markDirty();
   }
@@ -84,9 +90,7 @@ public class ThoughtComponent extends Component {
   }
 
   public void scrollDown() {
-    int totalLines = calculateContentLines();
-    int visibleLines = height;
-    int maxOffset = Math.max(0, totalLines - visibleLines);
+    int maxOffset = Math.max(0, logLines.size() - height);
     if (scrollOffset < maxOffset) {
       scrollOffset++;
       markDirty();
@@ -94,9 +98,7 @@ public class ThoughtComponent extends Component {
   }
 
   public void scrollToBottom() {
-    int totalLines = calculateContentLines();
-    int visibleLines = height;
-    scrollOffset = Math.max(0, totalLines - visibleLines);
+    scrollOffset = Math.max(0, logLines.size() - height);
     markDirty();
   }
 
@@ -107,76 +109,39 @@ public class ThoughtComponent extends Component {
   }
 
   public void pageDown() {
-    int totalLines = calculateContentLines();
-    int visibleLines = height;
+    int maxOffset = Math.max(0, logLines.size() - height);
     int pageSize = Math.max(1, height - 1);
-    scrollOffset = Math.min(Math.max(0, totalLines - visibleLines), scrollOffset + pageSize);
+    scrollOffset = Math.min(maxOffset, scrollOffset + pageSize);
     markDirty();
   }
 
-  // ========== 绘制 ==========
+  // ========== 渲染 ==========
 
   @Override
-  public void draw(TextGraphics g) {
-    if (!visible || width <= 0 || height <= 0) return;
-
-    // 清空内容区域
-    for (int r = 0; r < height; r++) {
-      for (int c = 0; c < width; c++) {
-        g.setCharacter(col + c, row + r, ' ');
-      }
+  public List<String> render() {
+    if (!visible || width <= 0 || height <= 0 || logLines.isEmpty()) {
+      clearDirty();
+      return List.of();
     }
-
-    // 内容绘制
-    List<String> renderedLines = renderThoughts();
-
-    int startLine = scrollOffset;
-    for (int i = 0; i < height; i++) {
-      int lineIdx = startLine + i;
-      if (lineIdx >= renderedLines.size()) break;
-
-      String line = renderedLines.get(lineIdx);
-      if (line.length() > width) {
-        line = line.substring(0, width);
-      }
-
-      // 根据前缀着色
-      g.setForegroundColor(TextColor.ANSI.WHITE);
-      if (line.startsWith("\u26A1 ")) {
-        g.setForegroundColor(TextColor.ANSI.YELLOW);
-      } else if (line.startsWith("\u25C9 ")) {
-        g.setForegroundColor(TextColor.ANSI.MAGENTA);
-      } else if (line.matches("^\\[\\d+\\].*")) {
-        g.setForegroundColor(TextColor.ANSI.GREEN);
-      }
-
-      for (int c = 0; c < line.length(); c++) {
-        g.setCharacter(col + c, row + i, line.charAt(c));
-      }
-    }
-
     clearDirty();
-  }
 
-  private List<String> renderThoughts() {
-    List<String> lines = new ArrayList<>();
-    for (ThoughtEntry entry : thoughts) {
-      String prefix = entry.step() > 0 ? "[" + entry.step() + "]> " : "    ";
-      String[] parts = entry.thought().split("\n", -1);
-      for (int i = 0; i < parts.length; i++) {
-        if (i == 0) {
-          lines.add(prefix + parts[i]);
-        } else {
-          lines.add("     " + parts[i]);
-        }
+    List<String> result = new ArrayList<>(height);
+    int startIdx = Math.min(scrollOffset, Math.max(0, logLines.size() - height));
+    int endIdx = Math.min(startIdx + height, logLines.size());
+
+    for (int i = startIdx; i < endIdx; i++) {
+      String raw = logLines.get(i);
+      if (raw.length() > width) {
+        raw = raw.substring(0, width);
       }
+      result.add(raw);
     }
-    return lines;
-  }
 
-  private int calculateContentLines() {
-    return renderThoughts().size();
-  }
+    // 填充剩余行为空行
+    while (result.size() < height) {
+      result.add("");
+    }
 
-  private record ThoughtEntry(int step, String thought) {}
+    return result;
+  }
 }

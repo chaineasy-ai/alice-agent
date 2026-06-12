@@ -55,7 +55,8 @@ public record SlashCommand(String command, String args, Type type, String descri
       case "/exit" -> new SlashCommand(cmd, args, Type.INTERNAL, "安全退出：保存会话后关闭 TUI");
       case "/help" -> new SlashCommand(cmd, args, Type.INTERNAL, "命令帮助：列出所有斜杠命令");
       case "/context" -> new SlashCommand(cmd, args, Type.INTERNAL, "查看上下文：展示当前会话的 Token 占用与消息快照");
-      case "/compact" -> new SlashCommand(cmd, args, Type.INTERNAL, "压缩上下文：提炼历史为摘要，释放 Context Window");
+      case "/compact" ->
+          new SlashCommand(cmd, args, Type.INTERNAL, "压缩上下文：提炼历史为摘要，释放 Context Window");
       case "/feedback" -> new SlashCommand(cmd, args, Type.INTERNAL, "反馈：向 Agent 注入人类反馈（HITL）");
       case "/prompt" -> new SlashCommand(cmd, args, Type.IO, "加载提示词：读取外部文件作为系统提示");
       case "/history" -> new SlashCommand(cmd, args, Type.IO, "历史回溯：展示最近执行记录快照");

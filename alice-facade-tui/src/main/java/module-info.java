@@ -11,11 +11,11 @@ module alice.agent.facade.tui.main {
   requires alice.agent.alice.model.main;
   requires alice.agent.command.main;
 
-  // Lanterna (automatic module)
-  requires com.googlecode.lanterna;
-  // JLine3: 当前未使用，TUI 基于 Lanterna
-  // requires org.jline.reader;
-  // requires org.jline.terminal;
+  // JLine 3: 三层单线分割布局 + 原生向上顶出补全（AUTO_MENU）
+  // org.jline.utils 包含在 jline-terminal 自动模块内
+  requires org.jline.reader;
+  requires org.jline.terminal;
+
   // Guava (automatic module)
   requires com.google.common;
 

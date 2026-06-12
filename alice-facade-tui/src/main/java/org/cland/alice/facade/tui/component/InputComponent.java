@@ -1,12 +1,14 @@
 package org.cland.alice.facade.tui.component;
 
-import com.googlecode.lanterna.TextColor;
-import com.googlecode.lanterna.graphics.TextGraphics;
+import java.util.List;
 
 /**
- * 输入框组件。
+ * 输入区域组件（中间输入区）。
  *
- * <p>支持文本输入、光标显示、历史浏览。 边框由 {@link org.cland.alice.facade.tui.ScreenManager} 统一绘制， 本组件只负责绘制输入内容和光标。
+ * <p>对应 Layout.md §7.1 中三条区域的第二块——"中间输入区"。 被两条分割线包裹，输入提示符固定居中。
+ *
+ * <p>实际终端 I/O 由 JLine 3 的 LineReader 处理（支持 AUTO_MENU 向上补全弹窗）， 本组件仅维护输入缓冲区模型供 {@link
+ * org.cland.alice.facade.tui.ScreenManager} 渲染参考。
  */
 public class InputComponent extends Component {
 
@@ -14,13 +16,22 @@ public class InputComponent extends Component {
 
   private final StringBuilder inputBuffer;
   private int cursorPos;
-  private boolean focused;
+  private String prompt;
 
   public InputComponent() {
     super("Input");
     this.inputBuffer = new StringBuilder();
     this.cursorPos = 0;
-    this.focused = false;
+    this.prompt = " > ";
+  }
+
+  public void setPrompt(String prompt) {
+    this.prompt = prompt;
+    markDirty();
+  }
+
+  public String prompt() {
+    return prompt;
   }
 
   // ========== 输入管理 ==========
@@ -100,64 +111,31 @@ public class InputComponent extends Component {
     return inputBuffer.toString();
   }
 
-  // ========== 焦点 ==========
-
-  public void setFocused(boolean focused) {
-    this.focused = focused;
-    markDirty();
+  public int cursorPos() {
+    return cursorPos;
   }
 
-  public boolean isFocused() {
-    return focused;
-  }
-
-  // ========== 绘制 ==========
+  // ========== 渲染 ==========
 
   @Override
-  public void draw(TextGraphics g) {
-    if (!visible || width <= 0 || height <= 0) return;
-
-    // 填充背景
-    for (int r = 0; r < height; r++) {
-      for (int c = 0; c < width; c++) {
-        g.setCharacter(col + c, row + r, ' ');
-      }
+  public List<String> render() {
+    if (!visible || width <= 0 || height <= 0) {
+      return List.of();
     }
-
-    // 在最左侧显示提示符
-    String prompt = focused ? "> " : "  ";
-    g.setForegroundColor(TextColor.ANSI.GREEN);
-    for (int i = 0; i < prompt.length() && i < width; i++) {
-      g.setCharacter(col + i, row, prompt.charAt(i));
-    }
-
-    // 输入文本
-    int promptLen = prompt.length();
-    int inputAreaWidth = width - promptLen;
-
-    g.setForegroundColor(TextColor.ANSI.WHITE);
-    String displayText = inputBuffer.toString();
-    if (displayText.length() > inputAreaWidth) {
-      displayText = displayText.substring(displayText.length() - inputAreaWidth);
-    }
-    for (int i = 0; i < displayText.length() && i < inputAreaWidth; i++) {
-      g.setCharacter(col + promptLen + i, row, displayText.charAt(i));
-    }
-
-    // 绘制光标（在 focused 时显示）
-    if (focused) {
-      int cursorDisplayPos = Math.min(cursorPos, inputAreaWidth - 1);
-      if (cursorDisplayPos >= 0) {
-        int cursorX = col + promptLen + cursorDisplayPos;
-        if (cursorX < col + width) {
-          g.setBackgroundColor(TextColor.ANSI.WHITE);
-          g.setForegroundColor(TextColor.ANSI.BLACK);
-          char cursorChar = cursorPos < inputBuffer.length() ? inputBuffer.charAt(cursorPos) : ' ';
-          g.setCharacter(cursorX, row, cursorChar);
-        }
-      }
-    }
-
     clearDirty();
+
+    // 格式： > /_module_command_here
+    // prompt 左对齐，输入文本紧随其后
+    String display = prompt + inputBuffer.toString();
+
+    StringBuilder sb = new StringBuilder(width);
+    if (display.length() > width) {
+      sb.append(display, display.length() - width, display.length());
+    } else {
+      sb.append(display);
+      sb.append(" ".repeat(width - display.length()));
+    }
+
+    return List.of(sb.toString());
   }
 }

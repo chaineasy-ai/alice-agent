@@ -4,148 +4,119 @@ import java.util.List;
 import org.cland.alice.facade.tui.component.*;
 
 /**
- * TUI 布局管理器。
+ * TUI 三层单线分割布局管理器。
  *
- * <p>负责计算各组件在终端屏幕中的位置与大小，并在终端尺寸变化时重新布局。
+ * <p>对应 docs/alice-facade-tui/Layout.md §7.1 沉浸式三看板常态布局（TAO Standard Mode）。
  *
- * <p>布局结构：
+ * <p>通过两条统一单线 `────────────────────────────────────────` 将终端垂直划分为三大固定区域：
  *
  * <pre>
- * ┌─ Alice Agent v1.0 ── Model: gpt-4o-mini ── Status: Idle ────────────┐  (Header, 1行)
- * │                                                                      │  (Header padding, 1行)
- * ├─ Chat History ────────────┬─ Thought Stream ────────────────────────┤  (Title divider, 1行)
- * │ User: hello               │ [1]> Analyzing...                       │  (Content, 可变)
- * │ Agent: Hi!                │ ⚡ Execute search                        │
- * ├───────────────────────────┴─────────────────────────────────────────┤  (Input divider, 1行)
- * │ > /exec ls -la                                                       │  (Input, 1行)
- * ├─────────────────────────────────────────────────────────────────────┤  (Footer divider, 1行)
- * │ F1:Help | F5:Stop | Tab:Focus | PgUp/PgDn | /help | Ctrl+Q:Quit     │  (Footer, 1行)
- * └─────────────────────────────────────────────────────────────────────┘  (Bottom border, 1行)
+ *  alice v0.1.0                                                                      ← Header (1行)
+ * ────────────────────────────────────────────────────────────────────────────────   ← 上分割线 (1行)
+ *  [T Thought]: ...                                                                   ← 上方滚动区（可变高度）
+ *  [A Action ]: ...
+ *  [O Observe]: ...
+ *                                                                                     ← 空行
+ * ────────────────────────────────────────────────────────────────────────────────   ← 下分割线 (1行)
+ *  > /_                                                                              ← 居中输入区域 (1行)
+ * ────────────────────────────────────────────────────────────────────────────────   ← 下分割线 (1行)
+ *  💰 Cost: $0.041 | 📊 Speed: 125 t/s | 🧠 Model: ... | 🔌 Active Tool: ...        ← 底部状态栏 (1行)
  * </pre>
+ *
+ * <p>分区规则：
+ *
+ * <ol>
+ *   <li>上方滚动区：业务日志、思考/动作/观测流输出，内容正常向上滚动
+ *   <li>中间输入区：被两条分割线包裹
+ *   <li>底部状态栏：计费、速率、模型、工具等核心指标，全程固定在页面最底端
+ * </ol>
  */
 public class TuiLayout {
 
-  /** 各行高度常量 */
+  /** 各行高度常量（单位：行） */
   public static final int HEADER_HEIGHT = 1;
 
-  public static final int HEADER_PADDING_HEIGHT = 1;
-  public static final int TITLE_DIVIDER_HEIGHT = 1;
-  public static final int INPUT_DIVIDER_HEIGHT = 1;
+  public static final int SEPARATOR_HEIGHT = 1;
   public static final int INPUT_HEIGHT = 1;
-  public static final int FOOTER_DIVIDER_HEIGHT = 1;
-  public static final int FOOTER_HEIGHT = 1;
-  public static final int BOTTOM_BORDER_HEIGHT = 1;
+  public static final int STATUS_HEIGHT = 1;
 
-  public static final int MIN_CONTENT_HEIGHT = 3;
+  /** 固定非内容行数 = Header + 上分割线 + 下分割线 + Input + 下分割线 + Status = 6 */
+  public static final int FIXED_ROWS =
+      HEADER_HEIGHT + SEPARATOR_HEIGHT + SEPARATOR_HEIGHT + INPUT_HEIGHT + STATUS_HEIGHT;
+
+  /** 分割线字符 */
+  static final char SEPARATOR_CHAR = '\u2500'; // ─
 
   private final HeaderComponent header;
-  private final ChatComponent chat;
   private final ThoughtComponent thought;
   private final InputComponent input;
   private final FooterComponent footer;
-
-  /** 边框字符 */
-  static final char BOX_TOP_LEFT = '┌';
-
-  static final char BOX_TOP_RIGHT = '┐';
-  static final char BOX_BOTTOM_LEFT = '└';
-  static final char BOX_BOTTOM_RIGHT = '┘';
-  static final char BOX_HORIZONTAL = '─';
-  static final char BOX_VERTICAL = '│';
-  static final char BOX_TITLE_LEFT = '├';
-  static final char BOX_TITLE_RIGHT = '┤';
-  static final char BOX_TITLE_CROSS = '┼';
-  static final char BOX_TITLE_DOWN = '┬';
-  static final char BOX_TITLE_UP = '┴';
 
   /** 当前终端尺寸 */
   private int terminalWidth;
 
   private int terminalHeight;
 
-  /** 各区域的起始行与高度 */
-  private int contentStartRow;
+  /** 各区域的起始行 */
+  private int separator1Row;
 
+  private int contentStartRow;
   private int contentHeight;
-  private int inputStartRow;
-  private int footerStartRow;
-  private int chatWidth;
-  private int thoughtWidth;
+  private int separator2Row;
+  private int inputRow;
+  private int separator3Row;
+  private int footerRow;
 
   public TuiLayout(
       HeaderComponent header,
-      ChatComponent chat,
       ThoughtComponent thought,
       InputComponent input,
       FooterComponent footer) {
     this.header = header;
-    this.chat = chat;
     this.thought = thought;
     this.input = input;
     this.footer = footer;
   }
 
-  /** 根据当前终端尺寸重新计算所有组件位置。 通常在终端 resize 时调用。 */
+  /** 根据当前终端尺寸重新计算所有组件位置。通常在终端 resize 时调用。 */
   public void recalculate(int terminalWidth, int terminalHeight) {
-    // 确保最小尺寸
-    this.terminalWidth = Math.max(terminalWidth, 60);
-    this.terminalHeight =
-        Math.max(
-            terminalHeight,
-            MIN_CONTENT_HEIGHT
-                + HEADER_HEIGHT
-                + HEADER_PADDING_HEIGHT
-                + TITLE_DIVIDER_HEIGHT
-                + INPUT_DIVIDER_HEIGHT
-                + INPUT_HEIGHT
-                + FOOTER_DIVIDER_HEIGHT
-                + FOOTER_HEIGHT
-                + BOTTOM_BORDER_HEIGHT);
+    this.terminalWidth = Math.max(terminalWidth, 40);
+    this.terminalHeight = Math.max(terminalHeight, FIXED_ROWS + 3);
 
-    int fixedNonContent =
-        HEADER_HEIGHT
-            + HEADER_PADDING_HEIGHT
-            + TITLE_DIVIDER_HEIGHT
-            + INPUT_DIVIDER_HEIGHT
-            + INPUT_HEIGHT
-            + FOOTER_DIVIDER_HEIGHT
-            + FOOTER_HEIGHT
-            + BOTTOM_BORDER_HEIGHT;
-
-    contentHeight = this.terminalHeight - fixedNonContent;
-
-    // 计算各行起始位置
+    // 布局计算（从顶到底）
     int currentRow = 0;
-    // Header: row 0
+
+    // 1. Header: row 0
     header.setBounds(currentRow, 0, this.terminalWidth, HEADER_HEIGHT);
+    currentRow += HEADER_HEIGHT;
 
-    // Header padding: invisible spacer row
-    currentRow += HEADER_HEIGHT + HEADER_PADDING_HEIGHT;
+    // 2. 上分割线: row 1
+    separator1Row = currentRow;
+    currentRow += SEPARATOR_HEIGHT;
 
-    // Title divider row: ├─ Chat ──┬─ Thought ─┤
-    contentStartRow = currentRow + TITLE_DIVIDER_HEIGHT;
+    // 3. 上方滚动区: 剩余高度减去固定底部区域
+    contentStartRow = currentRow;
+    contentHeight = this.terminalHeight - FIXED_ROWS;
 
-    // 内容区域分为左右两列（50%/50%）
-    chatWidth = this.terminalWidth / 2;
-    thoughtWidth = this.terminalWidth - chatWidth;
+    thought.setBounds(contentStartRow, 0, this.terminalWidth, contentHeight);
+    currentRow = contentStartRow + contentHeight;
 
-    // Chat (左列) 和 Thought (右列)：从 contentStartRow 开始
-    chat.setBounds(contentStartRow, 0, chatWidth, contentHeight);
-    thought.setBounds(contentStartRow, chatWidth, thoughtWidth, contentHeight);
+    // 4. 下分割线 (input上方)
+    separator2Row = currentRow;
+    currentRow += SEPARATOR_HEIGHT;
 
-    // Input 分隔行
-    inputStartRow = contentStartRow + contentHeight;
-    currentRow = inputStartRow + INPUT_DIVIDER_HEIGHT;
+    // 5. 输入区
+    inputRow = currentRow;
+    input.setBounds(inputRow, 0, this.terminalWidth, INPUT_HEIGHT);
+    currentRow += INPUT_HEIGHT;
 
-    // Input 行
-    input.setBounds(currentRow, 0, this.terminalWidth, INPUT_HEIGHT);
+    // 6. 下分割线 (input下方)
+    separator3Row = currentRow;
+    currentRow += SEPARATOR_HEIGHT;
 
-    // Footer 分隔行
-    footerStartRow = currentRow + INPUT_HEIGHT;
-    currentRow = footerStartRow + FOOTER_DIVIDER_HEIGHT;
-
-    // Footer 行
-    footer.setBounds(currentRow, 0, this.terminalWidth, FOOTER_HEIGHT);
+    // 7. 底部状态栏
+    footerRow = currentRow;
+    footer.setBounds(footerRow, 0, this.terminalWidth, STATUS_HEIGHT);
 
     // 标记所有组件为脏
     markAllDirty();
@@ -153,50 +124,58 @@ public class TuiLayout {
 
   // ========== 布局信息查询 ==========
 
-  /** 获取内容区域起始行（边框之后的第一行） */
+  /** 获取上方滚动区起始行 */
   public int contentStartRow() {
     return contentStartRow;
   }
 
-  /** 获取内容区域高度 */
+  /** 获取上方滚动区高度 */
   public int contentHeight() {
     return contentHeight;
   }
 
-  /** 获取输入区域起始行 */
-  public int inputStartRow() {
-    return inputStartRow;
+  /** 获取输入区行号 */
+  public int inputRow() {
+    return inputRow;
   }
 
-  /** 获取输入分隔行 */
-  public int inputDividerRow() {
-    return inputStartRow;
+  /** 获取上分割线行号 */
+  public int separator1Row() {
+    return separator1Row;
   }
 
-  /** 获取 Footer 分隔行 */
-  public int footerDividerRow() {
-    return footerStartRow + INPUT_HEIGHT;
+  /** 获取 input 上方分割线行号 */
+  public int separator2Row() {
+    return separator2Row;
   }
 
-  /** 获取最后一个绘制行 */
+  /** 获取 input 下方分割线行号 */
+  public int separator3Row() {
+    return separator3Row;
+  }
+
+  /** 获取底部状态栏行号 */
+  public int footerRow() {
+    return footerRow;
+  }
+
+  /** 获取底部状态栏最后一个行号 */
   public int lastRow() {
-    return footerStartRow + FOOTER_DIVIDER_HEIGHT + FOOTER_HEIGHT + BOTTOM_BORDER_HEIGHT - 1;
+    return footerRow + STATUS_HEIGHT - 1;
   }
 
-  /** 获取 Chat 面板宽度 */
-  public int chatWidth() {
-    return chatWidth;
-  }
-
-  /** 获取 Thought 面板宽度 */
-  public int thoughtWidth() {
-    return thoughtWidth;
+  /** 生成分割线字符串 */
+  public String separatorLine() {
+    StringBuilder sb = new StringBuilder(terminalWidth);
+    for (int i = 0; i < terminalWidth; i++) {
+      sb.append(SEPARATOR_CHAR);
+    }
+    return sb.toString();
   }
 
   /** 标记所有组件为需要重绘 */
   public void markAllDirty() {
     header.markDirty();
-    chat.markDirty();
     thought.markDirty();
     input.markDirty();
     footer.markDirty();
@@ -204,17 +183,13 @@ public class TuiLayout {
 
   /** 获取所有需要绘制的可见组件 */
   public List<Component> getComponents() {
-    return List.of(header, chat, thought, input, footer);
+    return List.of(header, thought, input, footer);
   }
 
   // ========== Getters ==========
 
   public HeaderComponent header() {
     return header;
-  }
-
-  public ChatComponent chat() {
-    return chat;
   }
 
   public ThoughtComponent thought() {

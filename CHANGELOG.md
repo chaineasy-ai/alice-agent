@@ -8,9 +8,19 @@ description: record your changes
 
 ### Changes
 
-- **alice-facade-tui/JLine 3 依赖清理**: 移除 TUI 模块中未使用的 JLine 3 依赖。TUI 完全基于 Lanterna，零 Java 源文件导入 JLine。
-  - `build.gradle`: JLine 3 三件套 (`jline-terminal`, `jline-reader`, `jline-builtins`) 注释保留，附可恢复说明
-  - `module-info.java`: `requires org.jline.reader` + `requires org.jline.terminal` 注释保留
+- **alice-facade-tui/Lanterna → JLine 3 重构**: 基于 `docs/alice-facade-tui/Layout.md` 三层单线分割布局（TAO Standard Mode）重写 TUI 模块，从 Lanterna 迁移至 JLine 3。
+  - **布局重写**: 移除旧版 box-drawing 四层边框布局（`┌─┐│└─┘`），实现三条统一单线 `───` 划分的三大固定区域：上方滚动区 + 中间输入区 + 底部状态栏。
+  - **ScreenManager 重写**: 替换 Lanterna `Screen`/`TextGraphics`/`KeyStroke` 为 JLine 3 `Terminal` + `LineReader`。增量渲染通过 `terminal.puts(cursor_address)` 仅重绘变更行，零闪烁。
+  - **LineReader AUTO_MENU**: 使用 JLine 3 原生 `AUTO_MENU` + `StringsCompleter` 实现 `/model` 命令向上顶出补全弹窗，选中项回车即销毁，分割线与状态栏完全静止。
+  - **HeaderComponent 精简**: 移除 model/status 显示，仅保留 agent 名称+版本（`alice v0.1.0`）。
+  - **FooterComponent 重写**: 改为底部计费状态栏，显示 Cost/Speed/Model/Active Tool 四项核心指标（💰📊🧠🔌 图标）。
+  - **ThoughtComponent 合并**: 合并旧 ChatComponent + ThoughtComponent 为单一滚动日志区，前缀格式 `[T Thought]`/`[A Action]`/`[O Observe]`/`[User]`/`[System]`。
+  - **InputComponent 精简**: 仅维护输入缓冲区模型，实际 I/O 委托给 JLine 3 LineReader。
+  - **Component 基类重构**: 移除 Lanterna `draw(TextGraphics)` 依赖，新增 `render() → List<String>` 抽象方法，添加公共 row/col/width/height getter。
+  - **自动构建适配**: 更新 `module-info.java`（`requires org.jline.reader` + `requires org.jline.terminal`）及 `build.gradle`（jline-terminal/reader/builtins 三件套）。
+  - **终端 resize**: 使用 JLine 3 `Signal.WINCH` 替代 Lanterna `addResizeListener`。
+  - **删除文件**: `ChatComponent.java` 功能合并至 ThoughtComponent。
+- **alice-facade-tui/HeaderComponent 精简**: 移除 model/status 显示，`setModel()`/`setStatus()`/`modelId()` 方法删除。模型信息仅保留在底部 FooterComponent 状态栏。相关调用（AliceTuiLauncher/ScreenManager）同步更新为引用 `footer().setModel()`/`footer().modelInfo()`。
 
 ### Fixes
 

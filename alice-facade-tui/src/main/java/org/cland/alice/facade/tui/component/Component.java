@@ -1,12 +1,12 @@
 package org.cland.alice.facade.tui.component;
 
-import com.googlecode.lanterna.graphics.TextGraphics;
-
 /**
- * TUI 组件抽象基类，对应设计文档 §2 中的 Component 抽象类。
+ * TUI 组件抽象基类。
  *
- * <p>所有 UI 组件（ChatComponent, ThoughtComponent, StatusComponent 等） 继承自此基类，由 ScreenManager
- * 统一管理生命周期与渲染。
+ * <p>配合 JLine 3 三层单线分割布局（TAO Standard Mode），所有组件继承自此基类。 组件不再依赖 Lanterna TextGraphics，而是通过 {@link
+ * #render()} 返回渲染后的行文本列表， 由 {@link org.cland.alice.facade.tui.ScreenManager} 统一输出到终端。
+ *
+ * <p>参考 docs/alice-facade-tui/Layout.md
  */
 public abstract class Component {
 
@@ -34,8 +34,12 @@ public abstract class Component {
 
   // ========== 抽象方法 ==========
 
-  /** 绘制组件内容 */
-  public abstract void draw(TextGraphics graphics);
+  /**
+   * 渲染组件内容为行文本列表。 每行字符串即为该行应在终端对应位置输出的内容（不含光标定位）。
+   *
+   * @return 组件内容的行列表，长度不应超过 height
+   */
+  public abstract java.util.List<String> render();
 
   // ========== 布局管理 ==========
 
@@ -57,6 +61,24 @@ public abstract class Component {
     this.width = width;
     this.height = height;
     markDirty();
+  }
+
+  // ========== 位置与大小查询 ==========
+
+  public int row() {
+    return row;
+  }
+
+  public int col() {
+    return col;
+  }
+
+  public int width() {
+    return width;
+  }
+
+  public int height() {
+    return height;
   }
 
   // ========== 可见性 ==========
@@ -90,46 +112,6 @@ public abstract class Component {
 
   public void clearDirty() {
     this.dirty = false;
-  }
-
-  // ========== 辅助方法 ==========
-
-  /** 绘制组件背景填充 */
-  protected void fillBackground(TextGraphics g, char ch) {
-    for (int r = 0; r < height; r++) {
-      for (int c = 0; c < width; c++) {
-        g.setCharacter(col + c, row + r, ch);
-      }
-    }
-  }
-
-  /** 在组件区域内绘制带换行的文本 */
-  protected void drawWrappedText(TextGraphics g, String text, int startRow, int startCol) {
-    if (text == null || text.isEmpty()) return;
-
-    String[] lines = text.split("\n", -1);
-    int maxLines = height - startRow;
-    int displayLines = Math.min(lines.length, maxLines);
-
-    for (int i = 0; i < displayLines; i++) {
-      int targetRow = row + startRow + i;
-      if (targetRow >= row + height) break;
-
-      String line = lines[i];
-      if (line.length() > width - startCol) {
-        line = line.substring(0, width - startCol);
-      }
-      for (int c = 0; c < line.length(); c++) {
-        int targetCol = col + startCol + c;
-        if (targetCol < col + width) {
-          g.setCharacter(targetCol, targetRow, line.charAt(c));
-        }
-      }
-    }
-  }
-
-  protected void drawWrappedText(TextGraphics g, String text) {
-    drawWrappedText(g, text, 0, 0);
   }
 
   @Override

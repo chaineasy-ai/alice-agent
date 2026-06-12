@@ -1,7 +1,5 @@
 package org.cland.alice.facade.tui;
 
-import com.googlecode.lanterna.input.KeyStroke;
-import com.googlecode.lanterna.input.KeyType;
 import java.io.IOException;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -18,18 +16,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * AliceTuiLauncher：TUI 外观模块的入口启动器。
+ * AliceTuiLauncher：基于 JLine 3 的 TUI 外观模块入口启动器。
  *
- * <p>对应设计文档 §2 中的 AliceTuiLauncher，负责：
+ * <p>对应设计文档 §2 中的 AliceTuiLauncher 及 Layout.md 三层单线分割布局， 负责：
  *
  * <ul>
  *   <li>初始化所有子模块（Agent, EventBridge, ScreenManager）
  *   <li>建立事件监听链路
- *   <li>进入主事件循环
+ *   <li>进入主输入循环
  * </ul>
  *
- * <p>基于 {@link AgentCommand} 抽象指令层：用户输入（自然语言 / 斜杠命令）统一解析为 AgentCommand，由 dispatchAgentCommand() 路由到
- * Agent 核心或本地处理。
+ * <p>基于 {@link AgentCommand} 抽象指令层：用户输入统一解析为 AgentCommand， 由 dispatchAgentCommand() 路由到 Agent
+ * 核心或本地处理。
  */
 public class AliceTuiLauncher implements AutoCloseable {
 
@@ -60,15 +58,15 @@ public class AliceTuiLauncher implements AutoCloseable {
     // 2. 创建 EventBridge
     this.eventBridge = new EventBridge();
 
-    // 3. 创建 ScreenManager
+    // 3. 创建 ScreenManager（基于 JLine 3）
     this.screenManager = new ScreenManager(eventBridge);
     this.running = true;
 
     // 4. 设置回调
     setupCallbacks();
 
-    // 5. 设置初始状态
-    this.screenManager.layout().header().setModel(config.defaultModelId());
+    // 5. 设置初始模型到状态栏（header 已精简为仅显示名称+版本）
+    this.screenManager.layout().footer().setModel(config.defaultModelId());
   }
 
   /** 使用外部 Agent 实例构造 */
@@ -79,7 +77,7 @@ public class AliceTuiLauncher implements AutoCloseable {
     this.screenManager = new ScreenManager(eventBridge);
     this.running = true;
     setupCallbacks();
-    this.screenManager.layout().header().setModel(agent.config().defaultModelId());
+    this.screenManager.layout().footer().setModel(agent.config().defaultModelId());
   }
 
   // ========== 设置回调 ==========
@@ -100,8 +98,7 @@ public class AliceTuiLauncher implements AutoCloseable {
   /**
    * 钩子：将 Agent 核心事件连接到 EventBridge。
    *
-   * <p>此处通过拦截 AgentExecutor 产生的 StepResult 来生成 TUI 事件。 更完整的实现应使用 Agent 内部的监听器模式（如 Vert.x event
-   * bus）。
+   * <p>此处通过拦截 AgentExecutor 产生的 StepResult 来生成 TUI 事件。 更完整的实现应使用 Agent 内部的监听器模式。
    */
   private void hookAgentEvents() {
     // 待 AgentCore 发布完整事件后再完善
@@ -111,7 +108,7 @@ public class AliceTuiLauncher implements AutoCloseable {
 
   /** 启动 TUI。 */
   public void start() throws IOException {
-    logger.info("Starting Alice Agent TUI...");
+    logger.info("Starting Alice Agent TUI (JLine 3, three-panel layout)...");
     screenManager.start();
     eventBridge.onChatMessage("System", "欢迎使用 Alice Agent TUI！");
     eventBridge.onChatMessage("System", "输入 /help 查看可用命令。");
@@ -120,38 +117,17 @@ public class AliceTuiLauncher implements AutoCloseable {
   // ========== 主循环 ==========
 
   /**
-   * 运行主事件循环。
+   * 运行主输入循环。
    *
-   * <p>对应设计文档 §4 业务流程中的主事件循环。 仅通过 /exit 命令或 Ctrl+Q / F10 退出。
+   * <p>基于 JLine 3 LineReader，原生支持 AUTO_MENU 向上补全弹窗。
    */
   public void run() {
-    logger.info("Alice Agent TUI entering main loop.");
+    logger.info("Alice Agent TUI entering main input loop.");
 
     try {
-      while (running) {
-        KeyStroke keyStroke = screenManager.screen().readInput();
-
-        if (keyStroke == null) {
-          Thread.sleep(50);
-          continue;
-        }
-
-        if (keyStroke.getKeyType() == KeyType.EOF) {
-          Thread.sleep(100);
-          continue;
-        }
-
-        boolean shouldContinue = screenManager.handleInput(keyStroke);
-        if (!shouldContinue) {
-          logger.info("Exit requested via keyboard.");
-          break;
-        }
-      }
-    } catch (IOException e) {
-      logger.error("IO error in main loop", e);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      logger.info("Main loop interrupted.");
+      screenManager.runInputLoop();
+    } catch (Exception e) {
+      logger.error("Error in main input loop", e);
     } finally {
       shutdown();
     }
@@ -159,18 +135,7 @@ public class AliceTuiLauncher implements AutoCloseable {
 
   // ========== AgentCommand 分发 ==========
 
-  /**
-   * 统一的 AgentCommand 分发入口。
-   *
-   * <p>用户输入（自然语言 / 斜杠命令）由 ScreenManager → CommandHandler 解析后， 经此方法路由到对应处理器：
-   *
-   * <ul>
-   *   <li>{@link ExecutionCmd} → 提交给 Agent 核心执行
-   *   <li>{@link CapabilityCmd} → 执行能力装载（skill/rules/reload）
-   *   <li>{@link ControlCmd} → 处理会话/生命周期控制
-   *   <li>{@code null} → 静默忽略
-   * </ul>
-   */
+  /** 统一的 AgentCommand 分发入口。 */
   void dispatchAgentCommand(AgentCommand cmd) {
     if (cmd == null) return;
 
@@ -205,34 +170,32 @@ public class AliceTuiLauncher implements AutoCloseable {
             String result = agent.ask(task);
             eventBridge.onTaskComplete(result, "Agent 执行完成");
             screenManager.state().transitionTo(TuiState.State.IDLE);
+            screenManager.markContentDirty();
           } catch (Exception e) {
             logger.error("Task execution failed", e);
             eventBridge.onTaskError(e.getMessage());
             screenManager.state().transitionTo(TuiState.State.ERROR);
+            screenManager.markContentDirty();
           }
         });
   }
 
-  /** 处理能力装载指令 */
   private void handleCapability(CapabilityCmd cmd) {
     logger.info(
         "Handling capability: {} resource={}", cmd.getClass().getSimpleName(), cmd.resource());
     eventBridge.onChatMessage("System", "能力装载: " + cmd.resource() + " (待实现完整 ResourceLoader)");
   }
 
-  /** 处理热重载 */
   private void handleReload(CapabilityCmd.ReloadKernelCmd reload) {
     logger.info("Hot reload requested");
     eventBridge.onChatMessage("System", "热重载触发中... (待实现完整 ReloadKernel)");
   }
 
-  /** 处理会话重置 */
   private void handleReset(ControlCmd.ResetSessionCmd reset) {
     logger.info("Session reset requested: {}", reset.sessionId());
     eventBridge.onChatMessage("System", "会话已重置，上下文已清空");
   }
 
-  /** 处理中断/退出 */
   private void handleInterrupt(ControlCmd.InterruptCmd interrupt) {
     logger.info("Interrupt requested: {}", interrupt.cause());
     if ("user-exit".equals(interrupt.cause()) || interrupt.cause().contains("exit")) {
@@ -240,7 +203,6 @@ public class AliceTuiLauncher implements AutoCloseable {
     }
   }
 
-  /** 处理清除上下文指令（/clear） */
   private void handleClearContext(ControlCmd.ClearContextCmd clear) {
     logger.info("Clear context requested: session={}", clear.sessionId());
     try {
@@ -249,15 +211,13 @@ public class AliceTuiLauncher implements AutoCloseable {
       logger.warn("Agent clearMemory not fully implemented, clearing UI only", e);
     }
     eventBridge.onChatMessage("System", "上下文已清除");
-    // 联动 CommandHandler 的 onClear 回调
-    screenManager.layout().chat().clearMessages();
     screenManager.layout().thought().clear();
+    screenManager.markContentDirty();
     if (screenManager.state().isRunning()) {
       screenManager.state().transitionTo(TuiState.State.IDLE);
     }
   }
 
-  /** 处理查看上下文指令（/context） */
   private void handleViewContext(ControlCmd.ViewContextCmd view) {
     logger.info("View context requested: session={}", view.sessionId());
     String contextInfo;
@@ -271,9 +231,8 @@ public class AliceTuiLauncher implements AutoCloseable {
     if (contextInfo != null) {
       eventBridge.onChatMessage("System", contextInfo);
     } else {
-      // 回退：从 Agent 的 memory 和 context 获取基础信息
       String sessionInfo = "会话 ID: " + view.sessionId();
-      String modelInfo = "当前模型: " + screenManager.layout().header().modelId();
+      String modelInfo = "当前模型: " + screenManager.layout().footer().modelInfo();
       String statusInfo = "状态: " + screenManager.state().current().name();
       eventBridge.onChatMessage(
           "System",
@@ -290,21 +249,18 @@ public class AliceTuiLauncher implements AutoCloseable {
     }
   }
 
-  /** 处理压缩上下文指令（/compact） */
   private void handleCompactContext(ControlCmd.CompactContextCmd compact) {
     logger.info("Compact context requested: session={}", compact.sessionId());
     try {
       String result = agent.compactContext();
       eventBridge.onChatMessage(
-          "System",
-          result != null ? result : "上下文压缩完成（释放 Token: N/A，待 Memory 模块提供总结接口）");
+          "System", result != null ? result : "上下文压缩完成（释放 Token: N/A，待 Memory 模块提供总结接口）");
     } catch (Exception e) {
       logger.warn("Agent compactContext not fully implemented", e);
       eventBridge.onChatMessage("System", "上下文压缩请求已提交（待 Memory 模块提供总结接口）");
     }
   }
 
-  /** 处理反馈指令（/feedback） */
   private void handleFeedback(ControlCmd.FeedbackCmd feedback) {
     logger.info("Feedback received: message={}", feedback.message());
     try {
@@ -312,11 +268,11 @@ public class AliceTuiLauncher implements AutoCloseable {
       eventBridge.onChatMessage("System", "反馈已注入: " + feedback.message());
     } catch (Exception e) {
       logger.warn("Agent injectFeedback not fully implemented", e);
-      eventBridge.onChatMessage("System", "反馈已记录: " + feedback.message() + "（待 Agent 暴露 HumanInTheLoop 接口）");
+      eventBridge.onChatMessage(
+          "System", "反馈已记录: " + feedback.message() + "（待 Agent 暴露 HumanInTheLoop 接口）");
     }
   }
 
-  /** 处理模型切换指令（/model） */
   private void handleModelSwitch(AlignmentCmd.SwitchModelCmd model) {
     logger.info("Model switch requested: {}", model.modelId());
     try {
@@ -324,15 +280,11 @@ public class AliceTuiLauncher implements AutoCloseable {
     } catch (Exception e) {
       logger.warn("Agent switchModel not fully implemented", e);
     }
-    screenManager.layout().header().setModel(model.modelId());
+    screenManager.layout().footer().setModel(model.modelId());
+    screenManager.markContentDirty();
     eventBridge.onChatMessage("System", "模型切换至: " + model.modelId());
   }
 
-  /**
-   * 将用户输入解析为 AgentCommand 并分发（ScreenManager 回调用）。
-   *
-   * <p>自然语言输入统一解析为 AcquireGoalCmd。
-   */
   private void submitAgentCommand(String input) {
     AgentCommand cmd = AgentCommand.parse(input, sessionId, traceId());
     if (cmd != null) {
@@ -370,8 +322,6 @@ public class AliceTuiLauncher implements AutoCloseable {
     shutdown();
   }
 
-  // ========== 辅助 ==========
-
   private String traceId() {
     return UUID.randomUUID().toString().substring(0, 12);
   }
@@ -383,7 +333,6 @@ public class AliceTuiLauncher implements AutoCloseable {
       String apiKey = System.getenv("OPENAI_API_KEY");
       if (apiKey == null || apiKey.isEmpty()) {
         System.err.println("警告: 未设置 OPENAI_API_KEY，LLM 功能将不可用。");
-        System.err.println("请设置环境变量后再运行。");
       }
 
       AgentConfig config =
