@@ -88,11 +88,10 @@
 - [x] 在 switch 表达式中添加缺失分支（ClearContextCmd, ViewContextCmd, CompactContextCmd, FeedbackCmd, SwitchModelCmd）
 - [x] 完整实现 handleClearContext(), handleViewContext(), handleCompactContext(), handleFeedback(), handleModelSwitch() 方法
 
-### □ 2.2 TUI JLine 3 依赖清理 [priority:: low] [tool:: gradle]
-- [ ] 评估 TUI 中 JLine 3 的使用必要：
-    - [ ] 如果 TUI 完全基于 Lanterna，移除 `jline-reader` 和 `jline-builtins` 依赖
-    - [ ] 如果保留（如 InputComponent 高级输入），更新 `module-info.java` 注释说明用途
-- [ ] 从 `alice-facade-tui/build.gradle` 移除未使用的 JLine 3 依赖
+### □ 2.2 TUI JLine 3 依赖清理 [priority:: low] [tool:: gradle] [status:: done]
+- [x] 评估 TUI 中 JLine 3 的使用必要：确认 TUI 完全基于 Lanterna，零 JLine 使用
+    - [x] 从 `build.gradle` 注释掉 JLine 3 依赖（保留注释说明可恢复）
+    - [x] 从 `module-info.java` 注释掉 `requires` 声明（保留注释说明可恢复）
 
 ---
 
@@ -165,16 +164,15 @@
 
 | 状态 | 计数 | 说明 |
 |------|------|------|
-| `- [x]` 已完成 | 28 | JLine Chat 模式 (1.1-1.4), 分发补齐 (1.5/2.1/3.1/4.1/4.2) |
-| `- [/]` 执行中 | 4 | TUI JLine 清理 (2.2), 测试 (5.1/5.2), 文档 (6.1) |
+| `- [x]` 已完成 | 31 | JLine Chat 模式 (1.1-1.4), 分发补齐 (1.5/2.1/3.1/4.1/4.2), TUI JLine 清理 (2.2) |
+| `- [/]` 执行中 | 3 | 测试 (5.1/5.2), 文档 (6.1) |
 | `- [ ]` 待执行 | 5 | 子任务细节 |
 | `- [!]` 失败/阻塞 | 0 | — |
-| **总计** | **37** | — |
+| **总计** | **39** | — |
 
 > 最后更新：2026-06-12
 >
 > **当前状态**:
-> - `alice-facade-cmd` 已有 picocli 单次任务模式，缺交互式 chat
-> - `alice-facade-tui` 已有 Lanterna TUI 但指令分发不全
-> - `alice-facade-tui` 已依赖 JLine 3 但未使用（需评估清理）
-> - `alice-agent-command` 指令实体已全，分发链路未覆盖
+> - `alice-facade-cmd` 已有 picocli 单次任务模式 + JLine 3 交互式 chat
+> - `alice-facade-tui` 已有 Lanterna TUI，指令分发已补齐 ✓, JLine 未使用依赖已清理 ✓
+> - `alice-agent-command` 指令实体已全，分发链路已覆盖 ✓

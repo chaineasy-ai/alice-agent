@@ -8,6 +8,14 @@ description: record your changes
 
 ### Changes
 
+- **alice-facade-tui/JLine 3 依赖清理**: 移除 TUI 模块中未使用的 JLine 3 依赖。TUI 完全基于 Lanterna，零 Java 源文件导入 JLine。
+  - `build.gradle`: JLine 3 三件套 (`jline-terminal`, `jline-reader`, `jline-builtins`) 注释保留，附可恢复说明
+  - `module-info.java`: `requires org.jline.reader` + `requires org.jline.terminal` 注释保留
+
+### Fixes
+
+- **alice-core-agent/Agent.java**: 修复 `getActiveContext()`、`clearMemory()`、`compactContext()` 中 `sessionId` 变量未定义导致的编译错误。新增 `private final String sessionId` 字段并在构造器中初始化 UUID。
+
 - **alice-agent-command 指令模块分发补齐**: 完成 TUI/CLI 分发路由、SlashCommand 枚举、CommandHandler、Agent 核心接口、AgentExecutor HITL 支持的全链路补齐。
   - **SlashCommand 枚举补齐**: 注册 `/context`、`/compact`、`/feedback` 三条新斜杠命令及其帮助文本。
   - **CommandHandler 命令执行补齐**: `handleInternal()` 增加 `/context` → ViewContextCmd、`/compact` → CompactContextCmd、`/feedback` → FeedbackCmd 的分发转换。

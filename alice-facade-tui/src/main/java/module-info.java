@@ -13,9 +13,9 @@ module alice.agent.facade.tui.main {
 
   // Lanterna (automatic module)
   requires com.googlecode.lanterna;
-  // JLine3 (automatic modules)
-  requires org.jline.reader;
-  requires org.jline.terminal;
+  // JLine3: 当前未使用，TUI 基于 Lanterna
+  // requires org.jline.reader;
+  // requires org.jline.terminal;
   // Guava (automatic module)
   requires com.google.common;
 

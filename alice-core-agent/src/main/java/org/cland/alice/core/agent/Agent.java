@@ -44,6 +44,7 @@ public class Agent {
   private static final Logger logger = LoggerFactory.getLogger(Agent.class);
 
   private final String agentId;
+  private final String sessionId;
   private final AgentConfig config;
   private final Vertx vertx;
   private final AgentExecutor executor;
@@ -73,6 +74,7 @@ public class Agent {
   Agent(String agentId, AgentConfig config) {
     this.agentId =
         agentId != null ? agentId : java.util.UUID.randomUUID().toString().substring(0, 8);
+    this.sessionId = java.util.UUID.randomUUID().toString().substring(0, 8);
     this.config = config;
     this.vertx = Vertx.vertx();
     this.executor = new AgentExecutor(vertx, this);
@@ -355,7 +357,7 @@ public class Agent {
 
     if (memory != null) {
       try {
-        String shortTerm = memory.getShortTerm(sessionId);
+        String shortTerm = memory.getShortTerm(ctx.sessionId());
         int msgCount = shortTerm.isEmpty() ? 0 : shortTerm.split("\n").length;
         sb.append("| 消息条数 | ").append(msgCount).append(" |\n");
         sb.append("| Token 占用 | N/A (Token 计数器待集成) |\n");
@@ -367,7 +369,9 @@ public class Agent {
       sb.append("| 消息滑动窗口 | N/A |\n");
     }
 
-    sb.append("| 变量快照 | ").append(ctx.asMap().isEmpty() ? "空" : ctx.asMap().keySet()).append(" |\n");
+    sb.append("| 变量快照 | ")
+        .append(ctx.asMap().isEmpty() ? "空" : ctx.asMap().keySet())
+        .append(" |\n");
     return sb.toString();
   }
 
@@ -408,7 +412,8 @@ public class Agent {
    * @param modelId 目标模型标识
    */
   public void switchModel(String modelId) {
-    logger.info("Switching model from {} to {} for agent {}", config.defaultModelId(), modelId, agentId);
+    logger.info(
+        "Switching model from {} to {} for agent {}", config.defaultModelId(), modelId, agentId);
     // 更新配置中的默认模型
     // TODO: 当 AgentConfig 支持动态修改时，更新 defaultModelId
   }
