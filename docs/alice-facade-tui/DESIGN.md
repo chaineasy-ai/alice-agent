@@ -210,7 +210,7 @@ graph TD
 
 ## 8. 模块实现细节
 - **渲染引擎**：`Lanterna`（跨平台终端 UI 库）
-- **输入增强**：`JLine3`（支持命令补全，`/` + Tab 提示命令）
+- **输入处理**：`Lanterna` `KeyStroke` 事件监听（`screen.readInput()`），`InputComponent` 自绘输入框（非 JLine LineReader）
 - **命令拦截逻辑**
   - **Type A（内部）**：`/new` `/clear` `/exit` 仅操作 UI/会话状态
   - **Type B（IO 操作）**：`/prompt` 读取文件并拼接为用户消息
