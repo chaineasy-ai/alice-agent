@@ -43,6 +43,25 @@ updated: "2026-06-13"
 
 # Changelog
 
+## 20260613
+
+### Changes
+
+- **docs: standardize documentation structure across all modules**
+  - Add `docs/DOC_SPEC.md` defining YAML front-matter header standard with `title`, `summary`, `read_when`, `scope`, `status`, `updated` fields
+  - Add `read_when` + `summary` YAML headers to all 35 project `.md` files for AI agent consumption
+  - Move TODO files (`TODO-*.md`) to `todos/` directory for cleaner project root
+  - Rewrite `AGENTS.md` and `CONTRIBUTING.md` with actual Alice Agent project info (replaced stale Temporal SDK templates)
+  - Standardize all `docs/*/DESIGN.md` files with consistent YAML headers
+  - Create `create-ai-doc` skill at `~/.agents/skills/create-ai-doc/` with `SKILL.md` + `references/DOC_SPEC.md`
+  - Add `bin/` to `.gitignore` for Gradle build artifacts
+
+### Docs
+
+- **AGENTS.md**: Full rewrite — module layout table, Java 25/Spock/Gradle build commands, key source file cross-reference, TODO tracking, review checklist
+- **CONTRIBUTING.md**: Full rewrite — Java 25+ dev environment, module dependency graph, PR checklist, commit prefix table, code style guidelines
+- **docs/DOC_SPEC.md**: New documentation specification defining YAML front-matter header standard for all project `.md` files
+
 ## 20260612
 
 ### Changes
