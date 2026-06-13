@@ -29,6 +29,9 @@ replay_pid*
 app/build
 build/reports
 .gradle
+
+# Gradle output directories
+bin/
 alice-core-planner/build
 alice-guardrail/build
 alice-memory-vault/build
