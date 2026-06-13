@@ -19,27 +19,6 @@ scope:
 status: "active"
 updated: "2026-06-13"
 ---
----
-title: "Changelog"
-summary: "Release history for Alice Agent"
-read_when:
-  - "checking release history and version changes"
-  - "updating changelog for a new release"
-scope:
-  - alice-bootstrap
-  - alice-core-agent
-  - alice-core-planner
-  - alice-model
-  - alice-env-adapter
-  - alice-tool-gateway
-  - alice-guardrail
-  - alice-memory-vault
-  - alice-agent-command
-  - alice-facade-cmd
-  - alice-facade-tui
-status: "active"
-updated: "2026-06-13"
----
 
 # Changelog
 

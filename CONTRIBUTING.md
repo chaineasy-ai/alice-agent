@@ -1,25 +1,3 @@
----
-title: "Contributing to Alice Agent"
-summary: "Contribution guidelines, development environment, and pull request process"
-read_when:
-  - "preparing a pull request"
-  - "setting up development environment"
-  - "understanding code style, testing, and commit conventions"
-scope:
-  - "alice-bootstrap"
-  - "alice-core-agent"
-  - "alice-core-planner"
-  - "alice-model"
-  - "alice-env-adapter"
-  - "alice-tool-gateway"
-  - "alice-guardrail"
-  - "alice-memory-vault"
-  - "alice-agent-command"
-  - "alice-facade-cmd"
-  - "alice-facade-tui"
-status: "active"
-updated: "2026-06-13"
----
 # Contributing to Alice Agent
 
 This doc is intended for contributors to **Alice Agent** (hopefully that's you!)
