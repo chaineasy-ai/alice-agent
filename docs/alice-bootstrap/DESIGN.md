@@ -1,3 +1,13 @@
+---
+title: "alice-bootstrap DESIGN"
+summary: "App module architecture design - bootstrapper and orchestrator"
+read_when:
+  - "understanding bootstrap/orchestrator architecture"
+scope:
+  - "alice-bootstrap"
+status: "active"
+updated: "2026-06-13"
+---
 我已为你**规范格式化、优化排版、修复语法、统一样式**，保留所有核心内容，格式更清晰、可直接用于文档/交付件：
 
 # Alice Agent - App 模块架构设计 (Bootstrapper & Orchestrator)

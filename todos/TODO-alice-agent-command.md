@@ -1,3 +1,14 @@
+---
+title: "TODO - alice-agent-command"
+summary: "Task board for the alice-agent-command module: sealed command layer"
+read_when:
+  - "tracking or updating command layer tasks"
+  - "working on AgentCommand sealed interface, parsing, or dispatch"
+scope:
+  - "alice-agent-command"
+status: "active"
+updated: "2026-06-13"
+---
 # TODO-alice-agent-command: 指令模块分发补齐
 
 > 遵循 [GFM Markdown 任务列表规范](./TODO-spec.md)

@@ -1,3 +1,25 @@
+---
+title: "Alice Agent"
+summary: "A modular Java agent framework built with Gradle and Spock"
+read_when:
+  - "getting started with the project"
+  - "understanding the project structure and build process"
+  - "running the application or tests"
+scope:
+  - "alice-bootstrap"
+  - "alice-core-agent"
+  - "alice-core-planner"
+  - "alice-model"
+  - "alice-env-adapter"
+  - "alice-tool-gateway"
+  - "alice-guardrail"
+  - "alice-memory-vault"
+  - "alice-agent-command"
+  - "alice-facade-cmd"
+  - "alice-facade-tui"
+status: "active"
+updated: "2026-06-13"
+---
 # Alice Agent
 
 A modular Java agent framework built with Gradle and Spock.

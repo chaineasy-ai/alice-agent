@@ -1,8 +1,12 @@
 ---
-summary: "acp"
+title: "ACP Java SDK"
+summary: "ACP Java SDK documentation reference and usage"
 read_when:
-  - impl code about `acp server`
-title: "acp"
+  - "working with ACP protocol or ACP Java SDK"
+scope:
+  - "docs"
+status: "active"
+updated: "2026-06-13"
 ---
 # ACP Java SDK
 

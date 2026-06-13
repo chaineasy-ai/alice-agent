@@ -1,3 +1,13 @@
+---
+title: "alice-agent-command DESIGN"
+summary: "Complete command set design for the sealed AgentCommand interface hierarchy"
+read_when:
+  - "implementing or modifying sealed command interface"
+scope:
+  - "alice-agent-command"
+status: "active"
+updated: "2026-06-13"
+---
 ## 1. Alice AgentCommand 完整指令集
 
 我们将指令按**驱动性质**重新划分为四大类，并明确 `/rules` 与 `/skill` 的联动关系。

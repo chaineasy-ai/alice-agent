@@ -1,8 +1,12 @@
 ---
-summary: "docs 目录描述"
+title: "docs - Documentation Directory"
+summary: "Index and description of the docs/ directory"
 read_when:
-  - 了解docs目录结构
-title: "docs 目录描述"
+  - "indexing or understanding the docs directory structure"
+scope:
+  - "docs"
+status: "active"
+updated: "2026-06-13"
 ---
 # docs
 # REFERENCE

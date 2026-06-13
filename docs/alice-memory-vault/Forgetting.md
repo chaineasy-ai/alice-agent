@@ -1,3 +1,13 @@
+---
+title: "Memory Vault - Forgetting Mechanism"
+summary: "Design of the forgetting mechanism for long-term memory management"
+read_when:
+  - "implementing or designing memory forgetting mechanism"
+scope:
+  - "alice-memory-vault"
+status: "draft"
+updated: "2026-06-13"
+---
 针对 **alice-memory-vault** 的设计，核心在于将人类的记忆分类学引入软件工程。这不仅仅是数据库的堆砌，而是一套**分层检索与生命周期管理系统**，确保 Agent 在推理时既能“记得住细节”，又能“拎得清重点”。
 
 ---

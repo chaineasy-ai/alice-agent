@@ -1,3 +1,14 @@
+---
+title: "TODO - alice-memory-vault"
+summary: "Task board for the alice-memory-vault module: memory management"
+read_when:
+  - "tracking or updating memory vault tasks"
+  - "working on episodic/procedural/semantic vaults, WAL, checkpoint, or summarization"
+scope:
+  - "alice-memory-vault"
+status: "active"
+updated: "2026-06-13"
+---
 # TODO-memory-vault: 双轨制 WAL + Checkpoint 记忆系统
 
 > 遵循 [GFM Markdown 任务列表规范](../../../../TODO-spec.md)

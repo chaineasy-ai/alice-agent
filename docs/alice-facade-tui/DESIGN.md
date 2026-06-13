@@ -1,3 +1,13 @@
+---
+title: "alice-facade-tui DESIGN"
+summary: "TUI facade design - JLine 3-based terminal UI with Layered layout"
+read_when:
+  - "implementing or modifying TUI facade"
+scope:
+  - "alice-facade-tui"
+status: "active"
+updated: "2026-06-13"
+---
 # alice-facade-tui 设计文档
 ## 目录
 1. 模块概述

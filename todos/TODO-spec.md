@@ -1,3 +1,25 @@
+---
+title: "TODO - Alice Agent Specification Board"
+summary: "Master task specification board covering all modules"
+read_when:
+  - "planning, tracking, or reviewing overall project progress"
+  - "checking status of all module tasks at a glance"
+  - "updating the master task board after completing milestones"
+scope:
+  - "alice-bootstrap"
+  - "alice-core-agent"
+  - "alice-core-planner"
+  - "alice-model"
+  - "alice-env-adapter"
+  - "alice-tool-gateway"
+  - "alice-guardrail"
+  - "alice-memory-vault"
+  - "alice-agent-command"
+  - "alice-facade-cmd"
+  - "alice-facade-tui"
+status: "active"
+updated: "2026-06-13"
+---
 # TODO-spec: Alice Agent 项目任务规范看板
 
 > 遵循 [GFM Markdown 任务列表规范](./docs/spec/GFM-Markdown-任务列表规范.md)

@@ -1,3 +1,13 @@
+---
+title: "Memory Vault - Module Structure"
+summary: "Module structure of alice-memory-vault following DDD layered architecture"
+read_when:
+  - "understanding memory vault module structure"
+scope:
+  - "alice-memory-vault"
+status: "active"
+updated: "2026-06-13"
+---
 # Alice Memory Vault 模块结构（分包后实际布局）
 
 按**领域职责+分层**拆分，贴合DDD内存记忆库架构。

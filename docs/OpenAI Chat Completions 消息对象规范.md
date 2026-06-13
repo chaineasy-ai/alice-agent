@@ -1,3 +1,13 @@
+---
+title: "OpenAI Chat Completions 消息对象规范"
+summary: "OpenAI Chat Completions message object specification"
+read_when:
+  - "implementing or debugging OpenAI model adapter"
+scope:
+  - "alice-model"
+status: "active"
+updated: "2026-06-13"
+---
 # OpenAI Chat Completions 消息对象规范（Agent 通用版）
 上下文整体结构：`messages: Array[Message]`，按角色划分不同消息结构，**同时兼容业务通信 + LLM 微调**。
 

@@ -1,8 +1,13 @@
 ---
-summary: "alice-core-agent模块的设计文档"
+title: "alice-core-agent Module Architecture Design"
+summary: "System design document for the core agent module - PPAO cycle, lifecycle, and state machine"
 read_when:
-  - 了解alice-core-agent的架构设计
-title: "alice-core-agent模块架构设计"
+  - "implementing or debugging the core agent lifecycle (PPAO cycle)"
+  - "understanding Agent, AgentExecutor, and ReAct loop design"
+scope:
+  - "alice-core-agent"
+status: "active"
+updated: "2026-06-13"
 ---
 基于你补充的 **Perceive-Plan-Act-Observe (PPAO)** 核心循环，这实际上是将经典的控制理论与 LLM 的推理能力结合。在 `alice-core-agent` 的工程实现中，我们需要确保每一个环节都有明确的**状态转移约束**。
 

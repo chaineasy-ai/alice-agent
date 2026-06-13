@@ -1,3 +1,13 @@
+---
+title: "TUI Layout - Single-line Cut + Pop-up Completion"
+summary: "JLine 3-based three-layer single-line split layout with pop-up completion"
+read_when:
+  - "implementing or modifying TUI layout"
+scope:
+  - "alice-facade-tui"
+status: "active"
+updated: "2026-06-13"
+---
 # 7. 功能用例与 TUI 布局（单线切割 + 向上顶出补全版）
 基于 **JLine 3** 实现**纯硬编码、无画面抖动**的三层单线分割布局，整体采用静态分割线划分区域，结合原生补全机制实现向上弹出选择菜单，分区边界固定、渲染高效。
 

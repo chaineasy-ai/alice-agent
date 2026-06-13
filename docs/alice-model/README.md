@@ -1,3 +1,13 @@
+---
+title: "alice-model README"
+summary: "Model provider layer - abstraction over LLM providers (OpenAI, Gemma4, etc.)"
+read_when:
+  - "understanding model provider layer"
+scope:
+  - "alice-model"
+status: "active"
+updated: "2026-06-13"
+---
 # alice-model — Model Provider Layer
 
 ## Overview

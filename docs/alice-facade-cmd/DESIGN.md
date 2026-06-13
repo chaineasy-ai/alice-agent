@@ -1,3 +1,13 @@
+---
+title: "alice-facade-cmd DESIGN"
+summary: "CLI facade design - picocli argument parsing, JLine 3 interactive mode, output rendering"
+read_when:
+  - "implementing or modifying CLI facade"
+scope:
+  - "alice-facade-cmd"
+status: "active"
+updated: "2026-06-13"
+---
 # alice-facade-cmd 设计文档
 ## 目录
 1. 模块概述

@@ -1,8 +1,12 @@
 ---
-summary: "CHANGELOG.md 115行有示例"
-read_when:
-        - 了解CHANGELOG规格
 title: "CHANGELOG规范"
+summary: "CHANGELOG writing conventions and standards (see CHANGELOG.md line 115 for example)"
+read_when:
+  - "writing or reviewing changelog entries"
+scope:
+  - "docs"
+status: "active"
+updated: "2026-06-13"
 ---
 # 通用项目 Changelog.md 命名与编写规范
 

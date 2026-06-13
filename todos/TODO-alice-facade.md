@@ -1,3 +1,15 @@
+---
+title: "TODO - Alice Facade"
+summary: "Task board for facade modules: alice-facade-cmd and alice-facade-tui"
+read_when:
+  - "tracking or updating facade layer tasks"
+  - "working on CLI or TUI frontend implementation"
+scope:
+  - "alice-facade-cmd"
+  - "alice-facade-tui"
+status: "active"
+updated: "2026-06-13"
+---
 # TODO-alice-facade: 门面模块加固与 JLine 3 交互式 CLI
 
 > 遵循 [GFM Markdown 任务列表规范](./TODO-spec.md)

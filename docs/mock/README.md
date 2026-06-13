@@ -1,3 +1,14 @@
+---
+title: "Mock Testing - LLM Simulation (aimock)"
+summary: "LLM API mocking for Alice Agent tests using @copilotkit/aimock"
+read_when:
+  - "setting up or running mock tests for LLM"
+scope:
+  - "docs"
+  - "e2e"
+status: "active"
+updated: "2026-06-13"
+---
 # Mock 测试 — LLM 模拟 (aimock)
 
 基于 `@copilotkit/aimock` 为 Alice Agent 提供 LLM API 模拟，无需真实 API Key 即可运行 Agent 测试。

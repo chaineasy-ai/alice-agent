@@ -1,8 +1,13 @@
 ---
-summary: "alice-model模块的设计文档"
+title: "alice-model Module Architecture Design"
+summary: "System design document for the model provider layer - multi-provider abstraction, hot-switching, cost tracking"
 read_when:
-  - 了解alice-model的架构设计
-title: "alice-model模块架构设计"
+  - "implementing or debugging model provider layer"
+  - "understanding ModelSupplier, ModelProvider, and multi-model routing"
+scope:
+  - "alice-model"
+status: "active"
+updated: "2026-06-13"
 ---
 这是一个针对大模型 Agent 架构中 **ModelProvider 链路**的系统设计文档。
 

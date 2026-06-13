@@ -1,3 +1,13 @@
+---
+title: "alice-tool-gateway DESIGN"
+summary: "Tool gateway design - bridging Java strong-typed methods with LLM JSON calls in a sandboxed execution environment"
+read_when:
+  - "implementing or modifying tool execution gateway"
+scope:
+  - "alice-tool-gateway"
+status: "active"
+updated: "2026-06-13"
+---
 针对 **alice-tool-gateway** 的设计，核心在于将 **Java 强类型方法** 与 **LLM 弱类型 JSON 调用** 进行无缝桥接，同时确保执行过程的物理安全性。它是 Agent 的“手”，既要灵活有力，又要戴上手套（沙箱）。
 
 ---

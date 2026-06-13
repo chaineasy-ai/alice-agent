@@ -1,4 +1,14 @@
-针对 **alice-core-planner** 的设计，核心挑战在于如何将“双路径决策”与 Java 的工程性（强类型、多线程、内存管理）深度结合。这个模块不只是调用 LLM，而是一个**状态化的推理机**。
+---
+title: "alice-core-planner DESIGN"
+summary: "Deep modular design for the core planner - dual-path decision engine (Fast/Slow Path)"
+read_when:
+  - "implementing or modifying planner, strategy, or decision engine"
+scope:
+  - "alice-core-planner"
+status: "active"
+updated: "2026-06-13"
+---
+针对 **alice-core-planner** 的设计，核心挑战在于如何将"双路径决策"与 Java 的工程性（强类型、多线程、内存管理）深度结合。这个模块不只是调用 LLM，而是一个**状态化的推理机**。
 
 以下是 alice-core-planner 的深度模块化设计：
 
@@ -65,33 +75,33 @@ classDiagram
 
 ## **2. 双路径决策逻辑流 (Double-Path Logic)**
 
-基于“快慢系统”理论，Planner 在接收输入后首先进行 **复杂度评估 (Complexity Assessment)**。
+基于"快慢系统"理论，Planner 在接收输入后首先进行 **复杂度评估 (Complexity Assessment)**。
 
 
 
 ```mermaid
 graph TD
     Input[AgentContext] --> Assess{Complexity?}
-    
+
     subgraph "Fast Path (Reactive)"
         Assess -->|Low| Direct[Direct Reasoning]
         Direct --> GenPlan[Generate Atomic Plan]
     end
-    
+
     subgraph "Slow Path (Deliberative)"
         Assess -->|High| Root[Root State Node]
         Root --> Search[MCTS Tree Search]
-        
+
         subgraph "Internal Simulation (Virtual ReAct)"
             Search --> Thought[Predict Thought]
             Thought --> VAction[Predict Action]
             VAction --> World[WorldModel: Predict Obs]
             World --> Thought
         end
-        
+
         Search --> BestPath[Extract Optimal Path]
     end
-    
+
     GenPlan --> Output[Return Plan to AgentCore]
     BestPath --> Output
 ```
@@ -117,9 +127,9 @@ graph TD
 ```java
 public interface ModelSupplier {
     // 高性能模型用于复杂推理 (System 2)
-    ModelSession getReasoningModel(); 
+    ModelSession getReasoningModel();
     // 轻量模型用于快速分类或简单指令 (System 1)
-    ModelSession getInstructionModel(); 
+    ModelSession getInstructionModel();
 }
 ```
 
@@ -127,7 +137,7 @@ public interface ModelSupplier {
 
 ## **4. 决策状态机 (ASCII Text)**
 
-描述 Planner 内部从“接收意图”到“交付路径”的过程：
+描述 Planner 内部从"接收意图"到"交付路径"的过程：
 
 ```text
        [ RECEIVE CONTEXT ]
@@ -158,10 +168,10 @@ public interface ModelSupplier {
 ## **5. 针对 alice-core-planner 的后续开发建议**
 
 * **Token 熔断机制**：在 Slow Path 的 MCTS 搜索中，必须设置 `TokenBudget`。当搜索深度或消耗超过阈值时，强制回退到当前最优分支。
-* **序列化能力**：`ThinkingTree` 应该支持序列化到 `alice-memory-vault`。这样当用户中途打断对话时，Agent 在下次唤醒后可以从上次的“思维断点”继续搜索，而不是重新开始。
+* **序列化能力**：`ThinkingTree` 应该支持序列化到 `alice-memory-vault`。这样当用户中途打断对话时，Agent 在下次唤醒后可以从上次的"思维断点"继续搜索，而不是重新开始。
 * **多模型混部方案**：
     * **Router**: 使用轻量化的模型（如 Qwen-1.8B 或 Llama-3-8B）做复杂度判定。
     * **Slow Path**: 使用 DeepSeek-V3 或 GPT-4o 做 MCTS 的 Node 节点生成。
     * **Fast Path**: 直接透传。
 
-这个设计目标将 Planner 从一个简单的“提示词包装器”提升为了一个真正的**具有元认知能力（Metacognition）**的工程模块。
+这个设计目标将 Planner 从一个简单的"提示词包装器"提升为了一个真正的**具有元认知能力（Metacognition）**的工程模块。

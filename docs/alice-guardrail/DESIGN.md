@@ -1,4 +1,14 @@
-针对 **alice-guardrail** 的设计，其核心逻辑是将“安全”与“正确性”从执行链路中剥离，形成一个独立的**审校委员会**。它不仅是拦截器，更是 Agent 自我进化的监督者。
+---
+title: "alice-guardrail DESIGN"
+summary: "Guardrail design - independent review committee for safety and correctness"
+read_when:
+  - "implementing or modifying guardrail/validation pipeline"
+scope:
+  - "alice-guardrail"
+status: "active"
+updated: "2026-06-13"
+---
+针对 **alice-guardrail** 的设计，其核心逻辑是将"安全"与"正确性"从执行链路中剥离，形成一个独立的**审校委员会**。它不仅是拦截器，更是 Agent 自我进化的监督者。
 
 ---
 
@@ -49,7 +59,7 @@ classDiagram
 
 ## **2. 验证时序与反馈流 (Verification Flow)**
 
-展示 V 层如何干预 P 层的决策，以及如何处理“幻觉”检测。
+展示 V 层如何干预 P 层的决策，以及如何处理"幻觉"检测。
 
 
 
@@ -71,7 +81,7 @@ sequenceDiagram
         P->>T: execute()
         T->>E: interaction
         E-->>T: rawData
-        
+
         Note over V: Phase 2: Post-Execution
         T->>V: auditObservation(rawData, originalGoal)
         V->>V: detectHallucination()
@@ -130,10 +140,10 @@ sequenceDiagram
 
 1.  **确定性验证 vs. 概率性验证**：
     * 对于 **Security (安全)**，使用确定性代码逻辑（Regex, JsonSchema, Policy-as-Code）。
-    * 对于 **Logic (幻觉/意图)**，调用轻量级 LLM（如 Qwen-7B）作为“独立评审员”进行二次确认，实现“模型验证模型”。
+    * 对于 **Logic (幻觉/意图)**，调用轻量级 LLM（如 Qwen-7B）作为"独立评审员"进行二次确认，实现"模型验证模型"。
 2.  **验证层与分布式追踪 (Tracing)**：
     鉴于你在开发 `cland-user-service` 等微服务，建议将 V 层的审计结果注入到 OpenTelemetry 的 Trace 中。这样当 Agent 做出错误决策时，你可以通过 Trace 清楚地看到是哪一步验证漏网。
-3.  **针对“一人公司”的优化**：
+3.  **针对"一人公司"的优化**：
     因为是 solo 模式，V 层可以增加一个 **"Human-in-the-loop"** 开关。对于高风险动作（如：删除数据库、发送外部公函），V 层在 `AuditResult` 中标记为 `MANUAL_CONFIRM`，挂起任务流并向你发送通知（如通过 CLI 提示或 Webhook）。
 
-这层 V (Verify) 是 `alice-agent` 区别于普通脚本的关键：它让智能体拥有了“审慎”这种高级认知属性。
+这层 V (Verify) 是 `alice-agent` 区别于普通脚本的关键：它让智能体拥有了"审慎"这种高级认知属性。

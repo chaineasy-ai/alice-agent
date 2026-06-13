@@ -1,3 +1,13 @@
+---
+title: "Memory Vault - WAL & Checkpoint"
+summary: "Dual-track (WAL + Checkpoint) design for industrial-grade agent memory"
+read_when:
+  - "implementing or debugging WAL/Checkpoint dual-track memory"
+scope:
+  - "alice-memory-vault"
+status: "active"
+updated: "2026-06-13"
+---
 将传统数据库/流处理的高性能 **双轨制（WAL + Checkpoint）** 引入 AI Agent 的记忆系统，是目前解决 Agent 工业级落地最硬核的解法。
 
 在这一套全新设计的架构中：
