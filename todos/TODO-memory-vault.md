@@ -7,7 +7,7 @@ read_when:
 scope:
   - "alice-memory-vault"
 status: "active"
-updated: "2026-06-13"
+updated: "2026-06-14"
 ---
 # TODO-memory-vault: 双轨制 WAL + Checkpoint 记忆系统
 
@@ -165,9 +165,11 @@ updated: "2026-06-13"
     - [x] 所有 WAL 操作以 `if (wal != null)` 保护，零侵入原有逻辑
 
 ### □ 5.2 与 Memory Vault (三级记忆) 集成
-- [ ] EpisodicVault 基于 WAL 重构 [priority:: high] [ref:: DESIGN.md]
-    - [ ] EpisodicVault 成为 WAL 的查询视图
-    - [ ] getRecentTrace() 基于 WAL replay 实现
+- [x] EpisodicVault 基于 WAL 重构 [priority:: high] [ref:: DESIGN.md]
+    - [x] WalEpisodicVault 实现 — WAL 作为情景记忆唯一事实来源
+    - [x] getTrace() 基于 WAL 全量回放
+    - [x] getRecentSteps() 基于差量读取
+    - [x] 17 个单元测试全部通过
 - [ ] 合并 Consolidation 流程 [priority:: medium] [ref:: AWL&CheckPoint.md §4]
     - [ ] Checkpoint 触发后，后台启动 Consolidation
     - [ ] 将 last_applied_id 之前的消息提炼进 Semantic Vault
@@ -196,14 +198,15 @@ updated: "2026-06-13"
 - [x] WalSession 集成门面测试 [priority:: high] [8 tests] [file:: WalSessionSpec.groovy]
 
 ### □ 6.2 集成测试
-- [ ] 模拟崩溃恢复 E2E 测试 [priority:: critical] [verify:: 完整流程]
-    - [ ] Step 1: 启动 Agent，执行若干工具调用
-    - [ ] Step 2: 模拟进程崩溃 (Kill)
-    - [ ] Step 3: 重启 Agent
-    - [ ] Step 4: 验证状态恢复至崩溃点，无重复工具调用
-- [ ] 消息链路完整性测试 [priority:: high]
-    - [ ] 多轮 tool_calls 链的完整恢复
-    - [ ] 穿插用户中断场景的恢复
+- [x] 模拟崩溃恢复 E2E 测试 [priority:: critical] [verify:: 完整流程]
+    - [x] Step 1: 启动 Agent，执行若干工具调用
+    - [x] Step 2: 模拟进程崩溃 (Kill)
+    - [x] Step 3: 重启 Agent
+    - [x] Step 4: 验证状态恢复至崩溃点，无重复工具调用
+    - [x] 5 个端到端测试：基本崩溃恢复、多轮工具链、用户中断穿插、空会话、全量回放
+- [x] 消息链路完整性测试 [priority:: high]
+    - [x] 多轮 tool_calls 链的完整恢复
+    - [x] 穿插用户中断场景的恢复
 
 ### □ 6.3 性能测试
 - [ ] WAL 写入吞吐 [priority:: medium] [verify:: 1000 msg/s 以上]
@@ -259,13 +262,15 @@ updated: "2026-06-13"
 
 | 状态 | 计数 | 说明 |
 |------|------|------|
-| `- [x]` 已完成 | 68 | 12 Java 类 + 9 个 Spock spec (222 tests ✅) + AgentExecutor 集成 |
+| `- [x]` 已完成 | 75 | 12 Java 类 + 11 个 Spock spec (244 tests ✅) |
 | `- [/]` 执行中 | 0 | — |
-| `- [ ]` 待执行 | 12 | 剩余待实现（内存 vault 集成、性能测试、文档） |
+| `- [ ]` 待执行 | 8 | 剩余待实现（存储层、性能测试、文档） |
 | `- [!]` 失败/阻塞 | 0 | — |
-| **总计** | **80** | — |
+| **总计** | **83** | — |
 
 > 最后更新：2026-06-14
-> ✅ **第四阶段完成**: 梦境引擎 (Dreaming Engine) — 7 阶段 35 项任务全部通过
-> 当前全模块 222 测试通过，spotlessCheck 通过
-> 下一步：Memory Vault 三级记忆集成（§5.2）→ E2E 崩溃恢复测试（§6.2）
+> ✅ **第五阶段完成**: EpisodicVault 基于 WAL 重构（WalEpisodicVault + 17 tests）
+> ✅ **第六阶段完成**: 崩溃恢复 E2E 测试（CrashRecoveryE2ESpec + 5 tests）
+> ✅ **消息链路完整性测试**完成
+> 当前全模块 244 测试通过，spotlessCheck 通过
+> 下一步：生产级存储层 (§1.1) → 性能测试 (§6.3) → 文档同步 (§7.1)

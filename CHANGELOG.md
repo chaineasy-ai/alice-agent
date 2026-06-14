@@ -56,6 +56,23 @@ updated: "2026-06-14"
   - `AgentFacadeSpec.groovy`: 新增 9 个测试 — `getActiveContext()` Markdown 表格格式输出、`clearMemory()`/`compactContext()`/`switchModel()`/`injectFeedback()` 异常安全、`feedback()` 默认 null 返回
   - `JLineChatSessionSpec.groovy`: 新增 5 个测试 — 自然语言与斜杠命令解析验证、dispatch 分发验证、close 幂等性验证
 
+### Features
+
+- **alice-memory-vault: EpisodicVault 基于 WAL 重构** — 新增 `WalEpisodicVault`，将情景记忆重构为 WAL 的查询视图：
+  - `getTrace()` 通过 WAL 全量回放重建 Step 列表
+  - `getRecentSteps()` 基于差量读取
+  - 保留重要度遗忘策略（与 InMemoryEpisodicVault 一致行为）
+  - 17 个单元测试覆盖全路径
+
+### Tests
+
+- **alice-memory-vault: 模拟崩溃恢复 E2E 测试** — 新增 `CrashRecoveryE2ESpec.groovy`（5 个测试）：
+  - 基本崩溃恢复：WAL 写入 → 模拟崩溃 → 新会话恢复 → 验证消息完整性
+  - 多轮工具调用链恢复：确保 tool_call → tool_result 配对完整
+  - 用户中断穿插场景：中断后切换任务的正确恢复
+  - 空会话恢复：FRESH_START
+  - 无 Checkpoint 全量回放
+
 ## 20260613
 
 ### Changes
