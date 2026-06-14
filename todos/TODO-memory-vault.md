@@ -126,6 +126,7 @@ updated: "2026-06-14"
     - [x] 脏 WAL 段为空时：直接使用 Checkpoint 状态 (CLEAN_RECOVERY)
     - [x] 重放失败时的降级策略
 - [ ] 恢复性能指标 [priority:: medium]
+    - [ ] 使用监听这模式，这是一个观察点
     - [ ] 恢复耗时监控
     - [ ] 重放消息数统计
 
@@ -210,9 +211,17 @@ updated: "2026-06-14"
     - [x] 穿插用户中断场景的恢复
 
 ### □ 6.3 性能测试
-- [ ] WAL 写入吞吐 [priority:: medium] [verify:: 1000 msg/s 以上]
-- [ ] Checkpoint 生成延迟 [priority:: medium] [verify:: < 50ms 不阻塞主线]
-- [ ] 恢复耗时 [priority:: medium] [verify:: 1000 条脏消息恢复 < 1s]
+- [x] WAL 写入吞吐 [priority:: medium] [verify:: 1000 msg/s 以上] [file:: WalStorePerformanceSpec.groovy]
+    - FileWalStore 单条写入: 1116 msg/s ✅
+    - FileWalStore 批量写入: 1251 msg/s ✅
+    - InMemoryWalStore 基线: 16541 msg/s ✅
+- [x] Checkpoint 生成延迟 [priority:: medium] [verify:: < 50ms 不阻塞主线]
+    - FileWalStore save: ~1.6ms ✅ (< 50ms)
+    - InMemoryWalStore save: ~0.5ms ✅ (< 1ms)
+    - FileWalStore read: ~0.14ms ✅ (< 10ms)
+- [x] 恢复耗时 [priority:: medium] [verify:: 1000 条脏消息恢复 < 1s]
+    - 1000 条重建: ~53ms ✅ (< 1s)
+    - 10000 条重建: 通过 ✅ (< 3s)
 
 ## 七、文档与规范 (Docs)
 
@@ -263,16 +272,19 @@ updated: "2026-06-14"
 
 | 状态 | 计数 | 说明 |
 |------|------|------|
-| `- [x]` 已完成 | 78 | 13 Java 类 + 12 个 Spock spec (265 tests ✅) |
+| `- [x]` 已完成 | 83 | 13 Java 类 + 13 个 Spock spec (273 tests ✅) |
 | `- [/]` 执行中 | 0 | — |
-| `- [ ]` 待执行 | 5 | 剩余待实现（PostgreSQL、性能测试、文档） |
+| `- [ ]` 待执行 | 4 | 剩余待实现（PostgreSQL、WAL 压缩、快照化、文档） |
 | `- [!]` 失败/阻塞 | 0 | — |
-| **总计** | **83** | — |
+| **总计** | **87** | — |
 
 > 最后更新：2026-06-14
-> ✅ **§1.1 存储层完成**: FileWalStore (JSONL) 零依赖实现 + 21 tests
+> ✅ **§6.3 性能测试完成**: 8 个基准测试全部通过
+>   - FileWalStore 写入: ~1100 msg/s | Checkpoint save: ~1.6ms | 恢复: ~53ms
+>   - InMemoryWalStore 基线: ~16500 msg/s
+> ✅ **§1.1 存储层完成**: FileWalStore (Jackson + JSONL) 23 tests
 > ✅ **§5.2 完成**: EpisodicVault 基于 WAL 重构（WalEpisodicVault + 17 tests）
 > ✅ **§6.2 完成**: 崩溃恢复 E2E 测试（CrashRecoveryE2ESpec + 5 tests）
-> 当前全模块 265 测试通过，spotlessCheck 通过
-> 默认存储插件：FileWalStore（JSONL），可替换为 PostgresWalStore
-> 下一步：性能测试 (§6.3) → 文档同步 (§7.1)
+> 当前全模块 273 测试通过，spotlessCheck 通过
+> 默认存储插件：FileWalStore (Jackson JSONL)，可替换为 PostgresWalStore
+> 剩余: PostgreSQL 实现 → WAL 压缩 → 快照化/向量化 → 文档同步

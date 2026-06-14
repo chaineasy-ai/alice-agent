@@ -38,7 +38,7 @@ updated: "2026-06-14"
     - [x] 基础 Tool Calling 循环实现
     - [x] 流式 (Streaming) 响应支持
     - [x] 中断恢复机制 (WAL + Checkpoint) [priority:: high] [verify:: AgentExecutor 5 个生命周期点注入 WAL，编译通过]
-    - [ ] 并发执行上下文管理 [priority:: medium]
+    - [x] 并发执行上下文管理 [priority:: medium]
 - [x] Memory / Context Window 管理 [priority:: high]
     - [x] getActiveContext() — Markdown 表格格式上下文状态
     - [x] clearMemory() — 清空短期记忆
@@ -46,7 +46,7 @@ updated: "2026-06-14"
     - [ ] 上下文窗口滑动策略
     - [ ] Token 使用监控与预警
 - [ ] 多模型调度 (Multi-Provider) [priority:: medium]
-    - [ ] 模型路由选择策略 (round-robin / fallback)
+    - [ ] 模型路由选择策略 (direct/ round-robin / fallback)
     - [ ] Provider 健康检查与熔断
 
 ### □ 1.2 alice-core-planner — 执行规划引擎
@@ -86,17 +86,16 @@ updated: "2026-06-14"
     - [ ] 工具版本管理
 
 ### □ 2.2 alice-env-adapter — 环境适配器
-- [ ] 本地 Shell 执行 [priority:: high]
-    - [ ] 跨平台 (Windows / Linux / macOS) 命令适配
-    - [ ] 超时与资源限制
-    - [ ] 输出截断与分页读取
+- [x] 本地 Shell 执行 [priority:: high]
+    - [x] 跨平台 (Windows / Linux / macOS) 命令适配
+    - [x] 超时与资源限制
+    - [x] 输出截断与分页读取
 - [ ] 远程 SSH 执行 [priority:: high]
     - [ ] 密钥管理与自动认证
     - [ ] SCP 文件传输
     - [ ] 会话复用 (Connection Pool)
-- [ ] Docker / K8s 环境适配 [priority:: medium]
+- [ ] DockerSendbox 环境适配 [priority:: medium]
     - [ ] Docker Exec 接口
-    - [ ] Kubernetes Pod 执行
 
 ### □ 2.3 alice-guardrail — 安全护栏
 - [ ] 命令白名单/黑名单 [priority:: high]
@@ -104,8 +103,8 @@ updated: "2026-06-14"
     - [ ] API Key / Token 检测与脱敏
     - [ ] 日志输出审查
 - [ ] 执行审计日志 [priority:: medium]
-    - [ ] 完整调用链追踪
-    - [ ] 审计日志持久化
+    - [x] 完整调用链追踪
+    - [ ] 审计日志持久化 use langfuse
 
 ## 三、记忆与持久化层 (Memory & Persistence)
 
