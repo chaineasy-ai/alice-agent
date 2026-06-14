@@ -18,6 +18,8 @@ import java.util.Objects;
  *     boolean verbose;      // 详细输出
  *     long timeoutSeconds;  // 超时时间
  *     Map&lt;String,String&gt; envVars; // 额外环境变量
+ *     String routineCron;   // 定时任务 Cron 表达式（可选）
+ *     boolean listRoutines; // 列出已注册定时任务
  *   }
  * </pre>
  */
@@ -36,6 +38,8 @@ public final class RunConfig {
   private final boolean verbose;
   private final long timeoutSeconds;
   private final Map<String, String> envVars;
+  private final String routineCron;
+  private final boolean listRoutines;
 
   private RunConfig(Builder builder) {
     this.task = Objects.requireNonNull(builder.task, "task must not be null");
@@ -46,6 +50,8 @@ public final class RunConfig {
     this.timeoutSeconds =
         builder.timeoutSeconds > 0 ? builder.timeoutSeconds : DEFAULT_TIMEOUT_SECONDS;
     this.envVars = builder.envVars != null ? Map.copyOf(builder.envVars) : Map.of();
+    this.routineCron = builder.routineCron;
+    this.listRoutines = builder.listRoutines;
   }
 
   // ========== Getters ==========
@@ -85,6 +91,16 @@ public final class RunConfig {
     return envVars;
   }
 
+  /** 定时任务 Cron 表达式（CLI {@code alice routine} 子命令设置） */
+  public String routineCron() {
+    return routineCron;
+  }
+
+  /** 是否列出已注册定时任务 */
+  public boolean listRoutines() {
+    return listRoutines;
+  }
+
   // ========== Builder ==========
 
   public static Builder builder() {
@@ -99,6 +115,8 @@ public final class RunConfig {
     private boolean verbose;
     private long timeoutSeconds;
     private Map<String, String> envVars;
+    private String routineCron;
+    private boolean listRoutines;
 
     private Builder() {}
 
@@ -145,6 +163,16 @@ public final class RunConfig {
       return this;
     }
 
+    public Builder routineCron(String routineCron) {
+      this.routineCron = routineCron;
+      return this;
+    }
+
+    public Builder listRoutines(boolean listRoutines) {
+      this.listRoutines = listRoutines;
+      return this;
+    }
+
     public RunConfig build() {
       return new RunConfig(this);
     }
@@ -152,16 +180,25 @@ public final class RunConfig {
 
   @Override
   public String toString() {
-    return "RunConfig{task='"
-        + task
-        + "', model='"
-        + model
-        + "', jsonOutput="
-        + jsonOutput
-        + ", verbose="
-        + verbose
-        + ", timeout="
-        + timeoutSeconds
-        + "s}";
+    StringBuilder sb = new StringBuilder();
+    sb.append("RunConfig{task='")
+        .append(task)
+        .append("', model='")
+        .append(model)
+        .append("', jsonOutput=")
+        .append(jsonOutput)
+        .append(", verbose=")
+        .append(verbose)
+        .append(", timeout=")
+        .append(timeoutSeconds)
+        .append("s");
+    if (routineCron != null) {
+      sb.append(", routineCron='").append(routineCron).append("'");
+    }
+    if (listRoutines) {
+      sb.append(", listRoutines=true");
+    }
+    sb.append("}");
+    return sb.toString();
   }
 }

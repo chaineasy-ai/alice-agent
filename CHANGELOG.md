@@ -37,6 +37,12 @@ updated: "2026-06-13"
   - 新增 9 个 Spock 测试文件（70 测试点），全模块 222 测试通过
   - 设计文档：`docs/alice-memory-vault/dreaming/FunctionArch.md`、`SystemArch.md`
 
+- **alice-agent-command, alice-facade-cmd, alice-facade-tui: Routine-Time Command Model Update** — 新增第五个密封分支 `RoutineTimeCmd` 表示定时调度：
+  - `alice-agent-command`: 新增 `RoutineTimeCmd.java`（sealed interface + `RegisterRoutineCmd`/`TimeTriggeredCmd` records），更新 `AgentCommand.permits` 和 `AgentCommand.parse()` 对 `/routine` 的支持
+  - `alice-facade-cmd`: 新增 `RoutineCommand` picocli 子命令，`RunConfig` 增加 `routineCron`/`listRoutines` 字段
+  - `alice-facade-tui`: 新增 `/routine` 斜杠命令（`Type.CONFIG`），`CommandHandler.handleConfig()` 分发 `RegisterRoutineCmd`
+  - 新增 3 个 Spock 测试文件 + 更新 5 个现有测试文件，共 65+ 新增测试点，全模块编译通过
+
 - **docs: update DESIGN.md for Routine-Time command model** — 将常规调度驱动（Routine-Time）融合至密封指令层次设计，新增类图分支、用例映射表和定时触发时序流程。
 
 ## 20260613

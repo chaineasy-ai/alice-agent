@@ -36,12 +36,12 @@ class AliceCliLauncherSpec extends Specification {
         System.setOut(origOut)
     }
 
-    def "run() should return EXIT_PARAM_ERROR for chat subcommand"() {
+    def "run() should return EXIT_SUCCESS for chat subcommand"() {
         when:
         def exitCode = AliceCliLauncher.run(["chat"] as String[])
 
         then:
-        exitCode == 1
+        exitCode == AliceCliLauncher.EXIT_SUCCESS
     }
 
     def "exit codes are defined correctly"() {

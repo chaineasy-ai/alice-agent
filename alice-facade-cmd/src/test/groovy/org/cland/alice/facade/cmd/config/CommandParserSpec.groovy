@@ -118,14 +118,14 @@ class CommandParserSpec extends Specification {
         config.model() == RunConfig.DEFAULT_MODEL
     }
 
-    def "should throw ParseException for chat subcommand"() {
+    def "should parse chat subcommand to RunConfig"() {
         when:
-        parser.parse(["chat"] as String[])
+        def config = parser.parse(["chat"] as String[])
 
         then:
-        def e = thrown(CommandParser.ParseException)
-        e.exitCode() == 1
-        e.message.contains("chat")
+        config != null
+        config.chat()
+        config.task() == "chat"
     }
 
     def "should throw ParseException for tools subcommand"() {
@@ -144,5 +144,66 @@ class CommandParserSpec extends Specification {
         then:
         def e = thrown(CommandParser.ParseException)
         e.exitCode() == 1
+    }
+
+    // ========================================================================
+    // routine subcommand
+    // ========================================================================
+
+    def "should parse routine subcommand with cron expression"() {
+        when:
+        def config = parser.parse(["routine", "0 */2 * * * ?"] as String[])
+
+        then:
+        config != null
+        config.routineCron() == "0 */2 * * * ?"
+        !config.listRoutines()
+    }
+
+    def "should parse routine subcommand with --list flag"() {
+        when:
+        def config = parser.parse(["routine", "--list"] as String[])
+
+        then:
+        config != null
+        config.listRoutines()
+        config.routineCron() == null
+    }
+
+    def "should parse routine subcommand with short -l flag"() {
+        when:
+        def config = parser.parse(["routine", "-l"] as String[])
+
+        then:
+        config != null
+        config.listRoutines()
+    }
+
+    def "should parse routine subcommand with cron and later list"() {
+        when:
+        def config = parser.parse(["routine", "0 */2 * * * ?", "--list"] as String[])
+
+        then:
+        config != null
+        config.routineCron() == "0 */2 * * * ?"
+        config.listRoutines()
+    }
+
+    def "should return null for --help on routine subcommand"() {
+        when:
+        def config = parser.parse(["routine", "--help"] as String[])
+
+        then:
+        config == null
+    }
+
+    def "should parse routine subcommand with no args"() {
+        when:
+        def config = parser.parse(["routine"] as String[])
+
+        then:
+        config != null
+        config.routineCron() == null
+        !config.listRoutines()
     }
 }

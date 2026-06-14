@@ -77,6 +77,7 @@ public class CommandParser {
     cmdLine.addSubcommand("chat", new ChatCommand());
     cmdLine.addSubcommand("tools", new ToolsCommand());
     cmdLine.addSubcommand("config", new ConfigCommand());
+    cmdLine.addSubcommand("routine", new RoutineCommand());
 
     try {
       CommandLine.ParseResult parseResult = cmdLine.parseArgs(args);
@@ -119,6 +120,10 @@ public class CommandParser {
 
       if (sub instanceof ConfigCommand) {
         throw new ParseException(1, "'config' subcommand is not yet implemented.");
+      }
+
+      if (sub instanceof RoutineCommand routine) {
+        return routine.toRunConfig();
       }
 
       cmdLine.usage(System.err);
@@ -276,6 +281,54 @@ public class CommandParser {
     public Integer call() {
       System.err.println("Config management not yet implemented");
       return 1;
+    }
+  }
+
+  // ========================================================================
+  // "routine" 子命令
+  // ========================================================================
+
+  @Command(
+      name = "routine",
+      description = "Register or manage scheduled routine tasks",
+      mixinStandardHelpOptions = true)
+  private static class RoutineCommand implements Callable<Integer> {
+
+    @Parameters(index = "0", arity = "0..1", description = "Cron expression or routine definition")
+    private String cronExpression;
+
+    @Option(
+        names = {"--list", "-l"},
+        description = "List registered routines")
+    private boolean listRoutines;
+
+    @Option(
+        names = {"--remove", "-r"},
+        description = "Remove a routine by ID")
+    private String removeRoutineId;
+
+    @Override
+    public Integer call() {
+      return 0;
+    }
+
+    /** 将 CLI 参数转换为 RunConfig */
+    RunConfig toRunConfig() {
+      RunConfig.Builder builder = RunConfig.builder().task("routine");
+      if (cronExpression != null && !cronExpression.isBlank()) {
+        builder.routineCron(cronExpression);
+      }
+      if (listRoutines) {
+        builder.listRoutines(true);
+      }
+      return builder.build();
+    }
+
+    /** 将 CLI 参数转换为 AgentCommand（RegisterRoutineCmd） */
+    AgentCommand toAgentCommand(String sessionId) {
+      String expr = (cronExpression != null) ? cronExpression : "";
+      String traceId = UUID.randomUUID().toString().substring(0, 12);
+      return AgentCommand.parse("/routine " + expr, sessionId, traceId);
     }
   }
 }

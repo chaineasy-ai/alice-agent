@@ -63,6 +63,7 @@ public record SlashCommand(String command, String args, Type type, String descri
       case "/exec" -> new SlashCommand(cmd, args, Type.SYSTEM, "执行指令：运行 Shell 命令并将结果传给 Agent");
       case "/model" -> new SlashCommand(cmd, args, Type.CONFIG, "切换模型：动态修改当前使用 LLM");
       case "/tools" -> new SlashCommand(cmd, args, Type.CONFIG, "查看工具：列出 Agent 可用工具集");
+      case "/routine" -> new SlashCommand(cmd, args, Type.CONFIG, "注册定时任务：注册 Cron 表达式到调度器");
       default -> null;
     };
   }
@@ -108,6 +109,7 @@ public record SlashCommand(String command, String args, Type type, String descri
             /exec <cmd>  执行指令：运行 Shell 命令并将结果传给 Agent
             /model <id>  切换模型：动态修改当前使用 LLM
             /tools       查看工具：列出 Agent 可用工具集
+            /routine <cron>  注册定时任务：注册 Cron 表达式到调度器
             ────────────────────────────────────────────────────────
             """;
   }

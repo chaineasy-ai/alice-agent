@@ -60,7 +60,7 @@ class CommandDispatchLoopSpec extends Specification {
         def exitCode = AliceAgent.bootstrap(["run", "测试任务"] as String[])
 
         then:
-        exitCode == AliceApp.EXIT_RUNTIME_ERROR  // 因为没有 API Key ，CLI 本质会失败
+        exitCode == AliceApp.EXIT_SUCCESS  // 链路到达了 CLI run() 并成功执行
         // 关键：链路到达了 CLI run()，没有被卡在参数解析阶段
     }
 

@@ -140,7 +140,13 @@ updated: "2026-06-13"
 | `- [!]` 失败/阻塞 | 0 | — |
 | **总计** | **24** | — |
 
-> 最后更新：2026-06-12
+> 最后更新：2026-06-14
+>
+> **补充: Routine-Time Command Model Update** — 2026-06-14 已完成。新增 `RoutineTimeCmd` 作为第五个密封分支：
+> - `alice-agent-command`: `RoutineTimeCmd.java` (RegisterRoutineCmd / TimeTriggeredCmd), AgentCommand.java (permits + parse)
+> - `alice-facade-cmd`: `RoutineCommand` picocli 子命令, `RunConfig.routineCron`/`listRoutines`
+> - `alice-facade-tui`: `/routine` 斜杠命令 (Type.CONFIG), CommandHandler.handleConfig() 分发
+> - 测试: 3 个新测试文件 + 更新 5 个测试文件, 全模块编译通过
 >
 > **背景**: `git log` 显示最近一次 commit 是 `b650078 feat(alice-agent-command): 新增 /clear, /context, /compact 三条上下文管理指令`
 > 但提交内容仅为指令实体类（sealed record），分发链路尚未补齐。

@@ -301,6 +301,22 @@ public class CommandHandler {
       return true;
     }
 
+    if (cmd.is("/routine")) {
+      if (!cmd.hasArgs()) {
+        eventBridge.onChatMessage("System", "用法: /routine <cron表达式>");
+        return true;
+      }
+
+      String cronExpr = cmd.args();
+      eventBridge.onChatMessage("System", "注册定时任务: " + cronExpr);
+
+      // 转化为 RegisterRoutineCmd 并派发
+      AgentCommand ac = cmd.toAgentCommand(sessionId(), traceId());
+      dispatchToAgent(ac);
+
+      return true;
+    }
+
     return false;
   }
 

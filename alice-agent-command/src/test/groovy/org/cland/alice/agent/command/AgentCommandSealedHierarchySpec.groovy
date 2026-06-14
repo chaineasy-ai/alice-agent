@@ -12,17 +12,17 @@ import spock.lang.Title
  *   <li>所有 12 个具体子类型可被正确分类</li>
  * </ul>
  */
-@Title("AgentCommand 密封层级完整性")
+@Title("AgentCommand 密封层级完整性（含 RoutineTimeCmd）")
 class AgentCommandSealedHierarchySpec extends Specification {
 
     static final String SESSION = "sess-01"
     static final String TRACE  = "trace-xyz"
 
     // ========================================================================
-    // instanceof 分类 —— 确保所有 12 个具体子类型可被正确识别
+    // instanceof 分类 —— 确保所有 14 个具体子类型可被正确识别
     // ========================================================================
 
-    def "instanceof 应正确分类所有 12 个子类型"() {
+    def "instanceof 应正确分类所有 14 个子类型"() {
         given:
         def cmds = [
             new ExecutionCmd.AcquireGoalCmd("goal", SESSION, TRACE),
@@ -37,6 +37,8 @@ class AgentCommandSealedHierarchySpec extends Specification {
             new ControlCmd.ClearContextCmd(SESSION, TRACE),
             new ControlCmd.ViewContextCmd(SESSION, TRACE),
             new ControlCmd.CompactContextCmd(SESSION, TRACE),
+            new RoutineTimeCmd.RegisterRoutineCmd("cron", SESSION, TRACE),
+            new RoutineTimeCmd.TimeTriggeredCmd("goal", SESSION, TRACE),
         ]
 
         expect:
@@ -52,18 +54,22 @@ class AgentCommandSealedHierarchySpec extends Specification {
         cmds[9] instanceof ControlCmd.ClearContextCmd
         cmds[10] instanceof ControlCmd.ViewContextCmd
         cmds[11] instanceof ControlCmd.CompactContextCmd
+        cmds[12] instanceof RoutineTimeCmd.RegisterRoutineCmd
+        cmds[13] instanceof RoutineTimeCmd.TimeTriggeredCmd
 
         // 父接口 instanceof 也成立
         cmds[0] instanceof ExecutionCmd
         cmds[2] instanceof CapabilityCmd
         cmds[5] instanceof AlignmentCmd
         cmds[6] instanceof ControlCmd
+        cmds[12] instanceof RoutineTimeCmd
+        cmds[13] instanceof RoutineTimeCmd
 
         // 顶层接口 instanceof 成立
         cmds.every { it instanceof AgentCommand }
     }
 
-    def "AgentCommand 的 instanceof 分类"() {
+    def "AgentCommand 的 instanceof 分类（含 RoutineTimeCmd）"() {
         expect:
         new ExecutionCmd.AcquireGoalCmd("g", SESSION, TRACE) instanceof ExecutionCmd
         new ExecutionCmd.ExecuteRawCmd("c", SESSION, TRACE) instanceof ExecutionCmd
@@ -77,7 +83,10 @@ class AgentCommandSealedHierarchySpec extends Specification {
         new ControlCmd.ClearContextCmd(SESSION, TRACE) instanceof ControlCmd
         new ControlCmd.ViewContextCmd(SESSION, TRACE) instanceof ControlCmd
         new ControlCmd.CompactContextCmd(SESSION, TRACE) instanceof ControlCmd
+        new RoutineTimeCmd.RegisterRoutineCmd("cron", SESSION, TRACE) instanceof RoutineTimeCmd
+        new RoutineTimeCmd.TimeTriggeredCmd("goal", SESSION, TRACE) instanceof RoutineTimeCmd
     }
+
 
     // ========================================================================
     // 密封约束验证（通过编译时约束 + 运行时 instanceof）
@@ -95,6 +104,9 @@ class AgentCommandSealedHierarchySpec extends Specification {
         !(new CapabilityCmd.ReloadKernelCmd(SESSION, TRACE) instanceof AlignmentCmd)
         !(new AlignmentCmd.SwitchModelCmd("m", SESSION, TRACE) instanceof ControlCmd)
         !(new ControlCmd.InterruptCmd("i", SESSION, TRACE) instanceof ExecutionCmd)
+        !(new RoutineTimeCmd.RegisterRoutineCmd("cron", SESSION, TRACE) instanceof ExecutionCmd)
+        !(new RoutineTimeCmd.RegisterRoutineCmd("cron", SESSION, TRACE) instanceof ControlCmd)
+        !(new ExecutionCmd.AcquireGoalCmd("g", SESSION, TRACE) instanceof RoutineTimeCmd)
     }
 
     // ========================================================================
@@ -115,5 +127,7 @@ class AgentCommandSealedHierarchySpec extends Specification {
         new ControlCmd.ClearContextCmd(SESSION, TRACE) instanceof AgentCommand
         new ControlCmd.ViewContextCmd(SESSION, TRACE) instanceof AgentCommand
         new ControlCmd.CompactContextCmd(SESSION, TRACE) instanceof AgentCommand
+        new RoutineTimeCmd.RegisterRoutineCmd("cron", SESSION, TRACE) instanceof AgentCommand
+        new RoutineTimeCmd.TimeTriggeredCmd("goal", SESSION, TRACE) instanceof AgentCommand
     }
 }

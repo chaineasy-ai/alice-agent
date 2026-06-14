@@ -11,18 +11,20 @@ import java.time.Instant;
 /**
  * AgentCommand — 所有 Agent 指令的顶层密封接口。
  *
- * <p>按驱动性质分为四大类：
+ * <p>按驱动性质分为五大类：
  *
  * <ol>
  *   <li><b>ExecutionCmd</b> — 任务驱动，消耗 Token 的实际工作（/run, /exec）
  *   <li><b>CapabilityCmd</b> — 能力装载，需 Reload 的静态/动态资源（/skill, /rules, /reload）
  *   <li><b>AlignmentCmd</b> — 运行配置，调整内核参数（/model）
  *   <li><b>ControlCmd</b> — 控制与反馈，生命周期与 HITL（/new, /feedback, /exit 等）
+ *   <li><b>RoutineTimeCmd</b> — 定时调度，Cron 表达式驱动的自主任务（/routine）
  * </ol>
  *
  * <p>每条指令都携带 {@code sessionId} 与 {@code traceId}，便于链路追踪。
  */
-public sealed interface AgentCommand permits ExecutionCmd, CapabilityCmd, AlignmentCmd, ControlCmd {
+public sealed interface AgentCommand
+    permits ExecutionCmd, CapabilityCmd, AlignmentCmd, ControlCmd, RoutineTimeCmd {
 
   /** 会话标识 */
   String sessionId();
@@ -91,6 +93,9 @@ public sealed interface AgentCommand permits ExecutionCmd, CapabilityCmd, Alignm
       case "/clear" -> new ControlCmd.ClearContextCmd(sessionId, traceId);
       case "/context" -> new ControlCmd.ViewContextCmd(sessionId, traceId);
       case "/compact" -> new ControlCmd.CompactContextCmd(sessionId, traceId);
+
+      // ── Routine-Time ──────────────────────────────────────────
+      case "/routine" -> new RoutineTimeCmd.RegisterRoutineCmd(args, sessionId, traceId);
 
       // 非斜杠命令（上文已处理），或未知斜杠命令
       default -> null;

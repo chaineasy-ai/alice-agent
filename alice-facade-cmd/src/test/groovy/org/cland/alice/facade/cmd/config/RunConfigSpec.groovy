@@ -112,4 +112,69 @@ class RunConfigSpec extends Specification {
         then:
         config.model() == ""
     }
+
+    // ========================================================================
+    // Routine fields
+    // ========================================================================
+
+    def "should set routineCron via builder"() {
+        when:
+        def config = RunConfig.builder()
+            .task("test")
+            .routineCron("0 */2 * * * ?")
+            .build()
+
+        then:
+        config.routineCron() == "0 */2 * * * ?"
+        !config.listRoutines()
+    }
+
+    def "should set listRoutines via builder"() {
+        when:
+        def config = RunConfig.builder()
+            .task("test")
+            .listRoutines(true)
+            .build()
+
+        then:
+        config.listRoutines()
+        config.routineCron() == null
+    }
+
+    def "should set both routineCron and listRoutines"() {
+        when:
+        def config = RunConfig.builder()
+            .task("test")
+            .routineCron("0 */2 * * * ?")
+            .listRoutines(true)
+            .build()
+
+        then:
+        config.routineCron() == "0 */2 * * * ?"
+        config.listRoutines()
+    }
+
+    def "routineCron defaults to null"() {
+        when:
+        def config = RunConfig.builder()
+            .task("test")
+            .build()
+
+        then:
+        config.routineCron() == null
+        !config.listRoutines()
+    }
+
+    def "toString should not contain routineCron when not set"() {
+        given:
+        def config = RunConfig.builder()
+            .task("test")
+            .build()
+
+        when:
+        def str = config.toString()
+
+        then:
+        !str.contains("routineCron")
+    }
 }

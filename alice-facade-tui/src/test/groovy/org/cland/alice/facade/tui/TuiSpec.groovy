@@ -102,6 +102,44 @@ class TuiSpec extends Specification {
         help.contains("/exec")
         help.contains("/model")
         help.contains("/tools")
+        help.contains("/routine")
+    }
+
+    def "SlashCommand parses /routine with args"() {
+        when: "parsing /routine 0 */2 * * * ?"
+        def cmd = SlashCommand.parse("/routine 0 */2 * * * ?")
+
+        then: "command is recognized with CONFIG type"
+        cmd != null
+        cmd.command() == "/routine"
+        cmd.args() == "0 */2 * * * ?"
+        cmd.type() == SlashCommand.Type.CONFIG
+        cmd.hasArgs()
+    }
+
+    def "SlashCommand parses /routine without args"() {
+        when: "parsing /routine with no args"
+        def cmd = SlashCommand.parse("/routine")
+
+        then: "command is recognized with empty args"
+        cmd != null
+        cmd.command() == "/routine"
+        cmd.args() == ""
+        cmd.type() == SlashCommand.Type.CONFIG
+        !cmd.hasArgs()
+    }
+
+    def "SlashCommand toAgentCommand for /routine returns RegisterRoutineCmd"() {
+        given: "a parsed /routine slash command"
+        def cmd = SlashCommand.parse("/routine 0 */2 * * * ?")
+
+        when: "converting to AgentCommand"
+        def ac = cmd.toAgentCommand("sess-01", "trace-abc")
+
+        then: "it returns a RegisterRoutineCmd"
+        ac != null
+        ac instanceof org.cland.alice.agent.command.RoutineTimeCmd.RegisterRoutineCmd
+        (ac as org.cland.alice.agent.command.RoutineTimeCmd.RegisterRoutineCmd).cronExpression() == "0 */2 * * * ?"
     }
 
     // ========== TuiEvent 测试 ==========
