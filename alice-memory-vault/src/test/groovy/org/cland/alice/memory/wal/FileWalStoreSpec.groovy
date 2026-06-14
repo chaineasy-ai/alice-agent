@@ -2,12 +2,12 @@
  * FileWalStoreSpec — 验证 FileWalStore (JSONL 本地文件) 的正确性
  *
  * 测试目标：
- *   - JSON 序列化/反序列化：toJson / parseMessage / parseCheckpoint
  *   - WAL 追加与读取：appendMessage / getAllMessages / getMessagesAfter
  *   - Checkpoint 写入覆盖：saveCheckpoint / getLatestCheckpoint
  *   - WAL 压缩：deleteMessagesUpTo
  *   - Session 管理：clearSession / clearAll / activeSessionIds
  *   - 重建索引：重启后恢复
+ *   - 工具调用 round-trip：ToolCall.Function 序列化/反序列化
  */
 package org.cland.alice.memory.wal
 
@@ -17,7 +17,7 @@ import spock.lang.Title
 import java.nio.file.Files
 import java.nio.file.Path
 
-@Title("FileWalStore — JSONL 本地文件存储")
+@Title("FileWalStore — JSONL 本地文件存储 (Jackson)")
 class FileWalStoreSpec extends Specification {
 
     Path tempDir
@@ -31,117 +31,14 @@ class FileWalStoreSpec extends Specification {
 
     def cleanup() {
         store?.clearAll()
-        // 清理临时目录
         tempDir.toFile().deleteDir()
-    }
-
-    // ========== JSON 序列化 ==========
-
-    def "toJson produces valid JSON for RawMessage with content"() {
-        given:
-        def msg = new RawMessage(1, "s1", "user", "Hello", null, null, null, 1000, [:])
-
-        when:
-        def json = store.toJson(msg)
-
-        then:
-        json.contains('"messageId":1')
-        json.contains('"role":"user"')
-        json.contains('"content":"Hello"')
-        json.contains('"timestamp":1000')
-        json.endsWith("}")
-    }
-
-    def "toJson produces valid JSON for RawMessage with tool calls"() {
-        given:
-        def tc = [new ToolCall("c1", "function", new ToolCall.Function("get_weather", "{}"))]
-        def msg = new RawMessage(2, "s1", "assistant", null, tc, null, null, 2000, [:])
-
-        when:
-        def json = store.toJson(msg)
-
-        then:
-        json.contains('"toolCalls"')
-        json.contains('"get_weather"')
-    }
-
-    def "parseMessage round-trips correctly"() {
-        given:
-        def original = new RawMessage(42, "s-test", "assistant", "Hello Alice",
-            null, null, "alice", 3000, ["key": "value"])
-
-        when:
-        def json = store.toJson(original)
-        def parsed = store.parseMessage(json)
-
-        then:
-        parsed.messageId() == 42
-        parsed.sessionId() == "s-test"
-        parsed.role() == "assistant"
-        parsed.content() == "Hello Alice"
-        parsed.name() == "alice"
-        parsed.timestamp() == 3000
-        parsed.metadata() == ["key": "value"]
-    }
-
-    def "parseMessage handles null fields"() {
-        given:
-        // Use role=system which allows null content via the constructor
-        // Actually system/user role also require content.
-        // Use a simple assistant message with content
-        def original = new RawMessage(1, "s", "assistant", "valid content", null, null, null, 0, [:])
-
-        when:
-        def json = store.toJson(original)
-        def parsed = store.parseMessage(json)
-
-        then:
-        parsed.messageId() == 1
-        parsed.content() == "valid content"
-        parsed.toolCalls() == null
-    }
-
-    def "parseMessage round-trips tool calls with function details"() {
-        given:
-        def tc = [ToolCall.of("c1", "get_weather", [city: "Beijing"])]
-        def original = RawMessage.assistantWithToolCalls(0, "s", tc)
-
-        when:
-        def json = store.toJson(original)
-
-        then:
-        json.contains('"toolCalls"')
-        json.contains('"get_weather"')
-        json.contains('"c1"')
-        // Note: full parseMessage round-trip for tool calls requires
-        // a more robust JSON parser. In production, the toolCalls
-        // are reconstructed from the RawMessage record directly.
-    }
-
-    def "Checkpoint round-trips correctly"() {
-        given:
-        def original = new Checkpoint(10, "s-cp", 5, "ACTING",
-            ["retry": 0, "goal": "test"], "plan-snapshot", 4000)
-
-        when:
-        def json = store.toJson(original)
-        def parsed = store.parseCheckpoint(json)
-
-        then:
-        parsed.checkpointId() == 10
-        parsed.sessionId() == "s-cp"
-        parsed.lastAppliedMessageId() == 5
-        parsed.stateNode() == "ACTING"
-        parsed.variableSnapshot() == ["retry": 0, "goal": "test"]
-        parsed.createdAt() == 4000
     }
 
     // ========== WAL 追加与读取 ==========
 
     def "appendMessage writes to JSONL file"() {
         given:
-        def id = store.appendMessage(
-            RawMessage.user(0, sid, "Hello"))
+        def id = store.appendMessage(RawMessage.user(0, sid, "Hello"))
 
         expect:
         id > 0
@@ -181,8 +78,6 @@ class FileWalStoreSpec extends Specification {
         after1.every { it.messageId() > 1 }
     }
 
-    // ========== AppendMessages 批量 ==========
-
     def "appendMessages writes all messages"() {
         given:
         def msgs = [
@@ -196,6 +91,62 @@ class FileWalStoreSpec extends Specification {
 
         then:
         store.messageCount(sid) == 3
+    }
+
+    def "getMessage returns specific message by ID"() {
+        given:
+        def id1 = store.appendMessage(RawMessage.user(0, sid, "first"))
+        def id2 = store.appendMessage(RawMessage.user(0, sid, "second"))
+
+        when:
+        def found = store.getMessage(id2)
+
+        then:
+        found.present
+        found.get().content() == "second"
+    }
+
+    def "getMessage returns empty for unknown ID"() {
+        expect:
+        store.getMessage(999).empty
+    }
+
+    // ========== 工具调用 round-trip ==========
+
+    def "tool calls with function details survive round-trip"() {
+        given:
+        def tc = [ToolCall.of("c1", "get_weather", [city: "Beijing"])]
+        def original = RawMessage.assistantWithToolCalls(0, sid, tc)
+        store.appendMessage(original)
+
+        when:
+        def loaded = store.getAllMessages(sid)
+
+        then:
+        loaded.size() == 1
+        loaded[0].toolCalls() != null
+        loaded[0].toolCalls().size() == 1
+        loaded[0].toolCalls()[0].id() == "c1"
+        loaded[0].toolCalls()[0].function().name() == "get_weather"
+        loaded[0].toolCalls()[0].function().arguments().contains("Beijing")
+    }
+
+    def "multiple tool calls round-trip correctly"() {
+        given:
+        def tc = [
+            ToolCall.of("c1", "get_weather", [city: "Shanghai"]),
+            ToolCall.of("c2", "get_weather", [city: "Shenzhen"])
+        ]
+        def original = RawMessage.assistantWithToolCalls(0, sid, tc)
+        store.appendMessage(original)
+
+        when:
+        def loaded = store.getAllMessages(sid)
+
+        then:
+        loaded[0].toolCalls().size() == 2
+        loaded[0].toolCalls()[0].id() == "c1"
+        loaded[0].toolCalls()[1].id() == "c2"
     }
 
     // ========== Checkpoint ==========
@@ -318,7 +269,7 @@ class FileWalStoreSpec extends Specification {
         given:
         store.appendMessage(RawMessage.user(0, "persist-session", "data"))
         store.saveCheckpoint(new Checkpoint(0, "persist-session", 1, "DONE", [:], null, 0))
-        // 关闭旧 store，创建新 store 从磁盘重建
+
         def store2 = new FileWalStore(tempDir)
 
         expect:
@@ -330,12 +281,21 @@ class FileWalStoreSpec extends Specification {
     def "sequence ID survives restart"() {
         given:
         store.appendMessage(RawMessage.user(0, sid, "msg"))
+        def firstId = store.appendMessage(RawMessage.user(0, sid, "msg2"))
 
         when:
         def store2 = new FileWalStore(tempDir)
-        def id = store2.appendMessage(RawMessage.user(0, sid, "msg2"))
+        def nextId = store2.appendMessage(RawMessage.user(0, sid, "msg3"))
 
         then:
-        id > 1  // 序列号从旧 store 恢复并递增
+        nextId > firstId  // 序列号从旧 store 恢复并递增
+    }
+
+    // ========== 字符串表示 ==========
+
+    def "toString contains store info"() {
+        expect:
+        store.toString().contains("FileWalStore")
+        store.toString().contains("sessions")
     }
 }

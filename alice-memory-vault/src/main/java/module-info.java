@@ -9,4 +9,7 @@ module alice.agent.alice.memory.vault.main {
 
   requires org.slf4j;
   requires ch.qos.logback.classic;
+  requires com.fasterxml.jackson.databind;
+  requires com.fasterxml.jackson.core;
+  requires com.fasterxml.jackson.datatype.jsr310;
 }

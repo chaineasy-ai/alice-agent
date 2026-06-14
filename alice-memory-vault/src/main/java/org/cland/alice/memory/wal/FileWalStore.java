@@ -4,11 +4,16 @@
  * 每条消息以 JSON 单行 (JSONL) 格式追加到 `<dataDir>/<sessionId>.wal.jsonl`。
  * Checkpoint 以单独文件 `<dataDir>/<sessionId>.checkpoint.json` 存储（同 session 覆盖）。
  *
- * 零外部依赖（Jackson/Gson），内建轻量 JSON 序列化。
+ * 使用 Jackson 进行 JSON 序列化/反序列化。
  * 适合开发/单机部署。生产环境可替换为 PostgresWalStore。
  */
 package org.cland.alice.memory.wal;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -16,9 +21,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -38,7 +41,7 @@ import org.slf4j.LoggerFactory;
  *     &lt;sessionId&gt;.checkpoint.json — 最新 Checkpoint（覆盖）
  * </pre>
  *
- * <p>零外部依赖，內建 JSON 序列化/反序列化。
+ * <p>使用 Jackson 进行 JSON 序列化，支持 RawMessage（含 ToolCall）和 Checkpoint 的完整 round-trip。
  */
 public final class FileWalStore implements WalStore {
 
@@ -48,6 +51,7 @@ public final class FileWalStore implements WalStore {
   private static final String CHECKPOINT_SUFFIX = ".checkpoint.json";
 
   private final Path dataDir;
+  private final ObjectMapper mapper;
   private final AtomicLong messageIdSeq = new AtomicLong(1);
   private final AtomicLong checkpointIdSeq = new AtomicLong(1);
 
@@ -67,7 +71,17 @@ public final class FileWalStore implements WalStore {
   public FileWalStore(Path dataDir) {
     this.dataDir = dataDir.toAbsolutePath().normalize();
     this.seqFile = this.dataDir.resolve("_seq");
+    this.mapper = createMapper();
     init();
+  }
+
+  private static ObjectMapper createMapper() {
+    ObjectMapper m = new ObjectMapper();
+    m.registerModule(new JavaTimeModule());
+    m.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    m.disable(SerializationFeature.INDENT_OUTPUT); // JSONL 需要单行
+    m.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    return m;
   }
 
   private void init() {
@@ -98,18 +112,24 @@ public final class FileWalStore implements WalStore {
         count = lines.size();
         for (String line : lines) {
           if (!line.isBlank()) {
-            RawMessage msg = parseMessage(line);
+            RawMessage msg = readMessage(line);
             if (msg != null && msg.messageId() > lastId) lastId = msg.messageId();
           }
         }
-        index.put(sessionId, new SessionIndex(lastId, count));
+        if (count > 0) {
+          index.put(sessionId, new SessionIndex(lastId, count));
+        }
 
         Path cpFile = dataDir.resolve(sessionId + CHECKPOINT_SUFFIX);
         if (Files.exists(cpFile)) {
           String content = Files.readString(cpFile).trim();
           if (!content.isEmpty()) {
-            Checkpoint cp = parseCheckpoint(content);
-            if (cp != null) checkpointCache.put(sessionId, cp);
+            try {
+              Checkpoint cp = mapper.readValue(content, Checkpoint.class);
+              checkpointCache.put(sessionId, cp);
+            } catch (JsonProcessingException e) {
+              log.warn("Malformed checkpoint file for session {}: {}", sessionId, e.getMessage());
+            }
           }
         }
       }
@@ -149,7 +169,7 @@ public final class FileWalStore implements WalStore {
   private void writeMessage(RawMessage message) {
     Path file = dataDir.resolve(message.sessionId() + WAL_SUFFIX);
     try {
-      String json = toJson(message) + System.lineSeparator();
+      String json = mapper.writeValueAsString(message) + System.lineSeparator();
       Files.writeString(file, json, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
       index.compute(
           message.sessionId(),
@@ -194,13 +214,22 @@ public final class FileWalStore implements WalStore {
       List<RawMessage> result = new ArrayList<>(lines.size());
       for (String line : lines) {
         if (line.isBlank()) continue;
-        RawMessage msg = parseMessage(line);
+        RawMessage msg = readMessage(line);
         if (msg != null) result.add(msg);
       }
       return result;
     } catch (IOException e) {
       log.warn("Failed to read WAL file: {}", e.getMessage());
       return List.of();
+    }
+  }
+
+  private RawMessage readMessage(String json) {
+    try {
+      return mapper.readValue(json, RawMessage.class);
+    } catch (JsonProcessingException e) {
+      log.warn("Skipping malformed WAL line: {}", e.getMessage());
+      return null;
     }
   }
 
@@ -216,7 +245,9 @@ public final class FileWalStore implements WalStore {
         index.remove(sessionId);
       } else {
         String content =
-            remaining.stream().map(this::toJson).collect(Collectors.joining(System.lineSeparator()))
+            remaining.stream()
+                    .map(this::writeMessageToString)
+                    .collect(Collectors.joining(System.lineSeparator()))
                 + System.lineSeparator();
         Files.writeString(
             file, content, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
@@ -227,6 +258,14 @@ public final class FileWalStore implements WalStore {
       throw new RuntimeException("Failed to compact WAL file", e);
     }
     return all.size() - remaining.size();
+  }
+
+  private String writeMessageToString(RawMessage msg) {
+    try {
+      return mapper.writeValueAsString(msg);
+    } catch (JsonProcessingException e) {
+      throw new RuntimeException("Failed to serialize message: " + msg.messageId(), e);
+    }
   }
 
   @Override
@@ -254,8 +293,9 @@ public final class FileWalStore implements WalStore {
             checkpoint.createdAt());
     Path file = dataDir.resolve(checkpoint.sessionId() + CHECKPOINT_SUFFIX);
     try {
+      String json = mapper.writeValueAsString(stored);
       Files.writeString(
-          file, toJson(stored), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+          file, json, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
       checkpointCache.put(stored.sessionId(), stored);
       updateSeq(id);
       return id;
@@ -274,12 +314,9 @@ public final class FileWalStore implements WalStore {
     try {
       String content = Files.readString(file).trim();
       if (content.isEmpty()) return Optional.empty();
-      Checkpoint cp = parseCheckpoint(content);
-      if (cp != null) {
-        checkpointCache.put(sessionId, cp);
-        return Optional.of(cp);
-      }
-      return Optional.empty();
+      Checkpoint cp = mapper.readValue(content, Checkpoint.class);
+      checkpointCache.put(sessionId, cp);
+      return Optional.of(cp);
     } catch (IOException e) {
       log.warn("Failed to read checkpoint file: {}", e.getMessage());
       return Optional.empty();
@@ -338,6 +375,11 @@ public final class FileWalStore implements WalStore {
     } catch (IOException e) {
       log.warn("Failed to clear checkpoint files: {}", e.getMessage());
     }
+    try {
+      Files.deleteIfExists(seqFile);
+    } catch (IOException e) {
+      // ignore
+    }
     index.clear();
     checkpointCache.clear();
   }
@@ -345,343 +387,6 @@ public final class FileWalStore implements WalStore {
   @Override
   public List<String> activeSessionIds() {
     return List.copyOf(index.keySet());
-  }
-
-  // ====================================================================
-  // 轻量 JSON 序列化（零外部依赖）
-  // ====================================================================
-
-  /** 将 RawMessage 序列化为 JSON 行。 */
-  String toJson(RawMessage msg) {
-    StringBuilder sb = new StringBuilder();
-    sb.append("{\"messageId\":").append(msg.messageId());
-    sb.append(",\"sessionId\":").append(quote(msg.sessionId()));
-    sb.append(",\"role\":").append(quote(msg.role()));
-    sb.append(",\"content\":").append(msg.content() != null ? quote(msg.content()) : "null");
-    sb.append(",\"toolCalls\":").append(toolCallsToJson(msg.toolCalls()));
-    sb.append(",\"toolCallId\":")
-        .append(msg.toolCallId() != null ? quote(msg.toolCallId()) : "null");
-    sb.append(",\"name\":").append(msg.name() != null ? quote(msg.name()) : "null");
-    sb.append(",\"timestamp\":").append(msg.timestamp());
-    sb.append(",\"metadata\":").append(mapToJson(msg.metadata()));
-    sb.append("}");
-    return sb.toString();
-  }
-
-  /** 将 Checkpoint 序列化为 JSON。 */
-  String toJson(Checkpoint cp) {
-    StringBuilder sb = new StringBuilder();
-    sb.append("{\"checkpointId\":").append(cp.checkpointId());
-    sb.append(",\"sessionId\":").append(quote(cp.sessionId()));
-    sb.append(",\"lastAppliedMessageId\":").append(cp.lastAppliedMessageId());
-    sb.append(",\"stateNode\":").append(quote(cp.stateNode()));
-    sb.append(",\"variableSnapshot\":").append(mapToJson(cp.variableSnapshot()));
-    sb.append(",\"planSnapshot\":")
-        .append(cp.planSnapshot() != null ? quote(cp.planSnapshot()) : "null");
-    sb.append(",\"createdAt\":").append(cp.createdAt());
-    sb.append("}");
-    return sb.toString();
-  }
-
-  private String toolCallsToJson(List<ToolCall> toolCalls) {
-    if (toolCalls == null || toolCalls.isEmpty()) return "null";
-    StringBuilder sb = new StringBuilder("[");
-    for (int i = 0; i < toolCalls.size(); i++) {
-      if (i > 0) sb.append(",");
-      ToolCall tc = toolCalls.get(i);
-      sb.append("{\"id\":").append(quote(tc.id()));
-      sb.append(",\"type\":").append(quote(tc.type()));
-      sb.append(",\"function\":{\"name\":").append(quote(tc.function().name()));
-      sb.append(",\"arguments\":").append(quote(tc.function().arguments())).append("}}");
-    }
-    sb.append("]");
-    return sb.toString();
-  }
-
-  private String mapToJson(Map<String, Object> map) {
-    if (map == null || map.isEmpty()) return "{}";
-    StringBuilder sb = new StringBuilder("{");
-    boolean first = true;
-    for (var entry : map.entrySet()) {
-      if (!first) sb.append(",");
-      first = false;
-      sb.append(quote(entry.getKey())).append(":");
-      Object val = entry.getValue();
-      if (val == null) {
-        sb.append("null");
-      } else if (val instanceof String s) {
-        sb.append(quote(s));
-      } else if (val instanceof Number || val instanceof Boolean) {
-        sb.append(val);
-      } else {
-        sb.append(quote(val.toString()));
-      }
-    }
-    sb.append("}");
-    return sb.toString();
-  }
-
-  // ====================================================================
-  // 轻量 JSON 反序列化
-  // ====================================================================
-
-  RawMessage parseMessage(String json) {
-    try {
-      Map<String, Object> map = parseJsonObject(json);
-      long messageId = longVal(map.get("messageId"));
-      String sessionId = strVal(map.get("sessionId"));
-      String role = strVal(map.get("role"));
-      String content = strVal(map.get("content"));
-      Object tcRaw = map.get("toolCalls");
-      List<ToolCall> toolCalls = tcRaw instanceof List ? parseToolCalls((List<?>) tcRaw) : null;
-      String toolCallId = strVal(map.get("toolCallId"));
-      String name = strVal(map.get("name"));
-      long timestamp = longVal(map.get("timestamp"));
-      Object metaRaw = map.get("metadata");
-      @SuppressWarnings("unchecked")
-      Map<String, Object> metadata =
-          metaRaw instanceof Map ? (Map<String, Object>) metaRaw : Map.of();
-      return new RawMessage(
-          messageId, sessionId, role, content, toolCalls, toolCallId, name, timestamp, metadata);
-    } catch (Exception e) {
-      log.warn("Failed to parse WAL message: {}", e.getMessage());
-      return null;
-    }
-  }
-
-  Checkpoint parseCheckpoint(String json) {
-    try {
-      Map<String, Object> map = parseJsonObject(json);
-      long checkpointId = longVal(map.get("checkpointId"));
-      String sessionId = strVal(map.get("sessionId"));
-      long lastAppliedMessageId = longVal(map.get("lastAppliedMessageId"));
-      String stateNode = strVal(map.get("stateNode"));
-      Object varRaw = map.get("variableSnapshot");
-      @SuppressWarnings("unchecked")
-      Map<String, Object> variableSnapshot =
-          varRaw instanceof Map ? (Map<String, Object>) varRaw : Map.of();
-      String planSnapshot = strVal(map.get("planSnapshot"));
-      long createdAt = longVal(map.get("createdAt"));
-      return new Checkpoint(
-          checkpointId,
-          sessionId,
-          lastAppliedMessageId,
-          stateNode,
-          variableSnapshot,
-          planSnapshot,
-          createdAt);
-    } catch (Exception e) {
-      log.warn("Failed to parse checkpoint: {}", e.getMessage());
-      return null;
-    }
-  }
-
-  @SuppressWarnings("unchecked")
-  private List<ToolCall> parseToolCalls(List<?> list) {
-    List<ToolCall> result = new ArrayList<>();
-    for (Object item : list) {
-      if (item instanceof Map) {
-        Map<String, Object> m = (Map<String, Object>) item;
-        String id = strVal(m.get("id"));
-        String type = strVal(m.get("type"));
-        Object fnRaw = m.get("function");
-        if (fnRaw instanceof Map) {
-          Map<String, Object> fn = (Map<String, Object>) fnRaw;
-          String name = strVal(fn.get("name"));
-          String args = strVal(fn.get("arguments"));
-          result.add(new ToolCall(id, type, new ToolCall.Function(name, args)));
-        }
-      }
-    }
-    return result;
-  }
-
-  // ====================================================================
-  // 简易 JSON 解析器（仅支持平层 + 嵌套 Map/List，无数组内嵌对象）
-  // ====================================================================
-
-  /** 解析顶层 JSON 对象。 */
-  static Map<String, Object> parseJsonObject(String json) {
-    if (json == null || json.isBlank()) return Map.of();
-    String trimmed = json.trim();
-    if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
-      throw new IllegalArgumentException("Not a JSON object: " + json);
-    }
-    Map<String, Object> result = new LinkedHashMap<>();
-    // 去掉首尾 { }
-    String inner = trimmed.substring(1, trimmed.length() - 1).trim();
-    if (inner.isEmpty()) return result;
-
-    List<String> tokens = tokenizeJson(inner);
-    for (int i = 0; i < tokens.size(); i += 2) {
-      if (i + 1 >= tokens.size()) break;
-      String key = unquote(tokens.get(i));
-      String val = tokens.get(i + 1);
-      result.put(key, parseJsonValue(val));
-    }
-    return result;
-  }
-
-  /** 将 JSON 对象的键值对序列分割为扁平 token 列表。 */
-  static List<String> tokenizeJson(String inner) {
-    List<String> tokens = new ArrayList<>();
-    StringBuilder current = new StringBuilder();
-    int depth = 0;
-    boolean inString = false;
-    boolean escaped = false;
-
-    for (int i = 0; i < inner.length(); i++) {
-      char c = inner.charAt(i);
-      if (escaped) {
-        current.append(c);
-        escaped = false;
-        continue;
-      }
-      if (c == '\\') {
-        current.append(c);
-        escaped = true;
-        continue;
-      }
-      if (c == '"') {
-        inString = !inString;
-        current.append(c);
-        continue;
-      }
-      if (!inString) {
-        if (c == '{' || c == '[') {
-          depth++;
-          current.append(c);
-          continue;
-        }
-        if (c == '}' || c == ']') {
-          depth--;
-          current.append(c);
-          continue;
-        }
-        if (c == ':' && depth == 0) {
-          // key-value separator
-          tokens.add(current.toString().trim());
-          current.setLength(0);
-          continue;
-        }
-        if (c == ',' && depth == 0) {
-          tokens.add(current.toString().trim());
-          current.setLength(0);
-          continue;
-        }
-      }
-      current.append(c);
-    }
-    if (!current.isEmpty()) {
-      tokens.add(current.toString().trim());
-    }
-    return tokens;
-  }
-
-  static Object parseJsonValue(String token) {
-    if (token == null) return null;
-    String t = token.trim();
-    if ("null".equals(t)) return null;
-    if ("true".equals(t)) return Boolean.TRUE;
-    if ("false".equals(t)) return Boolean.FALSE;
-    if (t.startsWith("\"")) return unquote(t);
-    if (t.startsWith("{")) return parseJsonObject(t);
-    if (t.startsWith("[")) {
-      List<Object> list = new ArrayList<>();
-      String inner = t.substring(1, t.length() - 1).trim();
-      if (!inner.isEmpty()) {
-        // 简单数组：无嵌套
-        for (String item : inner.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)")) {
-          list.add(parseJsonValue(item.trim()));
-        }
-      }
-      return list;
-    }
-    // 数字
-    try {
-      if (t.contains(".")) return Double.parseDouble(t);
-      return Long.parseLong(t);
-    } catch (NumberFormatException e) {
-      return t;
-    }
-  }
-
-  private static String quote(String s) {
-    if (s == null) return "null";
-    StringBuilder sb = new StringBuilder("\"");
-    for (int i = 0; i < s.length(); i++) {
-      char c = s.charAt(i);
-      switch (c) {
-        case '"' -> sb.append("\\\"");
-        case '\\' -> sb.append("\\\\");
-        case '\b' -> sb.append("\\b");
-        case '\f' -> sb.append("\\f");
-        case '\n' -> sb.append("\\n");
-        case '\r' -> sb.append("\\r");
-        case '\t' -> sb.append("\\t");
-        default -> {
-          if (c < 0x20) {
-            sb.append(String.format("\\u%04x", (int) c));
-          } else {
-            sb.append(c);
-          }
-        }
-      }
-    }
-    sb.append("\"");
-    return sb.toString();
-  }
-
-  static String unquote(String s) {
-    if (s == null || s.length() < 2) return s;
-    if (s.startsWith("\"") && s.endsWith("\"")) {
-      String inner = s.substring(1, s.length() - 1);
-      StringBuilder sb = new StringBuilder(inner.length());
-      for (int i = 0; i < inner.length(); i++) {
-        char c = inner.charAt(i);
-        if (c == '\\' && i + 1 < inner.length()) {
-          char next = inner.charAt(i + 1);
-          switch (next) {
-            case '"' -> sb.append('"');
-            case '\\' -> sb.append('\\');
-            case '/' -> sb.append('/');
-            case 'b' -> sb.append('\b');
-            case 'f' -> sb.append('\f');
-            case 'n' -> sb.append('\n');
-            case 'r' -> sb.append('\r');
-            case 't' -> sb.append('\t');
-            case 'u' -> {
-              if (i + 5 < inner.length()) {
-                String hex = inner.substring(i + 2, i + 6);
-                sb.append((char) Integer.parseInt(hex, 16));
-                i += 4;
-              }
-            }
-            default -> sb.append(next);
-          }
-          i++;
-        } else {
-          sb.append(c);
-        }
-      }
-      return sb.toString();
-    }
-    return s;
-  }
-
-  private static String strVal(Object val) {
-    if (val == null) return null;
-    return val instanceof String ? (String) val : String.valueOf(val);
-  }
-
-  private static long longVal(Object val) {
-    if (val == null) return 0;
-    if (val instanceof Number n) return n.longValue();
-    try {
-      return Long.parseLong(val.toString());
-    } catch (NumberFormatException e) {
-      return 0;
-    }
   }
 
   // ========== 辅助 ==========
