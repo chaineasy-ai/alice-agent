@@ -18,7 +18,7 @@ scope:
   - "alice-facade-cmd"
   - "alice-facade-tui"
 status: "active"
-updated: "2026-06-13"
+updated: "2026-06-14"
 ---
 # TODO-spec: Alice Agent 项目任务规范看板
 
@@ -39,7 +39,10 @@ updated: "2026-06-13"
     - [x] 流式 (Streaming) 响应支持
     - [x] 中断恢复机制 (WAL + Checkpoint) [priority:: high] [verify:: AgentExecutor 5 个生命周期点注入 WAL，编译通过]
     - [ ] 并发执行上下文管理 [priority:: medium]
-- [ ] Memory / Context Window 管理 [priority:: high]
+- [x] Memory / Context Window 管理 [priority:: high]
+    - [x] getActiveContext() — Markdown 表格格式上下文状态
+    - [x] clearMemory() — 清空短期记忆
+    - [x] compactContext() — 写入长期记忆作为 Checkpoint 替代
     - [ ] 上下文窗口滑动策略
     - [ ] Token 使用监控与预警
 - [ ] 多模型调度 (Multi-Provider) [priority:: medium]
@@ -128,11 +131,11 @@ updated: "2026-06-13"
     - [x] JSON / 文本双渲染器
     - [ ] 任务进度条
     - [ ] 状态图标与颜色方案
-- [/] 交互式 Chat 模式 (JLine 3) [priority:: high] [ref:: TODO-alice-facade.md]
-    - [ ] JLine 3 依赖注入 (build.gradle + module-info)
-    - [ ] JLineChatSession 交互引擎（行编辑、历史、补全）
-    - [ ] ChatCommand 子命令实现
-    - [ ] dispatchCommand 补齐 5 个缺失分支
+- [x] 交互式 Chat 模式 (JLine 3) [priority:: high] [ref:: TODO-alice-facade.md]
+    - [x] JLine 3 依赖注入 (build.gradle + module-info)
+    - [x] JLineChatSession 交互引擎（行编辑、历史、补全）
+    - [x] ChatCommand 子命令实现
+    - [x] dispatchCommand 补齐 5 个缺失分支
 
 ### □ 4.2 alice-facade-tui — TUI 门面
 - [x] 基础 TUI 框架集成 (Lanterna)
@@ -141,11 +144,11 @@ updated: "2026-06-13"
     - [x] 思考链视图 (ThoughtComponent)
     - [ ] 实时任务状态更新
     - [ ] 任务树展示 (Markdown 渲染)
-- [/] 指令分发链路补齐 [priority:: high] [ref:: TODO-alice-facade.md]
-    - [ ] dispatchAgentCommand 补齐 5 个缺失分支
-    - [ ] SlashCommand / CommandHandler 注册 /context /compact /feedback
-- [/] JLine 3 依赖清理 [priority:: low] [ref:: TODO-alice-facade.md]
-    - [ ] 评估并移除/保留 JLine 3
+- [x] 指令分发链路补齐 [priority:: high] [ref:: TODO-alice-facade.md]
+    - [x] dispatchAgentCommand 补齐 5 个缺失分支
+    - [x] SlashCommand / CommandHandler 注册 /context /compact /feedback
+- [x] JLine 3 依赖清理 [priority:: low] [ref:: TODO-alice-facade.md]
+    - [x] 评估并移除/保留 JLine 3
 - [ ] 多 Session / 多 Tab 支持 [priority:: low]
 
 ## 五、指令驱动层 (Command Layer)
@@ -158,7 +161,9 @@ updated: "2026-06-13"
     - [x] AlignmentCmd 分支 (/model)
     - [x] ControlCmd 分支 (/new, /feedback, /exit, /clear, /context, /compact)
 - [x] AgentCommand.parse() 工厂方法 (斜杠命令解析)
-- [ ] Agent 核心接口补齐 (getActiveContext / clearMemory / compactContext / switchModel / injectFeedback) [priority:: high] [ref:: TODO-alice-facade.md]
+- [x] Agent 核心接口补齐 (getActiveContext / clearMemory / compactContext / switchModel / injectFeedback) [priority:: high] [ref:: TODO-alice-facade.md]
+- [x] JLineChatSession 单元测试 (5 tests)
+- [x] AgentFacadeSpec 单元测试 (9 tests)
 
 ## 六、部署与运维 (DevOps & Release)
 
@@ -201,14 +206,15 @@ updated: "2026-06-13"
 
 | 状态 | 计数 | 说明 |
 |------|------|------|
-| `- [x]` 已完成 | 23 | 已实现并验证通过 |
-| `- [/]` 执行中 | 10 | 正在开发实现中 |
-| `- [ ]` 待执行 | 42 | 未开始 |
+| `- [x]` 已完成 | 32 | 已实现并验证通过 |
+| `- [/]` 执行中 | 8 | 正在开发实现中 |
+| `- [ ]` 待执行 | 43 | 未开始 |
 | `- [!]` 失败/阻塞 | 0 | 当前无阻塞项 |
-| **总计** | **75** | — |
+| **总计** | **83** | — |
 
-> 最后更新：2026-06-11
-> ✅ 新增 §5 指令驱动层域（alice-agent-command）
-> ✅ 创建 TODO-alice-agent-command.md（24 子任务：指令分发补齐）
-> ✅ 创建 TODO-alice-facade.md（37 子任务：JLine 3 CLI + TUI 加固）
-> 下次复查点：完成 alice-core-agent 中断恢复 和 alice-agent-command 分发补齐后更新本看板
+> 最后更新：2026-06-14
+> ✅ JLine 3 交互式 Chat 模式 1.1-1.4 全部完成
+> ✅ TUI/CLI 指令分发链路补齐（dispatchCommand + dispatchAgentCommand）
+> ✅ Agent 核心新接口 + 2 组单元测试 (AgentFacadeSpec 9 + JLineChatSessionSpec 5)
+> ✅ 合并并归档 TODO-alice-agent-command.md（29 项全部完成）
+> 下次复查点：集成测试 (E2E) + 文档同步后更新本看板
