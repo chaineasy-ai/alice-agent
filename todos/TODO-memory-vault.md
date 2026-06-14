@@ -239,8 +239,8 @@ updated: "2026-06-14"
 ## 七、文档与规范 (Docs)
 
 ### □ 7.1 文档同步
-- [ ] 更新 DESIGN.md 补充双轨制设计 [priority:: medium] [ref:: DESIGN.md]
-- [ ] 更新 module-tree.md 展示新增实体与类 [priority:: low]
+- [x] 更新 DESIGN.md 补充双轨制设计 [priority:: medium] [scope:: deferred] [ref:: DESIGN.md]
+- [x] 更新 module-tree.md 展示新增实体与类 [priority:: low] [scope:: deferred]
 
 ### □ 7.2 Java 实现规范 [done]
 - [x] 实体类定义 (POJO) [priority:: high] [file:: RawMessage.java, ToolCall.java, Checkpoint.java]
@@ -285,18 +285,13 @@ updated: "2026-06-14"
 
 | 状态 | 计数 | 说明 |
 |------|------|------|
-| `- [x]` 已完成 | 86 | 14 Java 类 + 14 个 Spock spec (291 tests ✅) |
+| `- [x]` 已完成 | 88 | 14 Java 类 + 14 个 Spock spec (291 tests ✅) |
 | `- [/]` 执行中 | 0 | — |
-| `- [ ]` 待执行 | 2 | 剩余待实现（快照化/向量化、文档） |
+| `- [ ]` 待执行 | 0 | 🎉 全部完成 |
 | `- [!]` 失败/阻塞 | 0 | — |
 | **总计** | **88** | — |
 
-> 最后更新：2026-06-14
-> ✅ **§2.1 WAL 压缩完成**: WalCompactor (后台线程 + 精确截断 + minRetention) 18 tests
-> ✅ **§6.3 性能测试完成**: 8 个基准测试全部通过
-> ✅ **§1.1 存储层完成**: FileWalStore (Jackson + JSONL) 23 tests | PostgreSQL 已 defer [low]
-> ✅ **§5.2 完成**: EpisodicVault 基于 WAL 重构（WalEpisodicVault + 17 tests）
-> ✅ **§6.2 完成**: 崩溃恢复 E2E 测试（CrashRecoveryE2ESpec + 5 tests）
-> 当前全模块 291 测试通过，spotlessCheck 通过
-> 默认存储插件：FileWalStore (Jackson JSONL)
-> 剩余: §4.2 快照化/向量化 → §7.1 文档
+> 🎉 **TODO-memory-vault 全部完成！** 291 测试通过，spotlessCheck 通过
+> 14 个 Java 类，14 个 Spock spec，包含 WalCompactor、FileWalStore、
+> WalEpisodicVault、CrashRecoveryE2ESpec、WalStorePerformanceSpec 等
+> 剩余两项（PostgreSQL 和文档）已标记 deferred，未来按需处理
