@@ -118,7 +118,6 @@ Application binaries are at `alice-bootstrap/build/install/alice-agent/bin/`.
 ## TODO / Plan Tracking
 
 Active work items are tracked in `TODO-*.md` files under [`todos/`](./todos/):
-- [todos/TODO-memory-vault.md](./todos/TODO-memory-vault.md) — Memory subsystem
 - [todos/TODO-spec.md](./todos/TODO-spec.md) — Specifications
 
 ## Additional Resources
