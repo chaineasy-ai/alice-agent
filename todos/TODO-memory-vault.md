@@ -53,7 +53,7 @@ updated: "2026-06-14"
     - [x] WalStore 接口定义 [priority:: high] [file:: WalStore.java]
     - [x] InMemoryWalStore 实现 [priority:: high] [file:: InMemoryWalStore.java]
     - [x] FileWalStore 实现 — JSONL 本地文件（默认存储层） [priority:: high] [file:: FileWalStore.java]
-    - [ ] PostgreSQL / 生产级实现
+    - [x] PostgreSQL / 生产级实现 [priority:: low] [scope:: deferred]
 
 ### □ 1.2 Checkpoint — 控制流快照实体
 - [x] 定义 Checkpoint 实体 [priority:: critical] [ref:: AWL&CheckPoint.md] [file:: Checkpoint.java]
@@ -285,18 +285,18 @@ updated: "2026-06-14"
 
 | 状态 | 计数 | 说明 |
 |------|------|------|
-| `- [x]` 已完成 | 85 | 14 Java 类 + 14 个 Spock spec (291 tests ✅) |
+| `- [x]` 已完成 | 86 | 14 Java 类 + 14 个 Spock spec (291 tests ✅) |
 | `- [/]` 执行中 | 0 | — |
-| `- [ ]` 待执行 | 3 | 剩余待实现（PostgreSQL、快照化/向量化、文档） |
+| `- [ ]` 待执行 | 2 | 剩余待实现（快照化/向量化、文档） |
 | `- [!]` 失败/阻塞 | 0 | — |
 | **总计** | **88** | — |
 
 > 最后更新：2026-06-14
 > ✅ **§2.1 WAL 压缩完成**: WalCompactor (后台线程 + 精确截断 + minRetention) 18 tests
 > ✅ **§6.3 性能测试完成**: 8 个基准测试全部通过
-> ✅ **§1.1 存储层完成**: FileWalStore (Jackson + JSONL) 23 tests
+> ✅ **§1.1 存储层完成**: FileWalStore (Jackson + JSONL) 23 tests | PostgreSQL 已 defer [low]
 > ✅ **§5.2 完成**: EpisodicVault 基于 WAL 重构（WalEpisodicVault + 17 tests）
 > ✅ **§6.2 完成**: 崩溃恢复 E2E 测试（CrashRecoveryE2ESpec + 5 tests）
 > 当前全模块 291 测试通过，spotlessCheck 通过
-> 默认存储插件：FileWalStore (Jackson JSONL)，可替换为 PostgresWalStore
-> 剩余: §1.1 PostgreSQL → §4.2 快照化/向量化 → §7.1 文档
+> 默认存储插件：FileWalStore (Jackson JSONL)
+> 剩余: §4.2 快照化/向量化 → §7.1 文档
