@@ -64,7 +64,12 @@ updated: "2026-06-14"
   - 保留重要度遗忘策略（与 InMemoryEpisodicVault 一致行为）
   - 17 个单元测试覆盖全路径
 
-- **alice-memory-vault: 存储性能基准测试** — 新增 `WalStorePerformanceSpec`，8 个基准测试覆盖 FileWalStore 和 InMemoryWalStore：
+- **alice-memory-vault: WAL 压缩清理引擎** — 新增 `WalCompactor`，后台线程异步压缩：
+  - 基于 Checkpoint lastAppliedMessageId 精确截断（会话内消息遍历）
+  - minRetentionCount 保护：保留最近 N 条消息，防止过度压缩
+  - 安全保证：绝不删除未确认（lastAppliedId 之后）的消息
+  - 支持自动调度（可配置间隔）和手动触发
+  - 18 个单元测试覆盖基础压缩、多会话、幂等、生命周期全路径
   - FileWalStore 写入吞吐: ~1100 msg/s（单条）、~1250 msg/s（批量）
   - InMemoryWalStore 基线: ~16500 msg/s（Groovy Spock 环境，不含 JIT 预热）
   - Checkpoint 保存延迟: ~1.6ms（FileWalStore）、~0.5ms（InMemoryWalStore）

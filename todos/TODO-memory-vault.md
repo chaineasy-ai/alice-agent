@@ -81,9 +81,22 @@ updated: "2026-06-14"
     - [x] 基于 last_applied_id 的增量读取
     - [x] 全量回放: `replayAll(sessionId) → List<RawMessage>`
     - [x] 差量回放: `replayFrom(sessionId, afterId) → List<RawMessage>`
-- [ ] WAL 压缩与清理 [priority:: medium]
-    - [ ] 已确认 (Last_Applied_ID 之前) 的旧消息标记可压缩
-    - [ ] 后台线程异步清理
+### □ 2.1 WAL 压缩与清理
+- [x] 已确认 (Last_Applied_ID 之前) 的旧消息标记可压缩 [priority:: medium] [file:: WalCompactor.java]
+    - [x] 基于 Checkpoint lastAppliedMessageId 精确截断
+    - [x] 会话内消息列表遍历 + ID 限制，兼容全局 ID 序列
+    - [x] minRetentionCount 保护：保留最近 N 条，防止过度压缩
+    - [x] 幂等保证：重复调用无害，二次运行无操作
+    - [x] 安全保证：绝不删除未确认（lastAppliedId 之后）的消息
+- [x] 后台线程异步清理 [priority:: medium]
+    - [x] ScheduledExecutorService 调度，可配置间隔
+    - [x] start/stop 生命周期管理
+    - [x] enabled 开关（可禁用自动压缩）
+    - [x] 手动 compactAll / compactSession 触发
+- [x] 测试覆盖 [priority:: medium] [18 tests] [file:: WalCompactorSpec.groovy]
+    - 基础压缩（mem + file）、无 Checkpoint 跳过、minRetention 保护
+    - 多会话 compactAll、幂等、空 store、安全保证
+    - start/stop 生命周期、disabled 开关、状态查询
 
 ### □ 2.2 Message 与 OpenAI 规范对齐 [done]
 - [x] RawMessage → OpenAI Message 转换 [priority:: high] [ref:: OpenAI Chat Completions 消息对象规范.md] [file:: RawMessage.java]
@@ -272,19 +285,18 @@ updated: "2026-06-14"
 
 | 状态 | 计数 | 说明 |
 |------|------|------|
-| `- [x]` 已完成 | 83 | 13 Java 类 + 13 个 Spock spec (273 tests ✅) |
+| `- [x]` 已完成 | 85 | 14 Java 类 + 14 个 Spock spec (291 tests ✅) |
 | `- [/]` 执行中 | 0 | — |
-| `- [ ]` 待执行 | 4 | 剩余待实现（PostgreSQL、WAL 压缩、快照化、文档） |
+| `- [ ]` 待执行 | 3 | 剩余待实现（PostgreSQL、快照化/向量化、文档） |
 | `- [!]` 失败/阻塞 | 0 | — |
-| **总计** | **87** | — |
+| **总计** | **88** | — |
 
 > 最后更新：2026-06-14
+> ✅ **§2.1 WAL 压缩完成**: WalCompactor (后台线程 + 精确截断 + minRetention) 18 tests
 > ✅ **§6.3 性能测试完成**: 8 个基准测试全部通过
->   - FileWalStore 写入: ~1100 msg/s | Checkpoint save: ~1.6ms | 恢复: ~53ms
->   - InMemoryWalStore 基线: ~16500 msg/s
 > ✅ **§1.1 存储层完成**: FileWalStore (Jackson + JSONL) 23 tests
 > ✅ **§5.2 完成**: EpisodicVault 基于 WAL 重构（WalEpisodicVault + 17 tests）
 > ✅ **§6.2 完成**: 崩溃恢复 E2E 测试（CrashRecoveryE2ESpec + 5 tests）
-> 当前全模块 273 测试通过，spotlessCheck 通过
+> 当前全模块 291 测试通过，spotlessCheck 通过
 > 默认存储插件：FileWalStore (Jackson JSONL)，可替换为 PostgresWalStore
-> 剩余: PostgreSQL 实现 → WAL 压缩 → 快照化/向量化 → 文档同步
+> 剩余: §1.1 PostgreSQL → §4.2 快照化/向量化 → §7.1 文档
