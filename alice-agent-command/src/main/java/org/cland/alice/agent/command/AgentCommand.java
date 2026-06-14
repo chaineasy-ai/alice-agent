@@ -19,12 +19,13 @@ import java.time.Instant;
  *   <li><b>AlignmentCmd</b> — 运行配置，调整内核参数（/model）
  *   <li><b>ControlCmd</b> — 控制与反馈，生命周期与 HITL（/new, /feedback, /exit 等）
  *   <li><b>RoutineTimeCmd</b> — 定时调度，Cron 表达式驱动的自主任务（/routine）
+ *   <li><b>SubAgentCmd</b> — 多 Agent 管理，子 Agent 创建与外部 ACP Agent 连接（/sub-agent）
  * </ol>
  *
  * <p>每条指令都携带 {@code sessionId} 与 {@code traceId}，便于链路追踪。
  */
 public sealed interface AgentCommand
-    permits ExecutionCmd, CapabilityCmd, AlignmentCmd, ControlCmd, RoutineTimeCmd {
+    permits ExecutionCmd, CapabilityCmd, AlignmentCmd, ControlCmd, RoutineTimeCmd, SubAgentCmd {
 
   /** 会话标识 */
   String sessionId();
@@ -97,8 +98,106 @@ public sealed interface AgentCommand
       // ── Routine-Time ──────────────────────────────────────────
       case "/routine" -> new RoutineTimeCmd.RegisterRoutineCmd(args, sessionId, traceId);
 
+      // ── Sub-Agent ─────────────────────────────────────────────
+      case "/sub-agent" -> parseSubAgent(args, sessionId, traceId);
+
       // 非斜杠命令（上文已处理），或未知斜杠命令
       default -> null;
     };
+  }
+
+  /**
+   * 解析 {@code /sub-agent} 子命令。
+   *
+   * <p>格式：{@code /sub-agent <subcommand> [args...]}
+   *
+   * <p>支持的子命令：
+   *
+   * <ul>
+   *   <li>{@code spawn --goal "<goal>" [--model <model>]}
+   *   <li>{@code connect --name <name> --acp-endpoint <url>}
+   *   <li>{@code list}
+   *   <li>{@code cancel <id>}
+   *   <li>{@code results <id>}
+   *   <li>{@code send <id> <message>}
+   *   <li>{@code prompt <id> <prompt>}
+   * </ul>
+   */
+  private static AgentCommand parseSubAgent(String args, String sessionId, String traceId) {
+    if (args == null || args.isBlank()) return null;
+
+    int spaceIdx = args.indexOf(' ');
+    String subCmd =
+        spaceIdx < 0 ? args.trim().toLowerCase() : args.substring(0, spaceIdx).toLowerCase();
+    String subArgs = spaceIdx < 0 ? "" : args.substring(spaceIdx + 1).trim();
+
+    return switch (subCmd) {
+      case "spawn" -> {
+        // Parse --goal "..." [--model "..."]
+        String goal = extractNamedArg(subArgs, "--goal");
+        if (goal == null || goal.isBlank()) yield null;
+        String model = extractNamedArg(subArgs, "--model");
+        yield new SpawnSubAgentCmd(goal, model, sessionId, traceId);
+      }
+      case "connect" -> {
+        String name = extractNamedArg(subArgs, "--name");
+        String ep = extractNamedArg(subArgs, "--acp-endpoint");
+        if (name == null || name.isBlank() || ep == null || ep.isBlank()) yield null;
+        try {
+          yield new ConnectSubAgentCmd(name, java.net.URI.create(ep), sessionId, traceId);
+        } catch (IllegalArgumentException e) {
+          yield null;
+        }
+      }
+      case "list" -> new ListSubAgentsCmd(sessionId, traceId);
+      case "cancel" -> {
+        if (subArgs.isBlank()) yield null;
+        yield new CancelSubAgentCmd(subArgs, sessionId, traceId);
+      }
+      case "results" -> {
+        if (subArgs.isBlank()) yield null;
+        yield new GetSubAgentResultsCmd(subArgs, sessionId, traceId);
+      }
+      case "send" -> {
+        // Format: send <id> <message>
+        int idEnd = subArgs.indexOf(' ');
+        if (idEnd < 0) yield null;
+        String id = subArgs.substring(0, idEnd).trim();
+        String msg = subArgs.substring(idEnd + 1).trim();
+        if (id.isBlank() || msg.isBlank()) yield null;
+        yield new SendToSubAgentCmd(id, msg, sessionId, traceId);
+      }
+      case "prompt" -> {
+        int idEnd = subArgs.indexOf(' ');
+        if (idEnd < 0) yield null;
+        String id = subArgs.substring(0, idEnd).trim();
+        String prompt = subArgs.substring(idEnd + 1).trim();
+        if (id.isBlank() || prompt.isBlank()) yield null;
+        yield new PromptSubAgentCmd(id, prompt, sessionId, traceId);
+      }
+      default -> null;
+    };
+  }
+
+  /**
+   * 从参数字符串中提取命名参数的值。
+   *
+   * <p>例如 {@code extractNamedArg("--goal \"hello\" --model gpt-4", "--goal")} 返回 {@code "hello"}。
+   *
+   * @param args 参数字符串
+   * @param name 参数名（含 {@code --} 前缀）
+   * @return 参数值，未找到时返回 {@code null}
+   */
+  private static String extractNamedArg(String args, String name) {
+    int idx = args.indexOf(name);
+    if (idx < 0) return null;
+    String after = args.substring(idx + name.length()).trim();
+    if (after.isEmpty()) return null;
+    if (after.startsWith("\"")) {
+      int end = after.indexOf('"', 1);
+      return end < 0 ? after.substring(1) : after.substring(1, end);
+    }
+    int end = after.indexOf(' ');
+    return end < 0 ? after : after.substring(0, end);
   }
 }

@@ -78,6 +78,7 @@ public class CommandParser {
     cmdLine.addSubcommand("tools", new ToolsCommand());
     cmdLine.addSubcommand("config", new ConfigCommand());
     cmdLine.addSubcommand("routine", new RoutineCommand());
+    cmdLine.addSubcommand("sub-agent", new SubAgentCommand());
 
     try {
       CommandLine.ParseResult parseResult = cmdLine.parseArgs(args);
@@ -124,6 +125,10 @@ public class CommandParser {
 
       if (sub instanceof RoutineCommand routine) {
         return routine.toRunConfig();
+      }
+
+      if (sub instanceof SubAgentCommand subAgent) {
+        return subAgent.toRunConfig();
       }
 
       cmdLine.usage(System.err);
@@ -329,6 +334,122 @@ public class CommandParser {
       String expr = (cronExpression != null) ? cronExpression : "";
       String traceId = UUID.randomUUID().toString().substring(0, 12);
       return AgentCommand.parse("/routine " + expr, sessionId, traceId);
+    }
+  }
+
+  // ========================================================================
+  // "sub-agent" 子命令
+  // ========================================================================
+
+  @Command(
+      name = "sub-agent",
+      description = "Manage sub-agents: spawn, connect, list, cancel, results, send, prompt",
+      subcommandsRepeatable = true,
+      mixinStandardHelpOptions = true)
+  private static class SubAgentCommand implements Callable<Integer> {
+
+    @Option(
+        names = {"--spawn"},
+        description = "Spawn a sub-agent with a goal")
+    private String spawnGoal;
+
+    @Option(
+        names = {"--connect"},
+        description = "Connect to an external ACP agent (requires --acp-endpoint)")
+    private String connectName;
+
+    @Option(
+        names = {"--acp-endpoint"},
+        description = "ACP endpoint URL for connection")
+    private String acpEndpoint;
+
+    @Option(
+        names = {"--list"},
+        description = "List all sub-agents")
+    private boolean listAgents;
+
+    @Option(
+        names = {"--cancel"},
+        description = "Cancel a sub-agent by ID")
+    private String cancelId;
+
+    @Option(
+        names = {"--results"},
+        description = "Get results of a sub-agent by ID")
+    private String resultsId;
+
+    @Option(
+        names = {"--send"},
+        description = "Send message to a sub-agent (requires --message)")
+    private String sendId;
+
+    @Option(
+        names = {"--message"},
+        description = "Message content for --send")
+    private String sendMessage;
+
+    @Option(
+        names = {"--prompt"},
+        description = "Prompt an external ACP agent (requires --agent-id)")
+    private String promptForAgent;
+
+    @Option(
+        names = {"--agent-id"},
+        description = "Target agent ID for --prompt")
+    private String promptAgentId;
+
+    @Override
+    public Integer call() {
+      return 0;
+    }
+
+    /** 将 CLI 参数转换为 RunConfig */
+    RunConfig toRunConfig() {
+      RunConfig.Builder builder = RunConfig.builder().task("sub-agent");
+      if (spawnGoal != null) builder.subAgentSpawnGoal(spawnGoal);
+      if (connectName != null) {
+        builder.subAgentConnectName(connectName);
+        builder.subAgentConnectEndpoint(acpEndpoint);
+      }
+      if (listAgents) builder.subAgentList(true);
+      if (cancelId != null) builder.subAgentCancelId(cancelId);
+      if (resultsId != null) builder.subAgentResultsId(resultsId);
+      if (sendId != null) {
+        builder.subAgentSendId(sendId);
+        builder.subAgentSendMessage(sendMessage);
+      }
+      if (promptForAgent != null && promptAgentId != null) {
+        builder.subAgentPromptAgentId(promptAgentId);
+        builder.subAgentPromptText(promptForAgent);
+      }
+      return builder.build();
+    }
+
+    /** 将 CLI 参数转换为 AgentCommand */
+    AgentCommand toAgentCommand(String sessionId) {
+      String traceId = UUID.randomUUID().toString().substring(0, 12);
+      StringBuilder sb = new StringBuilder("/sub-agent ");
+
+      if (spawnGoal != null) {
+        sb.append("spawn --goal \"").append(spawnGoal).append("\"");
+      } else if (connectName != null) {
+        sb.append("connect --name ").append(connectName);
+        if (acpEndpoint != null) {
+          sb.append(" --acp-endpoint ").append(acpEndpoint);
+        }
+      } else if (listAgents) {
+        sb.append("list");
+      } else if (cancelId != null) {
+        sb.append("cancel ").append(cancelId);
+      } else if (resultsId != null) {
+        sb.append("results ").append(resultsId);
+      } else if (sendId != null && sendMessage != null) {
+        sb.append("send ").append(sendId).append(" ").append(sendMessage);
+      } else if (promptForAgent != null && promptAgentId != null) {
+        sb.append("prompt ").append(promptAgentId).append(" ").append(promptForAgent);
+      }
+
+      return AgentCommand.parse(sb.toString(), sessionId, traceId);
     }
   }
 }

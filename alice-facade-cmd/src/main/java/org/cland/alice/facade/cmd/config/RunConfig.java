@@ -20,6 +20,16 @@ import java.util.Objects;
  *     Map&lt;String,String&gt; envVars; // 额外环境变量
  *     String routineCron;   // 定时任务 Cron 表达式（可选）
  *     boolean listRoutines; // 列出已注册定时任务
+ *     String subAgentSpawnGoal;    // /sub-agent spawn 目标（可选）
+ *     String subAgentConnectName;  // /sub-agent connect 名称（可选）
+ *     String subAgentConnectEndpoint; // ACP 端点 URL
+ *     boolean subAgentList;        // /sub-agent list
+ *     String subAgentCancelId;     // /sub-agent cancel ID
+ *     String subAgentResultsId;    // /sub-agent results ID
+ *     String subAgentSendId;       // /sub-agent send ID
+ *     String subAgentSendMessage;  // 发送的消息内容
+ *     String subAgentPromptAgentId;    // /sub-agent prompt 目标 ID
+ *     String subAgentPromptText;       // 提示文本
  *   }
  * </pre>
  */
@@ -40,6 +50,16 @@ public final class RunConfig {
   private final Map<String, String> envVars;
   private final String routineCron;
   private final boolean listRoutines;
+  private final String subAgentSpawnGoal;
+  private final String subAgentConnectName;
+  private final String subAgentConnectEndpoint;
+  private final boolean subAgentList;
+  private final String subAgentCancelId;
+  private final String subAgentResultsId;
+  private final String subAgentSendId;
+  private final String subAgentSendMessage;
+  private final String subAgentPromptAgentId;
+  private final String subAgentPromptText;
 
   private RunConfig(Builder builder) {
     this.task = Objects.requireNonNull(builder.task, "task must not be null");
@@ -52,6 +72,16 @@ public final class RunConfig {
     this.envVars = builder.envVars != null ? Map.copyOf(builder.envVars) : Map.of();
     this.routineCron = builder.routineCron;
     this.listRoutines = builder.listRoutines;
+    this.subAgentSpawnGoal = builder.subAgentSpawnGoal;
+    this.subAgentConnectName = builder.subAgentConnectName;
+    this.subAgentConnectEndpoint = builder.subAgentConnectEndpoint;
+    this.subAgentList = builder.subAgentList;
+    this.subAgentCancelId = builder.subAgentCancelId;
+    this.subAgentResultsId = builder.subAgentResultsId;
+    this.subAgentSendId = builder.subAgentSendId;
+    this.subAgentSendMessage = builder.subAgentSendMessage;
+    this.subAgentPromptAgentId = builder.subAgentPromptAgentId;
+    this.subAgentPromptText = builder.subAgentPromptText;
   }
 
   // ========== Getters ==========
@@ -101,6 +131,56 @@ public final class RunConfig {
     return listRoutines;
   }
 
+  /** /sub-agent spawn 目标 */
+  public String subAgentSpawnGoal() {
+    return subAgentSpawnGoal;
+  }
+
+  /** /sub-agent connect 名称 */
+  public String subAgentConnectName() {
+    return subAgentConnectName;
+  }
+
+  /** ACP 端点 URL */
+  public String subAgentConnectEndpoint() {
+    return subAgentConnectEndpoint;
+  }
+
+  /** 是否列出子 Agent */
+  public boolean subAgentList() {
+    return subAgentList;
+  }
+
+  /** /sub-agent cancel ID */
+  public String subAgentCancelId() {
+    return subAgentCancelId;
+  }
+
+  /** /sub-agent results ID */
+  public String subAgentResultsId() {
+    return subAgentResultsId;
+  }
+
+  /** /sub-agent send ID */
+  public String subAgentSendId() {
+    return subAgentSendId;
+  }
+
+  /** /sub-agent send 消息内容 */
+  public String subAgentSendMessage() {
+    return subAgentSendMessage;
+  }
+
+  /** /sub-agent prompt 目标 ID */
+  public String subAgentPromptAgentId() {
+    return subAgentPromptAgentId;
+  }
+
+  /** /sub-agent prompt 文本 */
+  public String subAgentPromptText() {
+    return subAgentPromptText;
+  }
+
   // ========== Builder ==========
 
   public static Builder builder() {
@@ -117,6 +197,16 @@ public final class RunConfig {
     private Map<String, String> envVars;
     private String routineCron;
     private boolean listRoutines;
+    private String subAgentSpawnGoal;
+    private String subAgentConnectName;
+    private String subAgentConnectEndpoint;
+    private boolean subAgentList;
+    private String subAgentCancelId;
+    private String subAgentResultsId;
+    private String subAgentSendId;
+    private String subAgentSendMessage;
+    private String subAgentPromptAgentId;
+    private String subAgentPromptText;
 
     private Builder() {}
 
@@ -173,6 +263,56 @@ public final class RunConfig {
       return this;
     }
 
+    public Builder subAgentSpawnGoal(String goal) {
+      this.subAgentSpawnGoal = goal;
+      return this;
+    }
+
+    public Builder subAgentConnectName(String name) {
+      this.subAgentConnectName = name;
+      return this;
+    }
+
+    public Builder subAgentConnectEndpoint(String endpoint) {
+      this.subAgentConnectEndpoint = endpoint;
+      return this;
+    }
+
+    public Builder subAgentList(boolean list) {
+      this.subAgentList = list;
+      return this;
+    }
+
+    public Builder subAgentCancelId(String id) {
+      this.subAgentCancelId = id;
+      return this;
+    }
+
+    public Builder subAgentResultsId(String id) {
+      this.subAgentResultsId = id;
+      return this;
+    }
+
+    public Builder subAgentSendId(String id) {
+      this.subAgentSendId = id;
+      return this;
+    }
+
+    public Builder subAgentSendMessage(String msg) {
+      this.subAgentSendMessage = msg;
+      return this;
+    }
+
+    public Builder subAgentPromptAgentId(String id) {
+      this.subAgentPromptAgentId = id;
+      return this;
+    }
+
+    public Builder subAgentPromptText(String text) {
+      this.subAgentPromptText = text;
+      return this;
+    }
+
     public RunConfig build() {
       return new RunConfig(this);
     }
@@ -197,6 +337,12 @@ public final class RunConfig {
     }
     if (listRoutines) {
       sb.append(", listRoutines=true");
+    }
+    if (subAgentSpawnGoal != null) {
+      sb.append(", subAgentSpawnGoal='").append(subAgentSpawnGoal).append("'");
+    }
+    if (subAgentConnectName != null) {
+      sb.append(", subAgentConnectName='").append(subAgentConnectName).append("'");
     }
     sb.append("}");
     return sb.toString();

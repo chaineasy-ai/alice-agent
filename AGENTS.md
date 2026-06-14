@@ -130,6 +130,6 @@ Active work items are tracked in `TODO-*.md` files under [`todos/`](./todos/):
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan:
-specs/002-routine-time-update/plan.md
+shell commands, and other important information, read the current plan
+(see [specs/003-sub-agent-acp/plan.md](./specs/003-sub-agent-acp/plan.md))
 <!-- SPECKIT END -->
