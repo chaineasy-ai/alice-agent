@@ -90,6 +90,15 @@ updated: "2026-06-14"
   - 空会话恢复：FRESH_START
   - 无 Checkpoint 全量回放
 
+## 20260614
+
+### Docs
+
+- **docs(memory): add implementation overview and JVector tech notes** — `docs/memory/README.md`
+  - Vault components table (Episodic/Semantic/Procedural)
+  - WAL subsystem components
+  - JVectorSemanticVault design decisions and pitfalls (VectorFloat instantiation, node ID continuity, dimension selection)
+
 ## 20260613
 
 ### Changes
