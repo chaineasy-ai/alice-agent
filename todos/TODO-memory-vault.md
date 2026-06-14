@@ -49,9 +49,10 @@ updated: "2026-06-14"
     - [x] `type: "function"`
     - [x] `function.name: string`
     - [x] `function.arguments: string` (JSON 字符串)
-- [ ] RawMessage 存储层 [priority:: high] [tool:: StorageBackend]
+- [x] RawMessage 存储层 [priority:: high] [tool:: StorageBackend]
     - [x] WalStore 接口定义 [priority:: high] [file:: WalStore.java]
     - [x] InMemoryWalStore 实现 [priority:: high] [file:: InMemoryWalStore.java]
+    - [x] FileWalStore 实现 — JSONL 本地文件（默认存储层） [priority:: high] [file:: FileWalStore.java]
     - [ ] PostgreSQL / 生产级实现
 
 ### □ 1.2 Checkpoint — 控制流快照实体
@@ -262,15 +263,16 @@ updated: "2026-06-14"
 
 | 状态 | 计数 | 说明 |
 |------|------|------|
-| `- [x]` 已完成 | 75 | 12 Java 类 + 11 个 Spock spec (244 tests ✅) |
+| `- [x]` 已完成 | 78 | 13 Java 类 + 12 个 Spock spec (265 tests ✅) |
 | `- [/]` 执行中 | 0 | — |
-| `- [ ]` 待执行 | 8 | 剩余待实现（存储层、性能测试、文档） |
+| `- [ ]` 待执行 | 5 | 剩余待实现（PostgreSQL、性能测试、文档） |
 | `- [!]` 失败/阻塞 | 0 | — |
 | **总计** | **83** | — |
 
 > 最后更新：2026-06-14
-> ✅ **第五阶段完成**: EpisodicVault 基于 WAL 重构（WalEpisodicVault + 17 tests）
-> ✅ **第六阶段完成**: 崩溃恢复 E2E 测试（CrashRecoveryE2ESpec + 5 tests）
-> ✅ **消息链路完整性测试**完成
-> 当前全模块 244 测试通过，spotlessCheck 通过
-> 下一步：生产级存储层 (§1.1) → 性能测试 (§6.3) → 文档同步 (§7.1)
+> ✅ **§1.1 存储层完成**: FileWalStore (JSONL) 零依赖实现 + 21 tests
+> ✅ **§5.2 完成**: EpisodicVault 基于 WAL 重构（WalEpisodicVault + 17 tests）
+> ✅ **§6.2 完成**: 崩溃恢复 E2E 测试（CrashRecoveryE2ESpec + 5 tests）
+> 当前全模块 265 测试通过，spotlessCheck 通过
+> 默认存储插件：FileWalStore（JSONL），可替换为 PostgresWalStore
+> 下一步：性能测试 (§6.3) → 文档同步 (§7.1)

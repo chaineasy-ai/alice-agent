@@ -64,6 +64,13 @@ updated: "2026-06-14"
   - 保留重要度遗忘策略（与 InMemoryEpisodicVault 一致行为）
   - 17 个单元测试覆盖全路径
 
+- **alice-memory-vault: JSONL 本地文件存储层** — 新增 `FileWalStore`，零外部依赖的 WalStore 实现：
+  - 数据以 JSONL 格式存储于 `<dataDir>/<sessionId>.wal.jsonl`
+  - Checkpoint 以独立 JSON 文件存储（同 session 覆盖）
+  - 内建轻量 JSON 序列化/反序列化（无 Jackson/Gson 依赖）
+  - 崩溃恢复后自动重建内存索引
+  - 21 个单元测试覆盖序列化、读写、压缩、重建索引全路径
+
 ### Tests
 
 - **alice-memory-vault: 模拟崩溃恢复 E2E 测试** — 新增 `CrashRecoveryE2ESpec.groovy`（5 个测试）：
