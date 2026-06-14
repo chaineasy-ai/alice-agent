@@ -112,12 +112,13 @@ updated: "2026-06-14"
 - [/] 工作记忆 (Working Memory) [priority:: high] [verify:: AWL&CheckPoint.md]
     - [x] 短期上下文存储
     - [/] 工作记忆序列化 (Checkpoint) [priority:: high]
-    - [x] WAL + Checkpoint 双轨制实现 [verify:: AgentExecutor 集成完成，63 个单元测试通过]
+    - [x] WAL + Checkpoint 双轨制实现 [verify:: AgentExecutor 集成完成，309 个测试通过]
     - [ ] 检查点自动保存间隔策略 [priority:: low]
-- [ ] 长期记忆 (Long-term Memory) [priority:: medium]
-    - [ ] 向量数据库集成 (Chroma / Milvus)
+- [x] 长期记忆 (Long-term Memory) [priority:: medium]
+    - [x] JVectorSemanticVault — 基于 JVector 4.x 的嵌入式向量搜索引擎 [verify:: JVectorSemanticVaultSpec 18 tests]
     - [ ] 记忆摘要与压缩
-- [ ] 遗忘机制 [priority:: low] [verify:: Forgetting.md]
+- [x] 遗忘机制 [priority:: low] [verify:: Forgetting.md]
+    - [x] 基于重要度的遗忘策略（EpisodicVault）
     - [ ] 基于时间衰减的遗忘策略
     - [ ] 重要记忆锁定
 
@@ -205,15 +206,13 @@ updated: "2026-06-14"
 
 | 状态 | 计数 | 说明 |
 |------|------|------|
-| `- [x]` 已完成 | 32 | 已实现并验证通过 |
-| `- [/]` 执行中 | 8 | 正在开发实现中 |
-| `- [ ]` 待执行 | 43 | 未开始 |
+| `- [x]` 已完成 | 35 | 已实现并验证通过 |
+| `- [/]` 执行中 | 6 | 正在开发实现中 |
+| `- [ ]` 待执行 | 42 | 未开始 |
 | `- [!]` 失败/阻塞 | 0 | 当前无阻塞项 |
 | **总计** | **83** | — |
 
 > 最后更新：2026-06-14
-> ✅ JLine 3 交互式 Chat 模式 1.1-1.4 全部完成
-> ✅ TUI/CLI 指令分发链路补齐（dispatchCommand + dispatchAgentCommand）
-> ✅ Agent 核心新接口 + 2 组单元测试 (AgentFacadeSpec 9 + JLineChatSessionSpec 5)
-> ✅ 合并并归档 TODO-alice-agent-command.md（29 项全部完成）
-> 下次复查点：集成测试 (E2E) + 文档同步后更新本看板
+> ✅ TODO-memory-vault 全部完成（90/90，309 tests）
+> ✅ JVectorSemanticVault — JVector 4.x 嵌入式向量搜索引擎（18 tests）
+> ✅ 核心框架层 → 记忆与持久化层全线贯通
