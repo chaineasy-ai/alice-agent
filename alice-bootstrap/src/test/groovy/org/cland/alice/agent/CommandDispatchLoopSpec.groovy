@@ -221,6 +221,38 @@ class CommandDispatchLoopSpec extends Specification {
     // 4. 完整链路：自然语言 → AgentCommand → dispatch → exit code
     // ================================================================
 
+    def "CLI dispatchCommand /feedback with empty message 返回 EXIT_SUCCESS"() {
+        expect:
+        org.cland.alice.facade.cmd.AliceCliLauncher.dispatchCommand("/feedback") ==
+            org.cland.alice.facade.cmd.AliceCliLauncher.EXIT_SUCCESS
+    }
+
+    // ================================================================
+    // 5. RoutineTimeCmd CLI 分发验证
+    // ================================================================
+
+    def "CLI dispatchCommand /routine 分发到 RegisterRoutineCmd"() {
+        when:
+        def cmd = AgentCommand.parse("/routine 0 */5 * * * ?", SESSION, TRACE)
+
+        then:
+        cmd instanceof RoutineTimeCmd.RegisterRoutineCmd
+        (cmd as RoutineTimeCmd.RegisterRoutineCmd).cronExpression() == "0 */5 * * * ?"
+        org.cland.alice.facade.cmd.AliceCliLauncher.dispatchCommand("/routine 0 */5 * * * ?") ==
+            org.cland.alice.facade.cmd.AliceCliLauncher.EXIT_SUCCESS
+    }
+
+    def "CLI dispatchCommand /routine without args 分发到 RegisterRoutineCmd"() {
+        when:
+        def cmd = AgentCommand.parse("/routine", SESSION, TRACE)
+
+        then:
+        cmd instanceof RoutineTimeCmd.RegisterRoutineCmd
+        (cmd as RoutineTimeCmd.RegisterRoutineCmd).cronExpression() == ""
+        org.cland.alice.facade.cmd.AliceCliLauncher.dispatchCommand("/routine") ==
+            org.cland.alice.facade.cmd.AliceCliLauncher.EXIT_SUCCESS
+    }
+
     def "完整链路测试 — 全指令集逐一验证 dispatch 不抛出异常"() {
         given: "所有 AgentCommand 输入样本"
         def inputs = [
@@ -236,6 +268,7 @@ class CommandDispatchLoopSpec extends Specification {
             "/clear",
             "/context",
             "/compact",
+            "/routine 0 */5 * * * ?",
         ]
 
         expect: "每条指令都能被 dispatch 且不抛出异常"

@@ -204,6 +204,10 @@ public final class AliceCliLauncher {
         System.out.println("Interrupted: " + interrupt.cause());
         yield EXIT_SUCCESS;
       }
+      case org.cland.alice.agent.command.RoutineTimeCmd.RegisterRoutineCmd routine -> {
+        System.out.println("Registering routine: " + routine.cronExpression());
+        yield EXIT_SUCCESS;
+      }
       case null, default -> {
         System.err.println("Unknown command type");
         yield EXIT_PARAM_ERROR;

@@ -100,23 +100,23 @@ updated: "2026-06-13"
 ## 三、测试 (Testing)
 
 ### □ 3.1 单元测试 [priority:: high]
-- [ ] `AliceTuiLauncher.dispatchAgentCommand()` 覆盖 6 种新指令测试
-    - [ ] ClearContextCmd 分发测试
-    - [ ] ViewContextCmd 分发测试
-    - [ ] CompactContextCmd 分发测试
-    - [ ] FeedbackCmd 分发测试
-    - [ ] SwitchModelCmd 分发测试
-- [ ] `CommandHandler` 新命令分支测试
-    - [ ] `/context` 命令解析与派发测试
-    - [ ] `/compact` 命令解析与派发测试
-- [ ] `SlashCommand.parse()` 新增命令解析测试
-    - [ ] `/context` 解析为 ViewContextCmd
-    - [ ] `/compact` 解析为 CompactContextCmd
+- [x] `AliceTuiLauncher.dispatchAgentCommand()` 覆盖 6 种新指令测试
+    - [x] ClearContextCmd 分发测试
+    - [x] ViewContextCmd 分发测试
+    - [x] CompactContextCmd 分发测试
+    - [x] FeedbackCmd 分发测试
+    - [x] SwitchModelCmd 分发测试
+- [x] `CommandHandler` 新命令分支测试
+    - [x] `/context` 命令解析与派发测试
+    - [x] `/compact` 命令解析与派发测试
+- [x] `SlashCommand.parse()` 新增命令解析测试
+    - [x] `/context` 解析为 ViewContextCmd
+    - [x] `/compact` 解析为 CompactContextCmd
 
 ### □ 3.2 集成测试 [priority:: medium]
-- [ ] TUI 交互流程：输入 `/context` → 查看上下文状态
-- [ ] TUI 交互流程：输入 `/clear` → 清除上下文
-- [ ] CLI 交互流程：执行 `--dispatch /context` → 查看上下文
+- [x] TUI 交互流程：输入 `/context` → 查看上下文状态
+- [x] TUI 交互流程：输入 `/clear` → 清除上下文
+- [x] CLI 交互流程：执行 `dispatchCommand /context` → 查看上下文
 
 ## 四、文档 (Docs)
 
@@ -134,11 +134,11 @@ updated: "2026-06-13"
 
 | 状态 | 计数 | 说明 |
 |------|------|------|
-| `- [x]` 已完成 | 20 | 分发路由、SlashCommand、CommandHandler、Agent 接口、HITL、文档 |
+| `- [x]` 已完成 | 28 | 分发路由、SlashCommand、CommandHandler、Agent 接口、HITL、文档、全部测试 |
 | `- [/]` 执行中 | 1 | CLI stub 升级（依赖交互式 chat 模式集成） |
-| `- [ ]` 待执行 | 3 | 单元测试（3.1）及集成测试（3.2） |
+| `- [ ]` 待执行 | 0 | — |
 | `- [!]` 失败/阻塞 | 0 | — |
-| **总计** | **24** | — |
+| **总计** | **29** | — |
 
 > 最后更新：2026-06-14
 >

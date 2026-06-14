@@ -7,8 +7,10 @@ import spock.lang.Specification
 
 import org.cland.alice.facade.tui.state.TuiState
 import org.cland.alice.facade.tui.command.SlashCommand
+import org.cland.alice.facade.tui.command.CommandHandler
 import org.cland.alice.facade.tui.bridge.TuiEvent
 import org.cland.alice.facade.tui.bridge.EventBridge
+import org.cland.alice.agent.command.*
 
 class TuiSpec extends Specification {
 
@@ -138,8 +140,274 @@ class TuiSpec extends Specification {
 
         then: "it returns a RegisterRoutineCmd"
         ac != null
-        ac instanceof org.cland.alice.agent.command.RoutineTimeCmd.RegisterRoutineCmd
-        (ac as org.cland.alice.agent.command.RoutineTimeCmd.RegisterRoutineCmd).cronExpression() == "0 */2 * * * ?"
+        ac instanceof RoutineTimeCmd.RegisterRoutineCmd
+        (ac as RoutineTimeCmd.RegisterRoutineCmd).cronExpression() == "0 */2 * * * ?"
+    }
+
+    // ========== SlashCommand 补全命令解析测试 (§3.1) ==========
+
+    def "SlashCommand parses /context"() {
+        when: "parsing /context"
+        def cmd = SlashCommand.parse("/context")
+
+        then: "command is recognized with INTERNAL type"
+        cmd != null
+        cmd.command() == "/context"
+        cmd.type() == SlashCommand.Type.INTERNAL
+    }
+
+    def "SlashCommand parses /compact"() {
+        when: "parsing /compact"
+        def cmd = SlashCommand.parse("/compact")
+
+        then: "command is recognized with INTERNAL type"
+        cmd != null
+        cmd.command() == "/compact"
+        cmd.type() == SlashCommand.Type.INTERNAL
+    }
+
+    def "SlashCommand toAgentCommand for /context returns ViewContextCmd"() {
+        given: "a parsed /context slash command"
+        def cmd = SlashCommand.parse("/context")
+
+        when: "converting to AgentCommand"
+        def ac = cmd.toAgentCommand("sess-01", "trace-abc")
+
+        then: "it returns a ViewContextCmd"
+        ac != null
+        ac instanceof ControlCmd.ViewContextCmd
+        (ac as ControlCmd.ViewContextCmd).sessionId() == "sess-01"
+    }
+
+    def "SlashCommand toAgentCommand for /compact returns CompactContextCmd"() {
+        given: "a parsed /compact slash command"
+        def cmd = SlashCommand.parse("/compact")
+
+        when: "converting to AgentCommand"
+        def ac = cmd.toAgentCommand("sess-01", "trace-abc")
+
+        then: "it returns a CompactContextCmd"
+        ac != null
+        ac instanceof ControlCmd.CompactContextCmd
+        (ac as ControlCmd.CompactContextCmd).sessionId() == "sess-01"
+    }
+
+    def "SlashCommand toAgentCommand for /feedback returns FeedbackCmd"() {
+        given: "a parsed /feedback slash command with message"
+        def cmd = SlashCommand.parse("/feedback 做得不错")
+
+        when: "converting to AgentCommand"
+        def ac = cmd.toAgentCommand("sess-01", "trace-abc")
+
+        then: "it returns a FeedbackCmd with the message"
+        ac != null
+        ac instanceof ControlCmd.FeedbackCmd
+        (ac as ControlCmd.FeedbackCmd).message() == "做得不错"
+    }
+
+    // ========== CommandHandler 命令分支测试 (§3.1) ==========
+
+    def "CommandHandler dispatches /context to onAgentCommand"() {
+        given: "a CommandHandler with a captured AgentCommand list"
+        def bridge = new EventBridge()
+        def handler = new CommandHandler(bridge).sessionId("sess-01")
+        def dispatched = []
+        handler.onAgentCommand({ cmd -> dispatched.add(cmd) })
+
+        and: "a parsed /context SlashCommand"
+        def cmd = SlashCommand.parse("/context")
+
+        when: "executing the command"
+        def handled = handler.execute(cmd)
+
+        then: "command is handled and ViewContextCmd is dispatched"
+        handled
+        dispatched.size() == 1
+        dispatched[0] instanceof ControlCmd.ViewContextCmd
+    }
+
+    def "CommandHandler dispatches /compact to onAgentCommand"() {
+        given: "a CommandHandler with a captured AgentCommand list"
+        def bridge = new EventBridge()
+        def handler = new CommandHandler(bridge).sessionId("sess-01")
+        def dispatched = []
+        handler.onAgentCommand({ cmd -> dispatched.add(cmd) })
+
+        and: "a parsed /compact SlashCommand"
+        def cmd = SlashCommand.parse("/compact")
+
+        when: "executing the command"
+        def handled = handler.execute(cmd)
+
+        then: "command is handled and CompactContextCmd is dispatched"
+        handled
+        dispatched.size() == 1
+        dispatched[0] instanceof ControlCmd.CompactContextCmd
+    }
+
+    def "CommandHandler dispatches /clear internally (no AgentCommand)"() {
+        given: "a CommandHandler with callbacks"
+        def bridge = new EventBridge()
+        def handler = new CommandHandler(bridge).sessionId("sess-01")
+        def clearCalled = false
+        handler.onClear({ clearCalled = true })
+
+        and: "a parsed /clear SlashCommand"
+        def cmd = SlashCommand.parse("/clear")
+
+        when: "executing the command"
+        def handled = handler.execute(cmd)
+
+        then: "command is handled and onClear is called, no AgentCommand dispatch"
+        handled
+        clearCalled
+    }
+
+    def "CommandHandler dispatches /model to onAgentCommand"() {
+        given: "a CommandHandler with callbacks"
+        def bridge = new EventBridge()
+        def handler = new CommandHandler(bridge).sessionId("sess-01")
+        def dispatched = []
+        def modelSwitchCalled = null
+        handler.onAgentCommand({ cmd -> dispatched.add(cmd) })
+        handler.onModelSwitch({ model -> modelSwitchCalled = model })
+
+        and: "a parsed /model gpt-4o SlashCommand"
+        def cmd = SlashCommand.parse("/model gpt-4o")
+
+        when: "executing the command"
+        def handled = handler.execute(cmd)
+
+        then: "command is handled and SwitchModelCmd is dispatched"
+        handled
+        dispatched.size() == 1
+        dispatched[0] instanceof AlignmentCmd.SwitchModelCmd
+        (dispatched[0] as AlignmentCmd.SwitchModelCmd).modelId() == "gpt-4o"
+        modelSwitchCalled == "gpt-4o"
+    }
+
+    def "CommandHandler dispatches /feedback to onAgentCommand"() {
+        given: "a CommandHandler with callbacks"
+        def bridge = new EventBridge()
+        def handler = new CommandHandler(bridge).sessionId("sess-01")
+        def dispatched = []
+        handler.onAgentCommand({ cmd -> dispatched.add(cmd) })
+
+        and: "a parsed /feedback please retry SlashCommand"
+        def cmd = SlashCommand.parse("/feedback please retry")
+
+        when: "executing the command"
+        def handled = handler.execute(cmd)
+
+        then: "command is handled and FeedbackCmd is dispatched"
+        handled
+        dispatched.size() == 1
+        dispatched[0] instanceof ControlCmd.FeedbackCmd
+        (dispatched[0] as ControlCmd.FeedbackCmd).message() == "please retry"
+    }
+
+    // ========== AliceTuiLauncher.dispatchAgentCommand() 测试 (§3.1) ==========
+
+    def "AliceTuiLauncher dispatchAgentCommand accepts ClearContextCmd"() {
+        given: "an AliceTuiLauncher with mocked Agent"
+        def launcher = new AliceTuiLauncher(
+            new org.cland.alice.core.agent.Agent(org.cland.alice.core.agent.AgentConfig.defaults()))
+
+        and: "a ClearContextCmd"
+        def cmd = new ControlCmd.ClearContextCmd("sess-01", "trace-abc")
+
+        when: "dispatching the command"
+        launcher.dispatchAgentCommand(cmd)
+
+        then: "no exception is thrown"
+        noExceptionThrown()
+    }
+
+    def "AliceTuiLauncher dispatchAgentCommand accepts ViewContextCmd"() {
+        given: "an AliceTuiLauncher with mocked Agent"
+        def launcher = new AliceTuiLauncher(
+            new org.cland.alice.core.agent.Agent(org.cland.alice.core.agent.AgentConfig.defaults()))
+
+        and: "a ViewContextCmd"
+        def cmd = new ControlCmd.ViewContextCmd("sess-01", "trace-abc")
+
+        when: "dispatching the command"
+        launcher.dispatchAgentCommand(cmd)
+
+        then: "no exception is thrown"
+        noExceptionThrown()
+    }
+
+    def "AliceTuiLauncher dispatchAgentCommand accepts CompactContextCmd"() {
+        given: "an AliceTuiLauncher with mocked Agent"
+        def launcher = new AliceTuiLauncher(
+            new org.cland.alice.core.agent.Agent(org.cland.alice.core.agent.AgentConfig.defaults()))
+
+        and: "a CompactContextCmd"
+        def cmd = new ControlCmd.CompactContextCmd("sess-01", "trace-abc")
+
+        when: "dispatching the command"
+        launcher.dispatchAgentCommand(cmd)
+
+        then: "no exception is thrown"
+        noExceptionThrown()
+    }
+
+    def "AliceTuiLauncher dispatchAgentCommand accepts FeedbackCmd"() {
+        given: "an AliceTuiLauncher with mocked Agent"
+        def launcher = new AliceTuiLauncher(
+            new org.cland.alice.core.agent.Agent(org.cland.alice.core.agent.AgentConfig.defaults()))
+
+        and: "a FeedbackCmd"
+        def cmd = new ControlCmd.FeedbackCmd("测试反馈", "sess-01", "trace-abc")
+
+        when: "dispatching the command"
+        launcher.dispatchAgentCommand(cmd)
+
+        then: "no exception is thrown"
+        noExceptionThrown()
+    }
+
+    def "AliceTuiLauncher dispatchAgentCommand accepts SwitchModelCmd"() {
+        given: "an AliceTuiLauncher with mocked Agent"
+        def launcher = new AliceTuiLauncher(
+            new org.cland.alice.core.agent.Agent(org.cland.alice.core.agent.AgentConfig.defaults()))
+
+        and: "a SwitchModelCmd"
+        def cmd = new AlignmentCmd.SwitchModelCmd("gpt-4o", "sess-01", "trace-abc")
+
+        when: "dispatching the command"
+        launcher.dispatchAgentCommand(cmd)
+
+        then: "no exception is thrown"
+        noExceptionThrown()
+    }
+
+    def "AliceTuiLauncher dispatchAgentCommand accepts RegisterRoutineCmd"() {
+        given: "an AliceTuiLauncher with mocked Agent"
+        def launcher = new AliceTuiLauncher(
+            new org.cland.alice.core.agent.Agent(org.cland.alice.core.agent.AgentConfig.defaults()))
+
+        and: "a RegisterRoutineCmd"
+        def cmd = new RoutineTimeCmd.RegisterRoutineCmd("0 */5 * * * ?", "sess-01", "trace-abc")
+
+        when: "dispatching the command"
+        launcher.dispatchAgentCommand(cmd)
+
+        then: "no exception is thrown (falls through to default/log)"
+        noExceptionThrown()
+    }
+
+    def "AliceTuiLauncher dispatchAgentCommand handles null gracefully"() {
+        given: "an AliceTuiLauncher with mocked Agent"
+        def launcher = new AliceTuiLauncher(
+            new org.cland.alice.core.agent.Agent(org.cland.alice.core.agent.AgentConfig.defaults()))
+
+        when: "dispatching null"
+        launcher.dispatchAgentCommand(null)
+
+        then: "no exception is thrown"
+        noExceptionThrown()
     }
 
     // ========== TuiEvent 测试 ==========
