@@ -64,6 +64,12 @@ updated: "2026-06-14"
   - 保留重要度遗忘策略（与 InMemoryEpisodicVault 一致行为）
   - 17 个单元测试覆盖全路径
 
+- **alice-memory-vault: JVectorSemanticVault — JVector 4.x 嵌入式向量搜索引擎**：
+  - 每个 Collection 独立 OnHeapGraphIndex（HNSW + COSINE 相似度）
+  - 增量添加/搜索/标记删除，零外部运行时依赖
+  - 文本通过 FNV 哈希投影为 128 维 L2 归一化向量
+  - 18 个单元测试覆盖存储、检索、隔离、删除全路径
+
 - **alice-memory-vault: WAL 压缩清理引擎** — 新增 `WalCompactor`，后台线程异步压缩：
   - 基于 Checkpoint lastAppliedMessageId 精确截断（会话内消息遍历）
   - minRetentionCount 保护：保留最近 N 条消息，防止过度压缩

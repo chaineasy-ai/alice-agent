@@ -29,6 +29,9 @@ dependencies {
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.3'
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.18.3'
 
+    // JVector：纯 Java 嵌入式向量搜索引擎（用于 SemanticVault 语义检索）
+    implementation 'io.github.jbellis:jvector:4.0.0-beta.6'
+
     // Guava：升级到兼容 Java 21+ 的最新稳定版（33.6.0-jre 适配高版本 Java）
     implementation 'com.google.guava:guava:33.6.0-jre'
 
@@ -69,6 +72,10 @@ java {
 tasks.withType(JavaCompile).configureEach {
     options.release = 25
     options.encoding = 'UTF-8'
+    // JVector 无 module-info，添加 module reads 以允许 named module 访问 unnamed module
+    options.compilerArgs.addAll([
+        '--add-reads', 'alice.agent.alice.memory.vault.main=ALL-UNNAMED'
+    ])
 }
 
 tasks.withType(GroovyCompile).configureEach {

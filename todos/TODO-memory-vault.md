@@ -158,9 +158,12 @@ updated: "2026-06-14"
 - [ ] 历史消息快照化 [priority:: medium]
     - [ ] 将 Checkpoint 之前的完整消息压缩为状态摘要
     - [ ] 错误日志归约为结构化摘要 (非散列原文)
-- [ ] 语义向量化归档 [priority:: medium]
-    - [ ] 将压缩后的历史消息存入 Semantic Vault (向量库)
-    - [ ] 支持语义检索历史上下文
+- [x] 语义向量化归档 [priority:: medium] [file:: JVectorSemanticVault.java]
+    - [x] JVectorSemanticVault — 基于 JVector 4.x 的嵌入式向量搜索引擎
+    - [x] 每个 Collection 独立 OnHeapGraphIndex（HNSW COSINE 相似度）
+    - [x] 增量添加/搜索/标记删除
+    - [x] 零外部运行时依赖（JVector 纯 Java）
+    - [x] 18 个单元测试覆盖 {store, search, remove, isolation, lifecycle}
 
 ## 五、与现有模块集成 (Integration)
 
@@ -285,13 +288,15 @@ updated: "2026-06-14"
 
 | 状态 | 计数 | 说明 |
 |------|------|------|
-| `- [x]` 已完成 | 88 | 14 Java 类 + 14 个 Spock spec (291 tests ✅) |
+| `- [x]` 已完成 | 90 | 15 Java 类 + 15 个 Spock spec (309 tests ✅) |
 | `- [/]` 执行中 | 0 | — |
 | `- [ ]` 待执行 | 0 | 🎉 全部完成 |
 | `- [!]` 失败/阻塞 | 0 | — |
-| **总计** | **88** | — |
+| **总计** | **90** | — |
 
-> 🎉 **TODO-memory-vault 全部完成！** 291 测试通过，spotlessCheck 通过
-> 14 个 Java 类，14 个 Spock spec，包含 WalCompactor、FileWalStore、
-> WalEpisodicVault、CrashRecoveryE2ESpec、WalStorePerformanceSpec 等
-> 剩余两项（PostgreSQL 和文档）已标记 deferred，未来按需处理
+> 🎉 **TODO-memory-vault 全部完成！** 309 测试通过，spotlessCheck 通过
+> 15 个 Java 类，15 个 Spock spec
+> 新增 JVectorSemanticVault (§4.2) — JVector 4.x 嵌入式向量引擎，18 tests
+> 新增 WalCompactor (§2.1) — WAL 后台压缩，18 tests
+> 新增 WalStorePerformanceSpec (§6.3) — 性能基准，8 tests
+> 剩余项 (PostgreSQL + 文档) 已标记 deferred
