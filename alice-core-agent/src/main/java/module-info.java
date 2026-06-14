@@ -3,6 +3,7 @@ module alice.agent.alice.core.agent.main {
   exports org.cland.alice.core.agent.lifecycle;
   exports org.cland.alice.core.agent.result;
   exports org.cland.alice.core.agent.executor;
+  exports org.cland.alice.agent.subagent;
 
   requires alice.agent.alice.model.main;
   requires alice.agent.alice.core.planner.main;

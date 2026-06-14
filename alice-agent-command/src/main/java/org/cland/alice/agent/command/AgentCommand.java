@@ -144,7 +144,10 @@ public sealed interface AgentCommand
         String ep = extractNamedArg(subArgs, "--acp-endpoint");
         if (name == null || name.isBlank() || ep == null || ep.isBlank()) yield null;
         try {
-          yield new ConnectSubAgentCmd(name, java.net.URI.create(ep), sessionId, traceId);
+          java.net.URI uri = java.net.URI.create(ep);
+          // Require a scheme (http/https) to reject relative URIs like "not-a-url"
+          if (uri.getScheme() == null) yield null;
+          yield new ConnectSubAgentCmd(name, uri, sessionId, traceId);
         } catch (IllegalArgumentException e) {
           yield null;
         }
@@ -164,6 +167,10 @@ public sealed interface AgentCommand
         if (idEnd < 0) yield null;
         String id = subArgs.substring(0, idEnd).trim();
         String msg = subArgs.substring(idEnd + 1).trim();
+        // Strip surrounding quotes if present
+        if (msg.startsWith("\"") && msg.endsWith("\"")) {
+          msg = msg.substring(1, msg.length() - 1);
+        }
         if (id.isBlank() || msg.isBlank()) yield null;
         yield new SendToSubAgentCmd(id, msg, sessionId, traceId);
       }
@@ -172,6 +179,10 @@ public sealed interface AgentCommand
         if (idEnd < 0) yield null;
         String id = subArgs.substring(0, idEnd).trim();
         String prompt = subArgs.substring(idEnd + 1).trim();
+        // Strip surrounding quotes if present
+        if (prompt.startsWith("\"") && prompt.endsWith("\"")) {
+          prompt = prompt.substring(1, prompt.length() - 1);
+        }
         if (id.isBlank() || prompt.isBlank()) yield null;
         yield new PromptSubAgentCmd(id, prompt, sessionId, traceId);
       }
