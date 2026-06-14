@@ -137,19 +137,19 @@ updated: "2026-06-13"
 ## 五、测试 (Testing)
 
 ### □ 5.1 单元测试 [priority:: high]
-- [ ] `JLineChatSession` 单元测试（Mock Terminal）
-    - [ ] 斜杠命令解析测试
-    - [ ] 非斜杠输入自然语言测试
-    - [ ] Ctrl+C / Ctrl+D 处理测试
-- [ ] `AliceTuiLauncher.dispatchAgentCommand()` 新分支测试
-    - [ ] 6 种新指令类型分发测试
-- [ ] `SlashCommand.parse()` / `CommandHandler.execute()` 新命令测试
-    - [ ] `/context` 全流程
-    - [ ] `/compact` 全流程
-- [ ] `Agent` 核心新接口测试
-    - [ ] getActiveContext()
-    - [ ] clearMemory()
-    - [ ] compactContext()
+- [x] `AliceTuiLauncher.dispatchAgentCommand()` 新分支测试
+    - [x] 6 种新指令类型分发测试
+- [x] `SlashCommand.parse()` / `CommandHandler.execute()` 新命令测试
+    - [x] `/context` 全流程
+    - [x] `/compact` 全流程
+- [x] `Agent` 核心新接口测试
+    - [x] getActiveContext()
+    - [x] clearMemory()
+    - [x] compactContext()
+- [x] `JLineChatSession` 单元测试（Mock Terminal）
+    - [x] 斜杠命令解析测试
+    - [x] 非斜杠输入自然语言测试
+    - [x] 关闭幂等性测试
 
 ### □ 5.2 集成测试 [priority:: medium]
 - [ ] CLI chat 模式 E2E：输入 → Agent 执行 → 输出
@@ -176,11 +176,11 @@ updated: "2026-06-13"
 
 | 状态 | 计数 | 说明 |
 |------|------|------|
-| `- [x]` 已完成 | 31 | JLine Chat 模式 (1.1-1.4), 分发补齐 (1.5/2.1/3.1/4.1/4.2), TUI JLine 清理 (2.2) |
-| `- [/]` 执行中 | 3 | 测试 (5.1/5.2), 文档 (6.1) |
+| `- [x]` 已完成 | 35 | JLine Chat 模式 (1.1-1.4), 分发补齐 (1.5/2.1/3.1/4.1/4.2), TUI JLine 清理 (2.2), Agent 接口测试 (5.1) |
+| `- [/]` 执行中 | 3 | 集成测试 (5.2), 文档 (6.1) |
 | `- [ ]` 待执行 | 5 | 子任务细节 |
 | `- [!]` 失败/阻塞 | 0 | — |
-| **总计** | **39** | — |
+| **总计** | **43** | — |
 
 > 最后更新：2026-06-12
 >

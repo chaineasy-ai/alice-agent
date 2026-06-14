@@ -52,6 +52,10 @@ updated: "2026-06-14"
   - `CommandDispatchLoopSpec.groovy`: 新增 `/routine` CLI 分发验证 + 加入完整链路清单
   - `AliceCliLauncher.java`: 补充 `RoutineTimeCmd.RegisterRoutineCmd` 开关分支，修复 `/routine` CLI 路由返回 EXIT_PARAM_ERROR 的问题
 
+- **alice-core-agent, alice-facade-cmd: 补齐 Facade 模块单元测试** — 完成 TODO-alice-facade.md §5.1 所有测试项：
+  - `AgentFacadeSpec.groovy`: 新增 9 个测试 — `getActiveContext()` Markdown 表格格式输出、`clearMemory()`/`compactContext()`/`switchModel()`/`injectFeedback()` 异常安全、`feedback()` 默认 null 返回
+  - `JLineChatSessionSpec.groovy`: 新增 5 个测试 — 自然语言与斜杠命令解析验证、dispatch 分发验证、close 幂等性验证
+
 ## 20260613
 
 ### Changes
