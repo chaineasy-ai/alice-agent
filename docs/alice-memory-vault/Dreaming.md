@@ -5,6 +5,9 @@ read_when:
   - "implementing or designing memory dreaming mechanism"
 scope:
   - "alice-memory-vault"
-status: "draft"
-updated: "2026-06-13"
+status: "active"
+updated: "2026-06-14"
 ---
+see 
+1. [FunctionArch](./dreaming/FunctionArch.md)
+2. [SystemArch](./dreaming/SystemArch.md)

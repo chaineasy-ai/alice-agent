@@ -63,3 +63,4 @@ controller ──→ router ──→ vault ──→ core
 - `router` 依赖 `agent`、`core`、`vault`
 - `vault` 依赖 `agent`、`core`
 - `agent`、`core`、`storage` 不依赖其他包（基础层）
+ 

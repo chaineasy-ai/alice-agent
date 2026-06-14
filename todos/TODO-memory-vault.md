@@ -222,16 +222,50 @@ updated: "2026-06-13"
 
 ---
 
+## 八、梦境引擎 (Dreaming Engine)
+
+### □ 8.1 核心实体
+- [x] DreamingTriggerConfig — 不可变配置记录 [priority:: critical] [file:: DreamingTriggerConfig.java]
+- [x] DreamingSession — 运行周期记录 + DreamingOutcome 枚举 [priority:: critical] [file:: DreamingSession.java]
+- [x] DreamingFact — 从 WAL 提取的事实记录 [priority:: critical] [file:: DreamingFact.java]
+- [x] CrystallizedPattern — 检测到的模式记录 [priority:: critical] [file:: CrystallizedPattern.java]
+- [x] SessionState — 会话生命周期状态枚举 (6 态) [priority:: critical] [file:: SessionState.java]
+- [x] StateTransitionException — 状态转换异常 [priority:: critical] [file:: StateTransitionException.java]
+
+### □ 8.2 管道组件
+- [x] PromptMelter — 离线日志 → 事件总结（噪声滤波 + 空间聚类） [priority:: critical] [file:: PromptMelter.java]
+- [x] Crystallizer — 滑动窗口工具调用重复检测 → SOP 结晶 [priority:: critical] [file:: Crystallizer.java]
+- [x] ConflictResolver — 时间戳知识冲突消解 [priority:: critical] [file:: ConflictResolver.java]
+- [x] SessionStateManager — 线程安全状态机（CAS 原子锁定） [priority:: critical] [file:: SessionStateManager.java]
+
+### □ 8.3 编排器与守卫
+- [x] DreamingEngine — 三级管道编排 + 三种触发模式 [priority:: critical] [file:: DreamingEngine.java]
+- [x] WalSessionReadGuard — DREAMING 状态 READ-lock 强制 [priority:: high] [file:: WalSessionReadGuard.java]
+
+### □ 8.4 测试
+- [x] DreamingTriggerConfig 配置验证测试 [priority:: critical] [12 tests]
+- [x] DreamingSession 会话记录测试 [priority:: critical] [7 tests]
+- [x] DreamingEngine 核心管道测试 [priority:: critical] [6 tests]
+- [x] ConflictResolver 冲突消解测试 [priority:: high] [7 tests]
+- [x] SessionStateManager 状态机测试 [priority:: critical] [18 tests]
+- [x] DreamingEngine 并发锁定测试 [priority:: high] [4 tests]
+- [x] DreamingEngine 触发机制测试 [priority:: medium] [5 tests]
+- [x] WalSessionReadGuard 守卫测试 [priority:: high] [8 tests]
+- [x] DreamingEngine 端到端集成测试 [priority:: critical] [3 tests]
+
+---
+
 ## 状态汇总
 
 | 状态 | 计数 | 说明 |
 |------|------|------|
-| `- [x]` 已完成 | 44 | 10 Java 类 + 5 个 Spock spec (63 tests ✅) + AgentExecutor 集成 |
+| `- [x]` 已完成 | 68 | 12 Java 类 + 9 个 Spock spec (222 tests ✅) + AgentExecutor 集成 |
 | `- [/]` 执行中 | 0 | — |
 | `- [ ]` 待执行 | 12 | 剩余待实现（内存 vault 集成、性能测试、文档） |
 | `- [!]` 失败/阻塞 | 0 | — |
-| **总计** | **56** | — |
+| **总计** | **80** | — |
 
-> 最后更新：2026-06-09
-> ✅ **第三阶段完成**: AgentExecutor WAL 集成 — 5 个 PPAO 生命周期点注入
+> 最后更新：2026-06-14
+> ✅ **第四阶段完成**: 梦境引擎 (Dreaming Engine) — 7 阶段 35 项任务全部通过
+> 当前全模块 222 测试通过，spotlessCheck 通过
 > 下一步：Memory Vault 三级记忆集成（§5.2）→ E2E 崩溃恢复测试（§6.2）

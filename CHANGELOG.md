@@ -22,6 +22,23 @@ updated: "2026-06-13"
 
 # Changelog
 
+## 20260614
+
+### Changes
+
+- **alice-memory-vault: Offline Dreaming Engine** — 完整实现记忆梦境引擎（Dreaming Engine）的 7 个阶段 35 项任务：
+  - 新增 `dreaming/` 包，包含 12 个生产类：`DreamingTriggerConfig`、`DreamingSession`、`DreamingFact`、`CrystallizedPattern`、`SessionState`、`StateTransitionException`、`PromptMelter`、`Crystallizer`、`ConflictResolver`、`SessionStateManager`、`DreamingEngine`、`WalSessionReadGuard`
+  - PromptMelter: 离线 WAL 日志 → 事件总结（噪声滤波 + 空间聚类）
+  - Crystallizer: 滑动窗口 Tool-Call 语义重复检测 → SOP 结晶（3 次重复触发阈值）
+  - ConflictResolver: 基于时间戳的知识冲突消解（新事实优先 + 旧知识 DEPRECATED 标记 + 并行修改 MANUAL_REVIEW 标记）
+  - SessionStateManager: 6 状态状态机（CREATED → RUNNING → COMPLETED → DREAMING → ARCHIVED），`ConcurrentHashMap.replace()` CAS 原子锁定
+  - DreamingEngine: 三级管道编排（PromptMelter → ConflictResolver → Crystallizer）→ Vault 写入，支持 on-demand / batch / background 三种触发模式
+  - WalSessionReadGuard: DREAMING 状态 READ-lock 强制（禁止在线 ReAct 读取正在被 Dreaming 处理的会话）
+  - 新增 9 个 Spock 测试文件（70 测试点），全模块 222 测试通过
+  - 设计文档：`docs/alice-memory-vault/dreaming/FunctionArch.md`、`SystemArch.md`
+
+- **docs: update DESIGN.md for Routine-Time command model** — 将常规调度驱动（Routine-Time）融合至密封指令层次设计，新增类图分支、用例映射表和定时触发时序流程。
+
 ## 20260613
 
 ### Changes

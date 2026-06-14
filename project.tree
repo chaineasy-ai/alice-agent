@@ -1,5 +1,64 @@
 ├── .gitignore
+├── .pi
+│  └── prompts
+│    ├── speckit.agent-context.update.md
+│    ├── speckit.analyze.md
+│    ├── speckit.checklist.md
+│    ├── speckit.clarify.md
+│    ├── speckit.constitution.md
+│    ├── speckit.implement.md
+│    ├── speckit.plan.md
+│    ├── speckit.specify.md
+│    ├── speckit.tasks.md
+│    └── speckit.taskstoissues.md
+├── .specify
+│  ├── extensions
+│  │  ├── .registry
+│  │  └── agent-context
+│  │    ├── agent-context-config.yml
+│  │    ├── commands
+│  │    │  └── speckit.agent-context.update.md
+│  │    ├── extension.yml
+│  │    ├── README.md
+│  │    └── scripts
+│  │      ├── bash
+│  │      │  └── update-agent-context.sh
+│  │      └── powershell
+│  │        └── update-agent-context.ps1
+│  ├── extensions.yml
+│  ├── init-options.json
+│  ├── integration.json
+│  ├── integrations
+│  │  ├── pi.manifest.json
+│  │  └── speckit.manifest.json
+│  ├── memory
+│  │  └── constitution.md
+│  ├── scripts
+│  │  └── bash
+│  │    ├── check-prerequisites.sh
+│  │    ├── common.sh
+│  │    ├── create-new-feature.sh
+│  │    ├── setup-plan.sh
+│  │    └── setup-tasks.sh
+│  ├── templates
+│  │  ├── checklist-template.md
+│  │  ├── constitution-template.md
+│  │  ├── plan-template.md
+│  │  ├── spec-template.md
+│  │  └── tasks-template.md
+│  └── workflows
+│    ├── speckit
+│    │  └── workflow.yml
+│    └── workflow-registry.json
+├── AGENTS.md
 ├── alice-agent-command
+│  ├── bin
+│  │  └── main
+│  │    └── org
+│  │      └── cland
+│  │        └── alice
+│  │          └── agent
+│  │            └── command
 │  ├── build.gradle
 │  └── src
 │    └── main
@@ -16,6 +75,13 @@
 │                  ├── ControlCmd.java
 │                  └── ExecutionCmd.java
 ├── alice-bootstrap
+│  ├── bin
+│  │  └── main
+│  │    ├── logback.xml
+│  │    └── org
+│  │      └── cland
+│  │        └── alice
+│  │          └── agent
 │  ├── build.gradle
 │  └── src
 │    └── main
@@ -29,6 +95,16 @@
 │                ├── AliceApp.java
 │                └── FacadeSelector.java
 ├── alice-core-agent
+│  ├── bin
+│  │  └── main
+│  │    └── org
+│  │      └── cland
+│  │        └── alice
+│  │          └── core
+│  │            └── agent
+│  │              ├── executor
+│  │              ├── lifecycle
+│  │              └── result
 │  ├── build.gradle
 │  └── src
 │    └── main
@@ -53,6 +129,18 @@
 │                  └── result
 │                    └── StepResult.java
 ├── alice-core-planner
+│  ├── bin
+│  │  └── main
+│  │    └── org
+│  │      └── cland
+│  │        └── alice
+│  │          └── core
+│  │            └── planner
+│  │              ├── budget
+│  │              ├── model
+│  │              ├── sop
+│  │              ├── strategy
+│  │              └── tree
 │  ├── build.gradle
 │  └── src
 │    └── main
@@ -84,6 +172,16 @@
 │                    ├── ThinkingNode.java
 │                    └── ThinkingTree.java
 ├── alice-env-adapter
+│  ├── bin
+│  │  └── main
+│  │    └── org
+│  │      └── cland
+│  │        └── alice
+│  │          └── env
+│  │            └── adapter
+│  │              ├── snapshot
+│  │              ├── state
+│  │              └── transport
 │  ├── build.gradle
 │  └── src
 │    └── main
@@ -108,6 +206,27 @@
 │                    ├── SseMcpTransport.java
 │                    └── StdioMcpTransport.java
 ├── alice-facade-cmd
+│  ├── bin
+│  │  ├── default
+│  │  │  └── META-INF
+│  │  │    └── native-image
+│  │  │      └── picocli-generated
+│  │  │        ├── proxy-config.json
+│  │  │        ├── reflect-config.json
+│  │  │        └── resource-config.json
+│  │  ├── generated-sources
+│  │  │  └── annotations
+│  │  ├── generated-test-sources
+│  │  │  └── annotations
+│  │  └── main
+│  │    └── org
+│  │      └── cland
+│  │        └── alice
+│  │          └── facade
+│  │            └── cmd
+│  │              ├── chat
+│  │              ├── config
+│  │              └── render
 │  ├── build.gradle
 │  └── src
 │    └── main
@@ -119,6 +238,8 @@
 │              └── facade
 │                └── cmd
 │                  ├── AliceCliLauncher.java
+│                  ├── chat
+│                  │  └── JLineChatSession.java
 │                  ├── config
 │                  │  ├── CommandParser.java
 │                  │  └── RunConfig.java
@@ -128,6 +249,18 @@
 │                    ├── OutputRenderer.java
 │                    └── TextOutputRenderer.java
 ├── alice-facade-tui
+│  ├── bin
+│  │  └── main
+│  │    └── org
+│  │      └── cland
+│  │        └── alice
+│  │          └── facade
+│  │            └── tui
+│  │              ├── bridge
+│  │              ├── command
+│  │              ├── component
+│  │              ├── layout
+│  │              └── state
 │  ├── build.gradle
 │  └── src
 │    └── main
@@ -146,7 +279,6 @@
 │                  │  ├── CommandHandler.java
 │                  │  └── SlashCommand.java
 │                  ├── component
-│                  │  ├── ChatComponent.java
 │                  │  ├── Component.java
 │                  │  ├── FooterComponent.java
 │                  │  ├── HeaderComponent.java
@@ -158,6 +290,13 @@
 │                  └── state
 │                    └── TuiState.java
 ├── alice-guardrail
+│  ├── bin
+│  │  └── main
+│  │    └── org
+│  │      └── cland
+│  │        └── alice
+│  │          └── guardrail
+│  │            └── validators
 │  ├── build.gradle
 │  └── src
 │    └── main
@@ -180,6 +319,19 @@
 │                │  └── PermissionSandboxValidator.java
 │                └── Verificator.java
 ├── alice-memory-vault
+│  ├── bin
+│  │  └── main
+│  │    └── org
+│  │      └── cland
+│  │        └── alice
+│  │          └── memory
+│  │            ├── agent
+│  │            ├── controller
+│  │            ├── core
+│  │            ├── router
+│  │            ├── storage
+│  │            ├── vault
+│  │            └── wal
 │  ├── build.gradle
 │  └── src
 │    └── main
@@ -208,14 +360,33 @@
 │                ├── storage
 │                │  ├── InMemoryStorageBackend.java
 │                │  └── StorageBackend.java
-│                └── vault
-│                  ├── EpisodicVault.java
-│                  ├── InMemoryEpisodicVault.java
-│                  ├── InMemoryProceduralVault.java
-│                  ├── InMemorySemanticVault.java
-│                  ├── ProceduralVault.java
-│                  └── SemanticVault.java
+│                ├── vault
+│                │  ├── EpisodicVault.java
+│                │  ├── InMemoryEpisodicVault.java
+│                │  ├── InMemoryProceduralVault.java
+│                │  ├── InMemorySemanticVault.java
+│                │  ├── ProceduralVault.java
+│                │  └── SemanticVault.java
+│                └── wal
+│                  ├── Checkpoint.java
+│                  ├── CheckpointManager.java
+│                  ├── InMemoryWalStore.java
+│                  ├── PromptMelter.java
+│                  ├── RawMessage.java
+│                  ├── RecoveryEngine.java
+│                  ├── ToolCall.java
+│                  ├── WalAppender.java
+│                  ├── WalSession.java
+│                  └── WalStore.java
 ├── alice-model
+│  ├── bin
+│  │  └── main
+│  │    └── org
+│  │      └── cland
+│  │        └── alice
+│  │          └── model
+│  │            ├── common
+│  │            └── supplier
 │  ├── build.gradle
 │  └── src
 │    └── main
@@ -236,6 +407,19 @@
 │                  ├── Gemma4Supplier.java
 │                  └── OpenAiSupplier.java
 ├── alice-tool-gateway
+│  ├── bin
+│  │  └── main
+│  │    └── org
+│  │      └── cland
+│  │        └── alice
+│  │          └── tool
+│  │            └── gateway
+│  │              ├── annotation
+│  │              ├── engine
+│  │              ├── metadata
+│  │              ├── model
+│  │              ├── sandbox
+│  │              └── schema
 │  ├── build.gradle
 │  └── src
 │    └── main
@@ -271,8 +455,28 @@
 │                  └── ToolRegistry.java
 ├── build.gradle
 ├── CHANGELOG.md
+├── CONTRIBUTING.md
 ├── docs
 ├── dtcw
+├── e2e
+│  ├── __pycache__
+│  │  └── alice_agent_e2e.cpython-312.pyc
+│  ├── aimock
+│  ├── alice_agent_e2e.py
+│  ├── gemma4
+│  │  ├── __pycache__
+│  │  │  ├── gemma_4_client.cpython-312.pyc
+│  │  │  └── gemma4_e2e_test.cpython-312.pyc
+│  │  ├── gemma_4_client.py
+│  │  ├── gemma4_e2e_test.py
+│  │  ├── pyproject.toml
+│  │  ├── requirements.txt
+│  │  ├── run_e2e.bat
+│  │  ├── run_e2e.py
+│  │  └── run_e2e.sh
+│  ├── run_alice_e2e.bat
+│  ├── run_alice_e2e.py
+│  └── run_alice_e2e.sh
 ├── gradle
 │  └── wrapper
 │    └── gradle-wrapper.properties
@@ -281,4 +485,10 @@
 ├── LICENSE
 ├── project.tree
 ├── README.md
-└── settings.gradle
+├── settings.gradle
+├── TECH_STACK.md
+└── todos
+  ├── TODO-alice-agent-command.md
+  ├── TODO-alice-facade.md
+  ├── TODO-memory-vault.md
+  └── TODO-spec.md

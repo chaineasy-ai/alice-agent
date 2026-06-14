@@ -1,16 +1,16 @@
----
-title: "alice-agent-command DESIGN"
-summary: "Complete command set design for the sealed AgentCommand interface hierarchy"
-read_when:
-  - "implementing or modifying sealed command interface"
-scope:
-  - "alice-agent-command"
-status: "active"
-updated: "2026-06-13"
----
-## 1. Alice AgentCommand 完整指令集
+# alice-agent-command DESIGN
+**summary**: Complete command set design for the sealed AgentCommand interface hierarchy with Routine-Time support
+**read_when**:
+- implementing or modifying sealed command interface
+**scope**:
+- alice-agent-command
+**status**: active
+**updated**: 2026-06-14
 
-我们将指令按**驱动性质**重新划分为四大类，并明确 `/rules` 与 `/skill` 的联动关系。
+已将定时/常规调度任务（Routine/Time 驱动）融合至整体设计，新增**常规调度驱动 (Routine-Time)** 大类，专门承接时间、周期、Cron 表达式触发的自主任务；同步更新类图、用例映射表，并补充定时触发相关时序流程。
+
+## 1. Alice AgentCommand 完整指令集
+指令按**驱动性质**划分为五大类，同时明确 `/rules`、`/skill`、`/routine` 之间的联动逻辑。
 
 ```mermaid
 classDiagram
@@ -56,63 +56,100 @@ classDiagram
     ControlCmd <|-- ViewContextCmd : /context (查看上下文)
     ControlCmd <|-- CompactContextCmd : /compact (压缩上下文)
 
+    %% 5. 常规调度驱动 (Routine-Time) - 基于时间的自主触发 [NEW]
+    class RoutineTimeCmd {
+        <<sealed>>
+    }
+    AgentCommand <|-- RoutineTimeCmd
+    RoutineTimeCmd <|-- RegisterRoutineCmd : /routine (注册定时/周期任务)
+    RoutineTimeCmd <|-- TriggerRoutineCmd : [System] TimeTriggered (时间到期触发)
 ```
 
----
-
 ## 2. 核心 Use Case 指令详解
+区分 **CLI 长参数（`--xxx`）** 与 **TUI 交互命令（`/xxx`）**；`TimeTriggered` 为内核自动触发，不对外暴露交互入口。
 
-| 类别 | 指令 (UC) | 映射功能 | **Reload 逻辑 (能力装载细节)** |
-| --- | --- | --- | --- |
-| **能力 (Capability)** | **`/skill`** | 注册工具 | 触发 `ToolGateway` 扫描新工具定义，并通知 **P (Planner)** 更新 API Schema 认知。 |
-| **能力 (Capability)** | **`/rules`** | 注册提示词 | 触发 `Memory` 加载 `.prompt` 文件，并通知 **P (Planner)** 重新 Rebase 整个 `System Prompt`。 |
-| **能力 (Capability)** | **`/reload`** | 热重载 | 强制重新扫描 `alice-core-agent` 的所有外部能力源，确保本地 Dell R730 上的文件变更立即生效。 |
-| **执行 (Execution)** | **`/run`** | 目标驱动 | 开启 P-E-M-T-V 循环。 |
-| **执行 (Execution)** | **`/exec`** | 原生驱动 | 直接执行 `ls`, `git`, `nvidia-smi` 等底层指令。 |
-| **对齐 (Alignment)** | **`/model`** | 引擎驱动 | 切换 LLM 后，同步刷新 **V (Verification)** 模块的审计敏感度。 |
-| **控制 (Control)** | **`/clear`** | 上下文管理 | 清空 Session 的短期记忆（保留 System Prompt/Rules），重置 Token 计数器。 |
-| **控制 (Control)** | **`/context`** | 上下文管理 | 从 Memory 拉取当前全量滑动窗口内的消息及 Token 占用统计，格式化输出。 |
-| **控制 (Control)** | **`/compact`** | 上下文管理 | 将历史对话写入 WAL，提炼为 Summary 事实快照，释放 Context Window。 |
-| **控制 (Control)** | **`/feedback`** | HITL 驱动 | 响应内核的 `AskHumanCmd`，解锁挂起状态。 |
+| 类别 | CLI 模式 (`--`) | TUI 模式 (`/`) | 映射功能 | Reload 与调度细节 |
+| ---- | --------------- | -------------- | -------- | ----------------- |
+| 能力 (Capability) | `--skill` | `/skill` | 注册工具 | 触发 `ToolGateway` 扫描新工具定义，并通知 **P (Planner)** 更新 API Schema 认知。 |
+| 能力 (Capability) | `--rules` | `/rules` | 注册提示词 | 触发 `Memory` 加载 `.prompt` 文件，并通知 **P (Planner)** 重新 Rebase 整个 `System Prompt`。 |
+| 能力 (Capability) | `--reload` | `/reload` | 热重载 | 强制重新扫描 `alice-core-agent` 所有外部能力源，确保本地 Dell R730 文件变更即时生效。 |
+| 执行 (Execution) | `--run` | `/run` | 目标驱动 | 开启 P-E-M-T-V 自主执行循环。 |
+| 执行 (Execution) | `--exec` | `/exec` | 原生驱动 | 直接执行 `ls`、`git`、`nvidia-smi` 等底层指令。 |
+| 对齐 (Alignment) | `--model` | `/model` | 引擎驱动 | 切换 LLM 后，同步刷新 **V (Verification)** 模块审计敏感度。 |
+| 控制 (Control) | `--clear` | `/clear` | 上下文管理 | 清空会话短期记忆（保留系统提示词/规则），重置 Token 计数器。 |
+| 控制 (Control) | `--context` | `/context` | 上下文管理 | 从内存拉取当前滑动窗口全部消息及 Token 占用数据，格式化输出。 |
+| 控制 (Control) | `--compact` | `/compact` | 上下文管理 | 历史对话写入 WAL，提炼为摘要快照，释放上下文窗口。 |
+| 控制 (Control) | `--feedback` | `/feedback` | HITL 驱动 | 响应内核 `AskHumanCmd`，解除任务挂起状态。 |
+| 调度 (Routine-Time) | `--routine` | `/routine` | 计划任务管理 | 动态新增/修改 Cron 表达式、周期任务（如服务器定时巡检、日报推送）。 |
+| 调度 (Routine-Time) | N/A | N/A | 定时内核唤醒 | 【TimeTriggered 内核内置自动触发】<br>由调度器驱动，绕过 CLI/TUI 直接向内核派发预设执行目标。 |
 
----
-
-## 3. 时序图：能力装载的通用驱动流 (Skill & Rules)
-
-由于 `/rules` 和 `/skill` 的相似性，它们共用这一套“加载-通知-重载”的时序。
+## 3. 时序图：能力与常规任务装载流 (Skill & Rules & Routine)
+`/rules`、`/skill`、`/routine` 共享资源装载流程；其中 `/routine` 会额外启动 `CronScheduler` 调度服务。
 
 ```mermaid
 sequenceDiagram
-    participant Facade as Facade (CLI/ACP)
+    participant Facade as Facade (CLI/TUI)
     participant Alice as AliceAgent (App/UC)
     participant Manager as ResourceLoader
+    participant Scheduler as CronScheduler
     participant Core as Agent (Kernel)
     participant Planner as P (Planner)
 
-    Facade->>Alice: dispatch(CapabilityCmd)
+    Facade->>Alice: dispatch(CapabilityCmd / RegisterRoutineCmd)
     
     rect rgb(235, 245, 255)
-        Note over Alice, Manager: 类似 Reload 的装载过程
-        Alice->>Manager: 查找并加载资源 (Prompt文件/MCP配置)
-        Manager-->>Alice: 返回解析后的能力实体
+        Note over Alice, Manager: 资源与策略装载
+        Alice->>Manager: 查找并加载资源 (Prompt文件/MCP配置/Cron配置)
+        Manager-->>Alice: 返回解析后的实体/Job定义
     end
 
-    Alice->>Core: attach(Capability)
+    alt 如果是 /routine 指令
+        Alice->>Scheduler: scheduleJob(JobDetail, CronTrigger)
+        Scheduler-->>Alice: Job 已常驻内存/持久化
+    end
+
+    Alice->>Core: attach(Capability/RoutineMetaData)
     
     rect rgb(240, 240, 240)
-        Note over Core, Planner: 内核重载与认知对齐
+        Note over Core, Planner: 内核认知与环境对齐
         Core->>Planner: refreshSystemKnowledge()
-        Planner->>Planner: 重新计算 Token 优先级与 API 限制
+        Planner->>Planner: 重新计算 Token 优先级与 API/定时任务拓扑限制
     end
     
-    Core-->>Facade: AckCommand (Ready: /rules 或 /skill 生效)
-
+    Core-->>Facade: AckCommand (Ready: 配置已生效)
 ```
 
----
+## 4. 时序图：常规调度时间触发流 (Routine-Time Execution)
+到达预设时间节点后，调度器自动驱动 Agent 启动 P-E-M-T-V 自主执行循环，无需人工介入。
 
-## 4. 时序图：上下文管理驱动流 (/clear, /context, /compact)
+```mermaid
+sequenceDiagram
+    participant Clock as System Clock / Timer
+    participant Scheduler as CronScheduler
+    participant Handler as CommandHandler
+    participant Agent as Agent (Kernel)
+    participant Executor as AgentExecutor
 
+    Clock->>Scheduler: 触发时间滴答 (Tick)
+    Note over Scheduler: 命中预设 Cron 表达式<br/>(e.g., "0 0 */2 * * ?" 巡检)
+    
+    Scheduler->>Handler: trigger() → TriggerRoutineCmd
+    Handler->>Agent: dispatch(TriggerRoutineCmd)
+    
+    Note over Agent: 将 Routine 转换为特定的自主 Goal<br/>(e.g., AcquireGoalCmd)
+    
+    Agent->>Executor: executeGoalAsync(routineGoal)
+    
+    rect rgb(240, 255, 240)
+        Note over Executor, Agent: 开启 P-E-M-T-V 自主循环
+        Executor->>Executor: 自动执行工具/大模型推理
+    end
+    
+    Executor-->>Agent: Routine Job Completed
+    Note over Agent: 写入审计日志并等待下一个周期
+```
+
+## 5. 时序图：上下文管理驱动流 (/clear, /context, /compact)
 ```mermaid
 sequenceDiagram
     participant User as User (TUI/CLI)
@@ -152,13 +189,9 @@ sequenceDiagram
     Note over Agent: TODO: 触发 LLM 总结<br/>将历史提炼为 Summary
     Agent-->>Facade: "上下文压缩完成"
     Facade-->>User: "上下文压缩完成，释放 Token: xxxx"
-
 ```
 
----
-
-## 5. 时序图：HITL 反馈流 (/feedback)
-
+## 6. 时序图：HITL 反馈流 (/feedback)
 ```mermaid
 sequenceDiagram
     participant User as User (TUI/CLI)
@@ -183,5 +216,4 @@ sequenceDiagram
     Facade-->>User: "反馈已提交"
 
     Note over User,Executor: ─── Agent 继续 PPAO 循环 ───
-
 ```
