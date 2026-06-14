@@ -17,7 +17,7 @@ scope:
   - "alice-facade-cmd"
   - "alice-facade-tui"
 status: "active"
-updated: "2026-06-13"
+updated: "2026-06-14"
 ---
 
 # Changelog
@@ -44,6 +44,13 @@ updated: "2026-06-13"
   - 新增 3 个 Spock 测试文件 + 更新 5 个现有测试文件，共 65+ 新增测试点，全模块编译通过
 
 - **docs: update DESIGN.md for Routine-Time command model** — 将常规调度驱动（Routine-Time）融合至密封指令层次设计，新增类图分支、用例映射表和定时触发时序流程。
+
+### Tests
+
+- **alice-facade-tui, alice-bootstrap, alice-facade-cmd: 补齐全部指令分发测试** — 完成 TODO-alice-agent-command.md §3.1/§3.2 所有测试项：
+  - `TuiSpec.groovy`: 新增 11 个测试 — SlashCommand 解析 `/context`/`/compact`/`/feedback` `toAgentCommand`；CommandHandler 分发 `/context`/`/compact`/`/clear`/`/model`/`/feedback`；AliceTuiLauncher.dispatchAgentCommand() 覆盖全部 6 种新指令 + null guard
+  - `CommandDispatchLoopSpec.groovy`: 新增 `/routine` CLI 分发验证 + 加入完整链路清单
+  - `AliceCliLauncher.java`: 补充 `RoutineTimeCmd.RegisterRoutineCmd` 开关分支，修复 `/routine` CLI 路由返回 EXIT_PARAM_ERROR 的问题
 
 ## 20260613
 
