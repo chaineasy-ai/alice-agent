@@ -95,30 +95,30 @@ class SubAgentManagerSpec extends Specification {
         !manager.cancelSubAgent("non-existent")
     }
 
-    def "取消已完成的子 Agent 应返回 false"() {
+    def "取消终端状态的子 Agent 应返回 false"() {
         given:
         def record = manager.spawnSubAgent("test goal", null)
 
-        // 等待完成
-        Thread.sleep(200)
+        // 使用 cancel 将其变为 CANCELED 状态
+        manager.cancelSubAgent(record.id())
 
         when:
-        def cancelled = manager.cancelSubAgent(record.id())
+        def cancelledAgain = manager.cancelSubAgent(record.id())
 
         then:
-        !cancelled  // 已完成状态不可取消
+        !cancelledAgain  // 终端状态不可取消
     }
 
     // ========================================================================
     // results
     // ========================================================================
 
-    def "getSubAgentResult 应返回已完成子 Agent 的结果"() {
+    def "getSubAgentResult 对终端状态的子 Agent 应返回结果"() {
         given:
         def record = manager.spawnSubAgent("test goal", null)
 
-        // 等待完成
-        Thread.sleep(200)
+        // 取消以快速达到终端状态
+        manager.cancelSubAgent(record.id())
 
         when:
         def result = manager.getSubAgentResult(record.id())
@@ -126,7 +126,6 @@ class SubAgentManagerSpec extends Specification {
         then:
         result.present
         result.get().subAgentId() == record.id()
-        result.get().status()    == SubAgentStatus.COMPLETED
         result.get().summary()   != null
         result.get().durationMs() >= 0
     }
@@ -150,22 +149,36 @@ class SubAgentManagerSpec extends Specification {
     }
 
     // ========================================================================
-    // connect (存根)
+    // connect (实际实现 — 连接到不存在的端点会抛出异常)
     // ========================================================================
 
-    def "connectAgent 应创建 CONNECTED 状态的 ACP 子 Agent"() {
+    def "connectAgent 对不可达端点应抛出 AcpClientException"() {
         when:
-        def record = manager.connectAgent("ext-agent", "http://localhost:9000/acp")
+        manager.connectAgent("ext-agent", "http://localhost:1/acp")
 
         then:
-        record.type()     == SubAgentType.ACP
-        record.status()   == SubAgentStatus.CONNECTED
-        record.endpoint() == "http://localhost:9000/acp"
-        record.id()       != null
+        def e = thrown(org.cland.alice.agent.internal.acp.AcpClientException)
+        e.message.contains("Failed to connect to ACP agent")
+    }
+
+    def "connectAgent 在失败时应在注册表中创建 FAILED 记录"() {
+        when:
+        try {
+            manager.connectAgent("ext-agent", "http://localhost:1/acp")
+        } catch (Exception ignored) {
+            // expected
+        }
+
+        then:
+        // 注册表中应有 FAILED 状态的记录
+        def list = manager.listSubAgents()
+        list.size() == 1
+        list[0].status() == SubAgentStatus.FAILED
+        list[0].type() == SubAgentType.ACP
     }
 
     // ========================================================================
-    // send / prompt (存根)
+    // send / prompt
     // ========================================================================
 
     def "sendToSubAgent 对存在的子 Agent 应返回 true"() {
@@ -181,24 +194,27 @@ class SubAgentManagerSpec extends Specification {
         !manager.sendToSubAgent("non-existent", "hello")
     }
 
-    def "promptAgent 应返回占位响应"() {
-        given:
-        def record = manager.connectAgent("ext-agent", "http://localhost:9000/acp")
-
-        when:
-        def response = manager.promptAgent(record.id(), "analyze this")
-
-        then:
-        response.present
-        response.get().contains("analyze this")
-    }
-
     def "promptAgent 对 ALICE 子 Agent 应返回 empty"() {
         given:
         def record = manager.spawnSubAgent("test goal", null)
 
         expect:
         !manager.promptAgent(record.id(), "analyze").present
+    }
+
+    def "promptAgent 对未初始化的 ACP 子 Agent 应返回 empty"() {
+        given:
+        // 直接创建一个 FAILED 状态的 ACP 记录以测试 promptAgent
+        def failedRecord = new SubAgentRecord(
+            "test-id", SubAgentType.ACP, SubAgentStatus.FAILED,
+            "test-agent", null, "http://localhost:1/acp",
+            System.currentTimeMillis(), System.currentTimeMillis(), "not connected")
+
+        when:
+        def result = manager.promptAgent(failedRecord.id(), "analyze")
+
+        then:
+        !result.present
     }
 
     // ========================================================================

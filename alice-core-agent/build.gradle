@@ -35,6 +35,9 @@ dependencies {
     // vert.x
     implementation 'io.vertx:vertx-core:5.0.8'
 
+    // ACP Java SDK
+    implementation 'com.agentclientprotocol:acp-core:0.9.0'
+
     // Guava：升级到兼容 Java 21+ 的最新稳定版（33.6.0-jre 适配高版本 Java）
     implementation 'com.google.guava:guava:33.6.0-jre'
 
@@ -75,6 +78,8 @@ java {
 tasks.withType(JavaCompile).configureEach {
     options.release = 25
     options.encoding = 'UTF-8'
+    // ACP SDK 是自动模块，确保它出现在模块路径上
+    modularity.inferModulePath = true
 }
 
 tasks.withType(GroovyCompile).configureEach {

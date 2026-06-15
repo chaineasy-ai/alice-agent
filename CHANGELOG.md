@@ -22,6 +22,35 @@ updated: "2026-06-14"
 
 # Changelog
 
+## 20260615
+
+### Features
+
+- **alice-core-agent, alice-agent-command, alice-facade-cmd, alice-facade-tui: /sub-agent — Multi-Agent via ACP Protocol (Phase 3-7)** — 实现子 Agent 完整生命周期：
+  - **US1 (Spawn)**: 真实 `Agent` 实例创建与独立的 ReAct 循环执行；异步完成通知回调；SLF4J 日志记录
+  - **US2 (ACP Connect)**: 新增 `AcpClientWrapper`（反射式 ACP SDK 调用，JPMS 兼容）、`AcpConnection`、`AcpClientException`；真实 WebSocket 连接与三阶段生命周期握手
+  - **US3 (List/Cancel/Results)**: 完整 List/Cancel/Results 命令处理；ACP 连接关闭集成
+  - **US4 (Message/Send)**: 消息队列（`LinkedBlockingQueue`）支持父子 Agent 双向通信；`sendToSubAgent`/`pollMessage`/`pendingMessageCount` API
+  - ACP SDK 依赖 (`com.agentclientprotocol:acp-core:0.9.0`) 加入 `alice-core-agent/build.gradle`
+  - CLI dispatch (`AliceCliLauncher`): 所有 7 个 SubAgentCmd 分支完整 switch case
+  - TUI dispatch (`AliceTuiLauncher`): 所有 7 个 SubAgentCmd 分支完整 switch case + handler 方法
+  - TUI 斜杠命令: `/sub-agent` 注册（`SlashCommand` + `CommandHandler`）
+
+### Dependencies
+
+- **alice-core-agent**: 新增 `com.agentclientprotocol:acp-core:0.9.0` — ACP Java SDK for external agent integration
+
+### Features
+
+- **alice-model: Anthropic Claude 适配器** — 实现 `ClaudeSupplier`，支持 Anthropic Messages API（v1/messages）：
+  - `ClaudeSupplier(apiKey)` 构造 — 默认端点 `https://api.anthropic.com/v1/messages`
+  - 三态生命周期：构建 Anthropic 格式请求体 → HTTP POST → 解析响应
+  - 支持 `temperature`、`system` 等 Anthropic 参数
+  - 支持 `stop_reason: "tool_use"` 检测（metadata 标记）
+  - Token usage 提取（`input_tokens`/`output_tokens`）
+  - 通过 `ANTHROPIC_API_KEY` 环境变量自动注册（`AliceAgent` + `AliceCliLauncher`）
+  - 新增 12 个 Spock 测试覆盖全部路径（`ClaudeSupplierSpec.groovy`）
+
 ## 20260614
 
 ### Changes

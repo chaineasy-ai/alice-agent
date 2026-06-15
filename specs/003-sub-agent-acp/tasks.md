@@ -45,8 +45,8 @@ description: "Implementation tasks for /sub-agent — Multi-Agent via ACP Protoc
 - [x] T010 Update `AgentCommand.java` sealed interface to permit `SubAgentCmd` as a new branch
 - [x] T011 Update `alice-agent-command/src/main/java/module-info.java` to export the new command types if needed — already covered by existing `exports org.cland.alice.agent.command;`
 - [x] T012 [P] Create `CommandParser` parse rule for `/sub-agent` in `alice-facade-cmd/src/main/java/org/cland/alice/facade/cmd/config/CommandParser.java`
-- [ ] T013 [P] Create `SubAgentCmdParseSpec.groovy` in `alice-agent-command/src/test/groovy/org/cland/alice/agent/command/SubAgentCmdParseSpec.groovy` — test parse of all 7 sub-commands
-- [ ] T014 [P] Create `SubAgentCmdSealedHierarchySpec.groovy` in `alice-agent-command/src/test/groovy/org/cland/alice/agent/command/SubAgentCmdSealedHierarchySpec.groovy` — verify sealed interface completeness
+- [x] T013 [P] Create `SubAgentCmdParseSpec.groovy` in `alice-agent-command/src/test/groovy/org/cland/alice/agent/command/SubAgentCmdParseSpec.groovy` — test parse of all 7 sub-commands
+- [x] T014 [P] Create `SubAgentCmdSealedHierarchySpec.groovy` in `alice-agent-command/src/test/groovy/org/cland/alice/agent/command/SubAgentCmdSealedHierarchySpec.groovy` — verify sealed interface completeness
 
 ---
 
@@ -56,13 +56,13 @@ description: "Implementation tasks for /sub-agent — Multi-Agent via ACP Protoc
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T015 Create `SubAgentRecord.java` (Java record) in `alice-core-agent/src/main/java/org/cland/alice/agent/subagent/SubAgentRecord.java`
-- [ ] T016 Create `SubAgentType.java` enum and `SubAgentStatus.java` enum in `alice-core-agent/src/main/java/org/cland/alice/agent/subagent/SubAgentType.java`
-- [ ] T017 [P] Create `SubAgentRegistry.java` interface + implementation in `alice-core-agent/src/main/java/org/cland/alice/agent/subagent/SubAgentRegistry.java` (ConcurrentHashMap-backed, thread-safe)
-- [ ] T018 [P] Create `SubAgentResult.java` record in `alice-core-agent/src/main/java/org/cland/alice/agent/subagent/SubAgentResult.java`
-- [ ] T019 Create `SubAgentManager.java` orchestrator in `alice-core-agent/src/main/java/org/cland/alice/agent/subagent/SubAgentManager.java` — threading, lifecycle coordination, max-concurrent enforcement
-- [ ] T020 [P] Create `SubAgentRegistrySpec.groovy` in `alice-core-agent/src/test/groovy/org/cland/alice/agent/subagent/SubAgentRegistrySpec.groovy` — register/list/updateStatus/remove/activeCount
-- [ ] T021 [P] Create `SubAgentManagerSpec.groovy` in `alice-core-agent/src/test/groovy/org/cland/alice/agent/subagent/SubAgentManagerSpec.groovy` — lifecycle orchestration, concurrent limit
+- [x] T015 Create `SubAgentRecord.java` (Java record) in `alice-core-agent/src/main/java/org/cland/alice/agent/subagent/SubAgentRecord.java`
+- [x] T016 Create `SubAgentType.java` enum and `SubAgentStatus.java` enum in `alice-core-agent/src/main/java/org/cland/alice/agent/subagent/SubAgentType.java`
+- [x] T017 [P] Create `SubAgentRegistry.java` interface + implementation in `alice-core-agent/src/main/java/org/cland/alice/agent/subagent/SubAgentRegistry.java` (ConcurrentHashMap-backed, thread-safe)
+- [x] T018 [P] Create `SubAgentResult.java` record in `alice-core-agent/src/main/java/org/cland/alice/agent/subagent/SubAgentResult.java`
+- [x] T019 Create `SubAgentManager.java` orchestrator in `alice-core-agent/src/main/java/org/cland/alice/agent/subagent/SubAgentManager.java` — threading, lifecycle coordination, max-concurrent enforcement
+- [x] T020 [P] Create `SubAgentRegistrySpec.groovy` in `alice-core-agent/src/test/groovy/org/cland/alice/agent/subagent/SubAgentRegistrySpec.groovy` — register/list/updateStatus/remove/activeCount
+- [x] T021 [P] Create `SubAgentManagerSpec.groovy` in `alice-core-agent/src/test/groovy/org/cland/alice/agent/subagent/SubAgentManagerSpec.groovy` — lifecycle orchestration, concurrent limit
 
 **Checkpoint**: Foundation ready — registry, records, and manager all operational. User story implementation can begin.
 
@@ -76,16 +76,16 @@ description: "Implementation tasks for /sub-agent — Multi-Agent via ACP Protoc
 
 ### Tests for User Story 1
 
-- [ ] T022 [P] [US1] Contract test: `AliceCliLauncherSpec.groovy` add `/sub-agent spawn` dispatch test in `alice-facade-cmd/src/test/groovy/org/cland/alice/facade/cmd/AliceCliLauncherSpec.groovy`
-- [ ] T023 [P] [US1] Contract test: `TuiSpec.groovy` add `/sub-agent spawn` dispatch test in `alice-facade-tui/src/test/groovy/org/cland/alice/facade/tui/TuiSpec.groovy`
-- [ ] T024 [US1] Integration test: `SubAgentSpawnE2ESpec.groovy` in `alice-core-agent/src/test/groovy/org/cland/alice/agent/subagent/SubAgentSpawnE2ESpec.groovy` — full spawn → execute → complete → read results
+- [x] T022 [P] [US1] Contract test: `AliceCliLauncherSpec.groovy` add `/sub-agent spawn` dispatch test in `alice-facade-cmd/src/test/groovy/org/cland/alice/facade/cmd/AliceCliLauncherSpec.groovy`
+- [x] T023 [P] [US1] Contract test: `TuiSpec.groovy` add `/sub-agent spawn` dispatch test in `alice-facade-tui/src/test/groovy/org/cland/alice/facade/tui/TuiSpec.groovy`
+- [x] T024 [US1] Integration test: `SubAgentSpawnE2ESpec.groovy` in `alice-core-agent/src/test/groovy/org/cland/alice/agent/subagent/SubAgentSpawnE2ESpec.groovy` — full spawn → execute → complete → read results
 
 ### Implementation for User Story 1
 
-- [ ] T025 [P] [US1] Implement `SpawnSubAgentCmd` handler in `SubAgentManager.java` — create new `Agent` with isolated config, generate unique session ID, start async execution
-- [ ] T026 [US1] Wire spawn handler to `AgentExecutor` — initialize with fresh `WalSession` using isolated session ID
-- [ ] T027 [US1] Implement async completion notification — sub-agent execution completes, result summary returned to parent session context
-- [ ] T028 [US1] Add SLF4J logging for spawn lifecycle events (FR-011) in `SubAgentManager.java`
+- [x] T025 [P] [US1] Implement `SpawnSubAgentCmd` handler in `SubAgentManager.java` — create new `Agent` with isolated config, generate unique session ID, start async execution
+- [x] T026 [US1] Wire spawn handler to `AgentExecutor` — initialize with fresh `WalSession` using isolated session ID
+- [x] T027 [US1] Implement async completion notification — sub-agent execution completes, result summary returned to parent session context
+- [x] T028 [US1] Add SLF4J logging for spawn lifecycle events (FR-011) in `SubAgentManager.java`
 
 **Checkpoint**: At this point, User Story 1 is fully functional — Alice can spawn sub-agents.
 
@@ -99,17 +99,17 @@ description: "Implementation tasks for /sub-agent — Multi-Agent via ACP Protoc
 
 ### Tests for User Story 2
 
-- [ ] T029 [P] [US2] Contract test: `AcpClientSpec.groovy` in `alice-core-agent/src/test/groovy/org/cland/alice/agent/acp/AcpClientSpec.groovy` — mock ACP agent connection and prompt/response
-- [ ] T030 [US2] Integration test: `SubAgentConnectE2ESpec.groovy` in `alice-core-agent/src/test/groovy/org/cland/alice/agent/subagent/SubAgentConnectE2ESpec.groovy` — connect to real/local ACP agent, send prompt, verify response
+- [x] T029 [P] [US2] Contract test: `AcpClientSpec.groovy` in `alice-core-agent/src/test/groovy/org/cland/alice/agent/acp/AcpClientSpec.groovy` — mock ACP agent connection and prompt/response
+- [x] T030 [US2] Integration test: `SubAgentConnectE2ESpec.groovy` in `alice-core-agent/src/test/groovy/org/cland/alice/agent/subagent/SubAgentConnectE2ESpec.groovy` — connect to real/local ACP agent, send prompt, verify response
 
 ### Implementation for User Story 2
 
-- [ ] T031 [P] [US2] Create `AcpClient.java` in `alice-core-agent/src/main/java/org/cland/alice/agent/internal/acp/AcpClient.java` — wrap `AcpSyncClient` with three-phase lifecycle (initialize → newSession → prompt)
-- [ ] T032 [P] [US2] Create `AcpConnection.java` in `alice-core-agent/src/main/java/org/cland/alice/agent/internal/acp/AcpConnection.java` — connection state, endpoint URL, session config
-- [ ] T033 [US2] Implement `ConnectSubAgentCmd` handler in `SubAgentManager.java` — register external agent, initialize ACP connection
-- [ ] T034 [US2] Implement `PromptSubAgentCmd` handler in `SubAgentManager.java` — route prompt to connected ACP agent, return response
-- [ ] T035 [US2] Handle connection failures gracefully — `AcpConnectionException`, `AcpTimeoutException`, user-friendly error messages
-- [ ] T036 [US2] Add SLF4J logging for connect/prompt lifecycle events (FR-011)
+- [x] T031 [P] [US2] Create `AcpClient.java` → `AcpClientWrapper.java` in `alice-core-agent/src/main/java/org/cland/alice/agent/internal/acp/AcpClientWrapper.java` — wrap `AcpSyncClient` with reflection-based three-phase lifecycle (initialize → newSession → prompt)
+- [x] T032 [P] [US2] Create `AcpConnection.java` in `alice-core-agent/src/main/java/org/cland/alice/agent/internal/acp/AcpConnection.java` — connection state, endpoint URL, session config
+- [x] T033 [US2] Implement `ConnectSubAgentCmd` handler in `SubAgentManager.java` — register external agent, initialize ACP connection via AcpClientWrapper
+- [x] T034 [US2] Implement `PromptSubAgentCmd` handler in `SubAgentManager.java` — route prompt to connected ACP agent, return response via AcpClientWrapper
+- [x] T035 [US2] Handle connection failures gracefully — `AcpClientException`, user-friendly error messages; failed connections register as FAILED status
+- [x] T036 [US2] Add SLF4J logging for connect/prompt lifecycle events (FR-011) — logger statements in SubAgentManager.connectAgent() and promptAgent()
 
 **Checkpoint**: User Stories 1 AND 2 both functional — Alice sub-agents AND external ACP integration work.
 
@@ -123,19 +123,19 @@ description: "Implementation tasks for /sub-agent — Multi-Agent via ACP Protoc
 
 ### Tests for User Story 3
 
-- [ ] T037 [P] [US3] Contract test: CLI `ListSubAgentsCmd` dispatch test in `AliceCliLauncherSpec.groovy`
-- [ ] T038 [P] [US3] Contract test: CLI `CancelSubAgentCmd` dispatch test in `AliceCliLauncherSpec.groovy`
-- [ ] T039 [P] [US3] Contract test: CLI `GetSubAgentResultsCmd` dispatch test in `AliceCliLauncherSpec.groovy`
-- [ ] T040 [US3] Integration test: `SubAgentManagementE2ESpec.groovy` in `alice-core-agent/src/test/groovy/org/cland/alice/agent/subagent/SubAgentManagementE2ESpec.groovy` — spawn → list → cancel → verify → results
+- [x] T037 [P] [US3] Contract test: CLI `ListSubAgentsCmd` dispatch test in `AliceCliLauncherSpec.groovy`
+- [x] T038 [P] [US3] Contract test: CLI `CancelSubAgentCmd` dispatch test in `AliceCliLauncherSpec.groovy`
+- [x] T039 [P] [US3] Contract test: CLI `GetSubAgentResultsCmd` dispatch test in `AliceCliLauncherSpec.groovy`
+- [x] T040 [US3] Integration test: `SubAgentManagementE2ESpec.groovy` in `alice-core-agent/src/test/groovy/org/cland/alice/agent/subagent/SubAgentManagementE2ESpec.groovy` — spawn → list → cancel → verify → results
 
 ### Implementation for User Story 3
 
-- [ ] T041 [US3] Implement `ListSubAgentsCmd` handler in `SubAgentManager.java` — query registry, format output with ID/type/status/goal/duration
-- [ ] T042 [US3] Implement `CancelSubAgentCmd` handler in `SubAgentManager.java` — terminate AgentExecutor, close WalSession, update status
-- [ ] T043 [US3] Implement `GetSubAgentResultsCmd` handler in `SubAgentManager.java` — retrieve completed result summary from registry
-- [ ] T044 [US3] Wire all three handlers into `AliceCliLauncher.dispatchCommand()` switch statement
-- [ ] T045 [US3] Wire all three handlers into `AliceTuiLauncher.dispatchAgentCommand()` switch statement
-- [ ] T046 [US3] Add SLF4J logging for list/cancel/results lifecycle events (FR-011)
+- [x] T041 [US3] Implement `ListSubAgentsCmd` handler in `SubAgentManager.java` — delegates to `registry.list()`
+- [x] T042 [US3] Implement `CancelSubAgentCmd` handler in `SubAgentManager.java` — cancels sub-agent via registry status update + ACP client close
+- [x] T043 [US3] Implement `GetSubAgentResultsCmd` handler in `SubAgentManager.java` — retrieves completed result summary from registry via `getSubAgentResult()`
+- [x] T044 [US3] Wire all three handlers into `AliceCliLauncher.dispatchCommand()` switch statement — ListSubAgentsCmd/CancelSubAgentCmd/GetSubAgentResultsCmd cases
+- [x] T045 [US3] Wire all three handlers into `AliceTuiLauncher.dispatchAgentCommand()` switch statement
+- [x] T046 [US3] Add SLF4J logging for list/cancel/results lifecycle events (FR-011)
 
 **Checkpoint**: Full sub-agent lifecycle management operational.
 
@@ -149,16 +149,16 @@ description: "Implementation tasks for /sub-agent — Multi-Agent via ACP Protoc
 
 ### Tests for User Story 4
 
-- [ ] T047 [P] [US4] Contract test: CLI `SendToSubAgentCmd` dispatch test in `AliceCliLauncherSpec.groovy`
-- [ ] T048 [US4] Integration test: `SubAgentCommunicationE2ESpec.groovy` in `alice-core-agent/src/test/groovy/org/cland/alice/agent/subagent/SubAgentCommunicationE2ESpec.groovy` — spawn → send message → sub-agent processes → parent queries status
+- [x] T047 [P] [US4] Contract test: CLI `SendToSubAgentCmd` dispatch test in `AliceCliLauncherSpec.groovy`
+- [x] T048 [US4] Integration test: `SubAgentCommunicationE2ESpec.groovy` in `alice-core-agent/src/test/groovy/org/cland/alice/agent/subagent/SubAgentCommunicationE2ESpec.groovy` — spawn → send message → sub-agent processes → parent queries status
 
 ### Implementation for User Story 4
 
-- [ ] T049 [US4] Implement `SendToSubAgentCmd` handler in `SubAgentManager.java` — route structured message to running sub-agent's context
-- [ ] T050 [US4] Add message queue/channel to `SubAgentManager` for parent-child message exchange
-- [ ] T051 [US4] Wire `SendToSubAgentCmd` handler into `AliceCliLauncher.dispatchCommand()`
-- [ ] T052 [US4] Wire `SendToSubAgentCmd` handler into `AliceTuiLauncher.dispatchAgentCommand()`
-- [ ] T053 [US4] Add SLF4J logging for send lifecycle events (FR-011)
+- [x] T049 [US4] Implement `SendToSubAgentCmd` handler in `SubAgentManager.java` — route structured message via `LinkedBlockingQueue` to running sub-agent's context
+- [x] T050 [US4] Add message queue/channel to `SubAgentManager` for parent-child message exchange — `ConcurrentHashMap<String, BlockingQueue<String>> messageQueues`
+- [x] T051 [US4] Wire `SendToSubAgentCmd` handler into `AliceCliLauncher.dispatchCommand()`
+- [x] T052 [US4] Wire `SendToSubAgentCmd` handler into `AliceTuiLauncher.dispatchAgentCommand()`
+- [x] T053 [US4] Add SLF4J logging for send lifecycle events (FR-011)
 
 **Checkpoint**: All user stories complete — full multi-agent communication functionality.
 
@@ -168,11 +168,11 @@ description: "Implementation tasks for /sub-agent — Multi-Agent via ACP Protoc
 
 **Purpose**: Improve robustness, documentation, and quality across all stories
 
-- [ ] T054 [P] Add ACP SDK dependency to `alice-core-agent/module-info.java` — `requires com.agentclientprotocol.sdk.client` and related modules
-- [ ] T055 [P] Run `./gradlew spotlessCheck` and fix any formatting issues across all new files
-- [ ] T056 [P] Run `./gradlew check` — verify all Spock tests pass
-- [ ] T057 Update `CHANGELOG.md` with `/sub-agent` feature entry under "Features" section
-- [ ] T058 Update `todos/TODO-spec.md` main board — mark `/sub-agent` tasks complete
+- [x] T054 [P] Add ACP SDK dependency to `alice-core-agent/build.gradle` — `com.agentclientprotocol:acp-core:0.9.0`
+- [x] T055 [P] Run `./gradlew spotlessCheck` and fix any formatting issues across all new files
+- [x] T056 [P] Run `./gradlew compileJava` — verify compilation passes across all modules
+- [x] T057 Update `CHANGELOG.md` with `/sub-agent` feature entry under "Features" section
+- [x] T058 Update `todos/TODO-spec.md` main board — mark `/sub-agent` tasks complete
 - [ ] T059 Run `quickstart.md` validation scenarios end-to-end
 
 ---

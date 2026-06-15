@@ -71,7 +71,7 @@ public class Agent {
     this(null, config);
   }
 
-  Agent(String agentId, AgentConfig config) {
+  public Agent(String agentId, AgentConfig config) {
     this.agentId =
         agentId != null ? agentId : java.util.UUID.randomUUID().toString().substring(0, 8);
     this.sessionId = java.util.UUID.randomUUID().toString().substring(0, 8);

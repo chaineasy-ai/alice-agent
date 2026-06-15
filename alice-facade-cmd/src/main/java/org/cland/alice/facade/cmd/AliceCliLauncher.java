@@ -4,11 +4,14 @@ import java.util.UUID;
 import org.cland.alice.agent.command.AgentCommand;
 import org.cland.alice.agent.command.CapabilityCmd;
 import org.cland.alice.agent.command.ControlCmd;
+import org.cland.alice.agent.subagent.SubAgentManager;
+import org.cland.alice.agent.subagent.SubAgentRecord;
 import org.cland.alice.facade.cmd.config.CommandParser;
 import org.cland.alice.facade.cmd.config.CommandParser.ParseException;
 import org.cland.alice.facade.cmd.config.RunConfig;
 import org.cland.alice.facade.cmd.render.OutputRenderer;
 import org.cland.alice.model.ModelProvider;
+import org.cland.alice.model.supplier.ClaudeSupplier;
 import org.cland.alice.model.supplier.OpenAiSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -208,6 +211,42 @@ public final class AliceCliLauncher {
         System.out.println("Registering routine: " + routine.cronExpression());
         yield EXIT_SUCCESS;
       }
+      case org.cland.alice.agent.command.SpawnSubAgentCmd spawn -> {
+        System.out.println("Spawning sub-agent: " + spawn.goal());
+        // 创建 SubAgentManager 并生成子 Agent
+        String subSessionId = UUID.randomUUID().toString().substring(0, 8);
+        SubAgentManager mgr = new SubAgentManager(subSessionId);
+        SubAgentRecord record = mgr.spawnSubAgent(spawn.goal(), spawn.model());
+        System.out.println("Sub-agent " + record.id() + " spawned with goal: " + spawn.goal());
+        yield EXIT_SUCCESS;
+      }
+      case org.cland.alice.agent.command.ConnectSubAgentCmd connect -> {
+        System.out.println(
+            "Connecting to ACP agent: " + connect.name() + " at " + connect.acpEndpoint());
+        yield EXIT_SUCCESS;
+      }
+      case org.cland.alice.agent.command.ListSubAgentsCmd list -> {
+        System.out.println("Listing sub-agents (not yet wired to a SubAgentManager)");
+        yield EXIT_SUCCESS;
+      }
+      case org.cland.alice.agent.command.CancelSubAgentCmd cancel -> {
+        System.out.println("Cancel sub-agent: " + cancel.subAgentId() + " (not yet wired)");
+        yield EXIT_SUCCESS;
+      }
+      case org.cland.alice.agent.command.GetSubAgentResultsCmd results -> {
+        System.out.println(
+            "Get results for sub-agent: " + results.subAgentId() + " (not yet wired)");
+        yield EXIT_SUCCESS;
+      }
+      case org.cland.alice.agent.command.SendToSubAgentCmd send -> {
+        System.out.println(
+            "Send message to sub-agent " + send.subAgentId() + ": " + send.message());
+        yield EXIT_SUCCESS;
+      }
+      case org.cland.alice.agent.command.PromptSubAgentCmd prompt -> {
+        System.out.println("Prompt sub-agent " + prompt.subAgentId() + ": " + prompt.prompt());
+        yield EXIT_SUCCESS;
+      }
       case null, default -> {
         System.err.println("Unknown command type");
         yield EXIT_PARAM_ERROR;
@@ -229,12 +268,20 @@ public final class AliceCliLauncher {
       ModelProvider provider = ModelProvider.getInstance();
       provider.registerBuiltinModels();
 
-      String apiKey = System.getenv("OPENAI_API_KEY");
-      if (apiKey != null && !apiKey.isEmpty()) {
-        provider.registerSupplier(new OpenAiSupplier(apiKey));
+      String openAiKey = System.getenv("OPENAI_API_KEY");
+      if (openAiKey != null && !openAiKey.isEmpty()) {
+        provider.registerSupplier(new OpenAiSupplier(openAiKey));
         logger.info("OpenAI supplier registered");
       } else {
         logger.warn("OPENAI_API_KEY not set. Set it via environment variable to enable LLM calls.");
+      }
+
+      String anthropicKey = System.getenv("ANTHROPIC_API_KEY");
+      if (anthropicKey != null && !anthropicKey.isEmpty()) {
+        provider.registerSupplier(new ClaudeSupplier(anthropicKey));
+        logger.info("Anthropic Claude supplier registered");
+      } else {
+        logger.warn("ANTHROPIC_API_KEY not set. LLM calls via Anthropic will be unavailable.");
       }
     } catch (Exception e) {
       logger.warn("ModelProvider initialization failed (some features may be unavailable)", e);

@@ -10,6 +10,7 @@ package org.cland.alice.agent;
 import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
 import org.cland.alice.model.ModelProvider;
+import org.cland.alice.model.supplier.ClaudeSupplier;
 import org.cland.alice.model.supplier.OpenAiSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -118,7 +119,10 @@ public final class AliceAgent implements AutoCloseable {
 
     String anthropicKey = System.getenv("ANTHROPIC_API_KEY");
     if (anthropicKey != null && !anthropicKey.isEmpty()) {
-      logger.info("Anthropic API key detected");
+      provider.registerSupplier(new ClaudeSupplier(anthropicKey));
+      logger.info("Anthropic Claude supplier registered");
+    } else {
+      logger.warn("ANTHROPIC_API_KEY not set. LLM calls via Anthropic will be unavailable.");
     }
     logger.info("ModelProvider initialized");
   }

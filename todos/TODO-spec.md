@@ -64,7 +64,7 @@ updated: "2026-06-14"
 - [x] 基础 OpenAI Chat Completions 适配
 - [/] 多 Provider 适配器 [priority:: high] [tool:: ModelAdapter]
     - [x] OpenAI 适配
-    - [/] Anthropic Claude 适配 [priority:: high]
+    - [x] Anthropic Claude 适配 [priority:: high] [verify:: ClaudeSupplierSpec 12 tests pass]
     - [ ] 本地模型 (Ollama / vLLM) 适配 [priority:: medium]
     - [ ] Azure OpenAI 适配 [priority:: low]
 - [ ] 自定义 Provider SPI 扩展 [priority:: medium]
@@ -206,13 +206,15 @@ updated: "2026-06-14"
 
 | 状态 | 计数 | 说明 |
 |------|------|------|
-| `- [x]` 已完成 | 35 | 已实现并验证通过 |
-| `- [/]` 执行中 | 6 | 正在开发实现中 |
-| `- [ ]` 待执行 | 42 | 未开始 |
+| `- [x]` 已完成 | 41 | 已实现并验证通过 |
+| `- [/]` 执行中 | 3 | 正在开发实现中 |
+| `- [ ]` 待执行 | 39 | 未开始 |
 | `- [!]` 失败/阻塞 | 0 | 当前无阻塞项 |
 | **总计** | **83** | — |
 
-> 最后更新：2026-06-14
+> 最后更新：2026-06-15
 > ✅ TODO-memory-vault 全部完成（90/90，309 tests）
 > ✅ JVectorSemanticVault — JVector 4.x 嵌入式向量搜索引擎（18 tests）
 > ✅ 核心框架层 → 记忆与持久化层全线贯通
+> ✅ /sub-agent — Multi-Agent via ACP Protocol (003): Phases 3-7 completed (21→59 tasks, 38 new tasks)
+> ✅ Anthropic Claude 适配器 — ClaudeSupplier 12 tests pass

@@ -317,6 +317,27 @@ public class CommandHandler {
       return true;
     }
 
+    if (cmd.is("/sub-agent")) {
+      if (!cmd.hasArgs()) {
+        eventBridge.onChatMessage(
+            "System", "用法: /sub-agent spawn|connect|list|cancel|results|send|prompt [args...]");
+        return true;
+      }
+
+      String subCmdLine = cmd.args();
+      eventBridge.onChatMessage("System", "子 Agent 指令: /sub-agent " + subCmdLine);
+
+      // 转化为对应的 SubAgentCmd 并派发
+      AgentCommand ac = cmd.toAgentCommand(sessionId(), traceId());
+      if (ac != null) {
+        dispatchToAgent(ac);
+      } else {
+        eventBridge.onChatMessage("System", "无法识别的子 Agent 指令: " + subCmdLine);
+      }
+
+      return true;
+    }
+
     return false;
   }
 

@@ -5,9 +5,18 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import org.cland.alice.agent.command.AgentCommand;
 import org.cland.alice.agent.command.AlignmentCmd;
+import org.cland.alice.agent.command.CancelSubAgentCmd;
 import org.cland.alice.agent.command.CapabilityCmd;
+import org.cland.alice.agent.command.ConnectSubAgentCmd;
 import org.cland.alice.agent.command.ControlCmd;
 import org.cland.alice.agent.command.ExecutionCmd;
+import org.cland.alice.agent.command.GetSubAgentResultsCmd;
+import org.cland.alice.agent.command.ListSubAgentsCmd;
+import org.cland.alice.agent.command.PromptSubAgentCmd;
+import org.cland.alice.agent.command.SendToSubAgentCmd;
+import org.cland.alice.agent.command.SpawnSubAgentCmd;
+import org.cland.alice.agent.subagent.SubAgentManager;
+import org.cland.alice.agent.subagent.SubAgentRecord;
 import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
 import org.cland.alice.facade.tui.bridge.EventBridge;
@@ -156,6 +165,13 @@ public class AliceTuiLauncher implements AutoCloseable {
       case ControlCmd.FeedbackCmd feedback -> handleFeedback(feedback);
       case ControlCmd.InterruptCmd exit -> handleInterrupt(exit);
       case AlignmentCmd.SwitchModelCmd model -> handleModelSwitch(model);
+      case SpawnSubAgentCmd spawn -> handleSpawnSubAgent(spawn);
+      case ConnectSubAgentCmd connect -> handleConnectAgent(connect);
+      case ListSubAgentsCmd list -> handleListSubAgents(list);
+      case CancelSubAgentCmd cancel -> handleCancelSubAgent(cancel);
+      case GetSubAgentResultsCmd results -> handleGetResults(results);
+      case SendToSubAgentCmd send -> handleSendToSubAgent(send);
+      case PromptSubAgentCmd prompt -> handlePromptAgent(prompt);
       case null, default -> logger.warn("Unknown AgentCommand type: {}", cmd);
     }
   }
@@ -283,6 +299,65 @@ public class AliceTuiLauncher implements AutoCloseable {
     screenManager.layout().footer().setModel(model.modelId());
     screenManager.markContentDirty();
     eventBridge.onChatMessage("System", "模型切换至: " + model.modelId());
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Sub-Agent 命令处理
+  // ──────────────────────────────────────────────────────────────────────────
+
+  private void handleSpawnSubAgent(SpawnSubAgentCmd spawn) {
+    logger.info("Spawning sub-agent: goal={}", spawn.goal());
+    eventBridge.onChatMessage("System", "正在生成子 Agent: " + spawn.goal());
+
+    CompletableFuture.runAsync(
+        () -> {
+          try {
+            String subSessionId = java.util.UUID.randomUUID().toString().substring(0, 8);
+            SubAgentManager mgr = new SubAgentManager(subSessionId);
+            SubAgentRecord record = mgr.spawnSubAgent(spawn.goal(), spawn.model());
+            String msg = "子 Agent " + record.id() + " 已生成，目标: " + spawn.goal();
+            eventBridge.onChatMessage("System", msg);
+          } catch (Exception e) {
+            logger.error("Failed to spawn sub-agent", e);
+            eventBridge.onTaskError("子 Agent 生成失败: " + e.getMessage());
+          }
+        });
+  }
+
+  private void handleConnectAgent(ConnectSubAgentCmd connect) {
+    logger.info(
+        "Connecting to ACP agent: name={}, endpoint={}", connect.name(), connect.acpEndpoint());
+    eventBridge.onChatMessage(
+        "System", "连接 ACP Agent: " + connect.name() + " -> " + connect.acpEndpoint());
+  }
+
+  private void handleListSubAgents(ListSubAgentsCmd list) {
+    logger.info("List sub-agents requested");
+    eventBridge.onChatMessage("System", "列出子 Agent（待集成 SubAgentManager）");
+  }
+
+  private void handleCancelSubAgent(CancelSubAgentCmd cancel) {
+    logger.info("Cancel sub-agent: id={}", cancel.subAgentId());
+    eventBridge.onChatMessage(
+        "System", "取消子 Agent: " + cancel.subAgentId() + "（待集成 SubAgentManager）");
+  }
+
+  private void handleGetResults(GetSubAgentResultsCmd results) {
+    logger.info("Get results for sub-agent: id={}", results.subAgentId());
+    eventBridge.onChatMessage(
+        "System", "获取子 Agent 结果: " + results.subAgentId() + "（待集成 SubAgentManager）");
+  }
+
+  private void handleSendToSubAgent(SendToSubAgentCmd send) {
+    logger.info("Send to sub-agent: id={}, message={}", send.subAgentId(), send.message());
+    eventBridge.onChatMessage(
+        "System", "发送消息给子 Agent " + send.subAgentId() + ": " + send.message());
+  }
+
+  private void handlePromptAgent(PromptSubAgentCmd prompt) {
+    logger.info("Prompt ACP agent: id={}, prompt={}", prompt.subAgentId(), prompt.prompt());
+    eventBridge.onChatMessage(
+        "System", "提示 ACP Agent " + prompt.subAgentId() + ": " + prompt.prompt());
   }
 
   private void submitAgentCommand(String input) {
