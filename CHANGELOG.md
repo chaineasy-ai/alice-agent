@@ -24,6 +24,22 @@ updated: "2026-06-14"
 
 ## 20260615
 
+### Fixes
+
+- **alice-memory-vault/JVectorSemanticVault: 修复 3 处过时 API**:
+  - `GraphIndexBuilder.addGraphNode(int, RandomAccessVectorValues)` → `addGraphNode(int, VectorFloat<?>)` — 直接传入 `vectorList.get(localId)` 避免使用已过时的 `ravv` 重载
+  - `GraphIndex.size()` → `vectorList.isEmpty()` — 用本地列表判断空索引，绕开已过时的 `size()`
+  - `RandomAccessVectorValues.getVector()` 保留实现并添加 `@SuppressWarnings("deprecation")`（因接口方法为 abstract 必须实现）；移除同样已过时的 `vectorValue()` 重复 override
+- **alice-core-agent/AgentExecutor: 修复已过时的 `ToolRegistry.execute()`** → `ExecutionEngine.invoke()`:
+  - 构造器内预构建 `ExecutionEngine` 实例（来自 `agent.toolRegistry()`）
+  - `dispatchToolCall()` 中调用 `executionEngine.invoke()` 获取结构化 `ToolResult` 替代旧 boolean 返回值
+  - 错误信息纳入 `ToolResult.summary()` 增强可读性
+- **过时API.md**: 新增过时 API 跟踪文件，记录所有修复详情
+- **alice-facade-tui/AliceTuiLauncher: 修复启动时 bootstrap 日志污染 TUI 显示**:
+  - 移除 `start()` 中 `logger.info("Starting Alice Agent TUI...")` 调用——该日志在 `screenManager.start()` 清屏前写入 stdout，导致引导日志残留在 TUI 缓冲区中
+  - 移除 `run()` 中 `logger.info("Alice Agent TUI entering main input loop.")` 调用——TUI 已激活后 stdout 日志会直接打印到终端区域，干扰 LineReader 显示
+  - 所有用户可见信息改由 `eventBridge.onChatMessage()` → `ThoughtComponent` 在 TUI 滚动区内展示
+
 ### Features
 
 - **alice-core-agent, alice-agent-command, alice-facade-cmd, alice-facade-tui: /sub-agent — Multi-Agent via ACP Protocol (Phase 3-7)** — 实现子 Agent 完整生命周期：

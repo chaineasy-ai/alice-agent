@@ -10,5 +10,5 @@ updated: "2026-06-13"
 ---
 # RUN AGENT ON TUI MODE
 ```bash
-cd ./alice-agent && ./build/install/alice-agent/bin/alice-agent --tui
+./alice-bootstrap/build/install/alice-agent/bin/alice-agent --tui
 ```

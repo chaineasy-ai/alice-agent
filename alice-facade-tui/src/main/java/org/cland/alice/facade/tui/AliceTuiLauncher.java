@@ -117,7 +117,7 @@ public class AliceTuiLauncher implements AutoCloseable {
 
   /** 启动 TUI。 */
   public void start() throws IOException {
-    logger.info("Starting Alice Agent TUI (JLine 3, three-panel layout)...");
+    // screenManager.start() 会清屏 + 全量重绘，所有日志必须在此之后输出
     screenManager.start();
     eventBridge.onChatMessage("System", "欢迎使用 Alice Agent TUI！");
     eventBridge.onChatMessage("System", "输入 /help 查看可用命令。");
@@ -131,8 +131,6 @@ public class AliceTuiLauncher implements AutoCloseable {
    * <p>基于 JLine 3 LineReader，原生支持 AUTO_MENU 向上补全弹窗。
    */
   public void run() {
-    logger.info("Alice Agent TUI entering main input loop.");
-
     try {
       screenManager.runInputLoop();
     } catch (Exception e) {
