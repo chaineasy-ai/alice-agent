@@ -1,0 +1,90 @@
+# Alice Agent 配置键参考
+#
+# 实际存储格式：JSON (~/.alice/config.json)
+# 当前使用扁平键值对，每个键是顶层条目。
+# 本 YAML 仅为配置键的参考文档。
+# 配置读取优先级：环境变量 > ~/.alice/config.json > 内建默认值
+#
+# CLI 使用点分隔键名（如 openai.api_key），
+# JSON 存储使用下划线键名（如 openai_api_key），
+# 由 AliceConfigStore 自动转换。
+
+# ==================== System Config ====================
+
+default.timeout:
+  json_key: default_timeout
+  env: DEFAULT_TIMEOUT
+  default: 180
+  description: "默认任务超时时长（秒）"
+
+default.verbose:
+  json_key: default_verbose
+  env: DEFAULT_VERBOSE
+  default: false
+  description: "默认是否启用详细输出模式"
+
+max_iterations:
+  json_key: max_iterations
+  env: MAX_ITERATIONS
+  default: 10
+  description: "最大 PPAO 迭代次数"
+
+action_timeout_ms:
+  json_key: action_timeout_ms
+  env: ACTION_TIMEOUT_MS
+  default: 30000
+  description: "Action 执行超时（毫秒）"
+
+# ==================== Model Config ====================
+
+default.model:
+  json_key: default_model
+  env: DEFAULT_MODEL
+  default: "gpt-4o-mini"
+  description: "默认 LLM 模型 ID"
+
+agent.max_iterations:
+  json_key: max_iterations
+  env: MAX_ITERATIONS
+  default: 10
+  description: "最大迭代次数（同 max_iterations）"
+
+# ==================== Provider: OpenAI ====================
+
+openai.api_key:
+  json_key: openai_api_key
+  env: OPENAI_API_KEY
+  default: ~
+  description: "OpenAI API 密钥"
+
+openai.model:
+  json_key: openai_model
+  env: OPENAI_MODEL
+  default: ~
+  description: "OpenAI provider 使用的模型"
+
+openai.base_url:
+  json_key: openai_base_url
+  env: OPENAI_BASE_URL
+  default: "https://api.openai.com/v1"
+  description: "OpenAI API 端点 URL"
+
+# ==================== Provider: Anthropic ====================
+
+anthropic.api_key:
+  json_key: anthropic_api_key
+  env: ANTHROPIC_API_KEY
+  default: ~
+  description: "Anthropic API 密钥"
+
+anthropic.model:
+  json_key: anthropic_model
+  env: ANTHROPIC_MODEL
+  default: ~
+  description: "Anthropic provider 使用的模型"
+
+anthropic.base_url:
+  json_key: anthropic_base_url
+  env: ANTHROPIC_BASE_URL
+  default: "https://api.anthropic.com/v1"
+  description: "Anthropic API 端点 URL"

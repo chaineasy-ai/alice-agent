@@ -17,10 +17,38 @@ scope:
   - "alice-facade-cmd"
   - "alice-facade-tui"
 status: "active"
-updated: "2026-06-14"
+updated: "2026-06-17"
 ---
 
 # Changelog
+
+## 20260617
+
+### Features
+
+- **alice-facade-cmd/AliceConfigStore nested provider config**: 重构配置存储以支持混合存储——3+ 段键（`providers.openai.api_key`）存储为嵌套 JSON 对象，已知 2 段键和单段键保持扁平下划线格式（`default_timeout`）。新增 `splitKey()` / `resolvePath()` / `putNested()` / `removePath()` / `deepCopy()` 方法。155 测试全部通过。
+
+- **alice-facade-cmd/Config & Tools subcommands fully implemented**: `tools` 和 `config` 子命令从桩代码（exit 1）升级为完整实现。`config` 子命令支持 `get`/`set`/list；`tools` 子命令通过 `ToolRegistryHolder` 列出已注册工具，支持 `--detail` 参数。
+
+- **docs: Configuration system documented**: 新增 `docs/config/README.md`（配置系统设计）、`config.json`（系统设置示例）、`model.json`（Provider 嵌套配置示例）、`example.yaml`（键参考）。`docs/alice-facade-cmd/cmd.md`（CLI 命令参考）完整记录全部 6 个子命令、chat 斜杠命令、退出码、数据流。
+
+- **docs/alice-facade-tui/tui.md**: New TUI slash command reference, covering all 14 commands, three-layer single-line layout, keyboard shortcuts, command classification (INTERNAL/IO/SYSTEM/CONFIG), and comparison with CLI.
+
+### Fixes
+
+- **alice-facade-cmd/CliRoot**: 修复 `@Command` 注解缺少 `subcommands` 属性导致 `routine` 和 `sub-agent` 子命令不可解析的问题。重构为使用 `@Command(subcommands = {...})` 单一注册方式。
+
+- **alice-facade-tui/TuiLayout separator encoding**: `SEPARATOR_CHAR` 从 Unicode `\u2500` (`─`) 改为 ASCII `-`，解决 Windows GBK 终端下 box-drawing 字符渲染为 `€鈹€鈹€` 乱码的问题。
+
+- **alice-facade-tui/ScreenManager ANSI escape leak**: 所有 `terminal.puts(InfoCmp.Capability.*)` 调用替换为直接 ANSI escape code 写入（`\033[row;colH`），解决 Windows 终端下光标定位序列被当作文本输出的问题。
+
+- **alice-facade-tui/Chinese encoding**: `TerminalBuilder` 显式设置 `.encoding(StandardCharsets.UTF_8)`，`AliceTuiLauncher.main()` 设置 `file.encoding` / `sun.stdout.encoding` 系统属性为 UTF-8，解决 Windows GBK 终端中文乱码。
+
+### Docs
+
+- **docs/alice-facade-tui/Layout.md**: 更新补全描述——从"向上顶出选择抽屉"修正为"输入框内补全列表"（JLine 3 AUTO_MENU 行为），分割线字符从 `───` 改为 `-`。
+- **docs/config/README.md**: 转换为 ai-doc 格式（YAML 前端块），更新为反映实际代码的混合扁平/嵌套存储格式。
+- **docs/config/model.json**: 从扁平键（`openai_api_key`）改为实际嵌套结构（`providers.openai.api_key`）。
 
 ## 20260615
 

@@ -402,10 +402,15 @@ public class AliceTuiLauncher implements AutoCloseable {
   // ========== Main 入口 ==========
 
   public static void main(String[] args) {
+    // 强制 UTF-8 输出编码（解决 Windows GBK 终端中文乱码）
+    System.setProperty("file.encoding", "UTF-8");
+    System.setProperty("sun.stdout.encoding", "UTF-8");
+    System.setProperty("sun.stderr.encoding", "UTF-8");
+
     try {
       String apiKey = System.getenv("OPENAI_API_KEY");
       if (apiKey == null || apiKey.isEmpty()) {
-        System.err.println("警告: 未设置 OPENAI_API_KEY，LLM 功能将不可用。");
+        System.err.println("Warning: OPENAI_API_KEY not set, LLM features will be unavailable.");
       }
 
       AgentConfig config =

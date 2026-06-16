@@ -72,13 +72,8 @@ public class CommandParser {
     CliRoot root = new CliRoot();
     CommandLine cmdLine = new CommandLine(root);
 
-    // 注册子命令
-    cmdLine.addSubcommand("run", new RunCommand());
-    cmdLine.addSubcommand("chat", new ChatCommand());
-    cmdLine.addSubcommand("tools", new ToolsCommand());
-    cmdLine.addSubcommand("config", new ConfigCommand());
-    cmdLine.addSubcommand("routine", new RoutineCommand());
-    cmdLine.addSubcommand("sub-agent", new SubAgentCommand());
+    // 子命令已在 @Command(subcommands = {...}) 中注册
+    // 此处不再重复 addSubcommand
 
     try {
       CommandLine.ParseResult parseResult = cmdLine.parseArgs(args);
@@ -115,12 +110,12 @@ public class CommandParser {
         return RunConfig.builder().task("chat").chat(true).build();
       }
 
-      if (sub instanceof ToolsCommand) {
-        throw new ParseException(1, "'tools' subcommand is not yet implemented.");
+      if (sub instanceof ToolsCommand tools) {
+        return tools.toRunConfig();
       }
 
-      if (sub instanceof ConfigCommand) {
-        throw new ParseException(1, "'config' subcommand is not yet implemented.");
+      if (sub instanceof ConfigCommand config) {
+        return config.toRunConfig();
       }
 
       if (sub instanceof RoutineCommand routine) {
@@ -168,7 +163,15 @@ public class CommandParser {
       description = "Alice Agent — AI-powered autonomous agent",
       subcommandsRepeatable = true,
       mixinStandardHelpOptions = true,
-      usageHelpAutoWidth = true)
+      usageHelpAutoWidth = true,
+      subcommands = {
+        RunCommand.class,
+        ChatCommand.class,
+        ToolsCommand.class,
+        ConfigCommand.class,
+        RoutineCommand.class,
+        SubAgentCommand.class
+      })
   private static class CliRoot implements Callable<Integer> {
 
     @Override
@@ -269,8 +272,17 @@ public class CommandParser {
 
     @Override
     public Integer call() {
-      System.err.println("Tools listing not yet implemented");
-      return 1;
+      return 0;
+    }
+
+    /** 将 CLI 参数转换为 RunConfig */
+    RunConfig toRunConfig() {
+      return RunConfig.builder().task("tools").listTools(true).toolDetail(detail).build();
+    }
+
+    /** 将 CLI 参数转换为 AgentCommand */
+    AgentCommand toAgentCommand(String sessionId) {
+      return AgentCommand.parse("/tools", sessionId, UUID.randomUUID().toString().substring(0, 12));
     }
   }
 
@@ -279,13 +291,39 @@ public class CommandParser {
       description = "Manage model keys / global configuration",
       mixinStandardHelpOptions = true)
   private static class ConfigCommand implements Callable<Integer> {
-    @Parameters(description = "Config action (get/set)")
+    @Parameters(
+        index = "0",
+        description = "Config action: get, set, or leave empty to show all",
+        arity = "0..1")
     private String action;
+
+    @Parameters(
+        index = "1",
+        description = "Config key (e.g. openai.api_key, anthropic.api_key, default.model)",
+        arity = "0..1")
+    private String key;
+
+    @Parameters(index = "2", description = "Config value (only for 'set' action)", arity = "0..1")
+    private String value;
 
     @Override
     public Integer call() {
-      System.err.println("Config management not yet implemented");
-      return 1;
+      return 0;
+    }
+
+    /** 将 CLI 参数转换为 RunConfig */
+    RunConfig toRunConfig() {
+      var b = RunConfig.builder().task("config");
+      b.configAction(action != null ? action : "show");
+      if (key != null) b.configKey(key);
+      if (value != null) b.configValue(value);
+      return b.build();
+    }
+
+    /** 将 CLI 参数转换为 AgentCommand */
+    AgentCommand toAgentCommand(String sessionId) {
+      return AgentCommand.parse(
+          "/config", sessionId, UUID.randomUUID().toString().substring(0, 12));
     }
   }
 

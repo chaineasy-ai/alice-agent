@@ -1,0 +1,6 @@
+{
+  "default_timeout": 180,
+  "default_verbose": false,
+  "max_iterations": 10,
+  "action_timeout_ms": 30000
+}

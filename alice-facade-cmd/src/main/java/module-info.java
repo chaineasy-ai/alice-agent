@@ -3,9 +3,12 @@ module alice.agent.facade.cmd.main {
   exports org.cland.alice.facade.cmd.config;
   exports org.cland.alice.facade.cmd.render;
 
+  opens org.cland.alice.facade.cmd.config;
+
   requires alice.agent.alice.core.agent.main;
   requires alice.agent.alice.model.main;
   requires alice.agent.command.main;
+  requires alice.agent.alice.tool.gateway.main;
   requires info.picocli;
   requires org.jline.reader;
   requires org.jline.terminal;

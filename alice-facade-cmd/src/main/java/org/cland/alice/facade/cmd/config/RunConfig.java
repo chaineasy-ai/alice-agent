@@ -30,6 +30,11 @@ import java.util.Objects;
  *     String subAgentSendMessage;  // 发送的消息内容
  *     String subAgentPromptAgentId;    // /sub-agent prompt 目标 ID
  *     String subAgentPromptText;       // 提示文本
+ *     boolean listTools;       // 列出工具
+ *     boolean toolDetail;      // 工具详情
+ *     String configAction;     // config 动作 (get/set/show)
+ *     String configKey;        // config 键名
+ *     String configValue;      // config 值 (仅 set 时)
  *   }
  * </pre>
  */
@@ -60,6 +65,11 @@ public final class RunConfig {
   private final String subAgentSendMessage;
   private final String subAgentPromptAgentId;
   private final String subAgentPromptText;
+  private final boolean listTools;
+  private final boolean toolDetail;
+  private final String configAction;
+  private final String configKey;
+  private final String configValue;
 
   private RunConfig(Builder builder) {
     this.task = Objects.requireNonNull(builder.task, "task must not be null");
@@ -82,6 +92,11 @@ public final class RunConfig {
     this.subAgentSendMessage = builder.subAgentSendMessage;
     this.subAgentPromptAgentId = builder.subAgentPromptAgentId;
     this.subAgentPromptText = builder.subAgentPromptText;
+    this.listTools = builder.listTools;
+    this.toolDetail = builder.toolDetail;
+    this.configAction = builder.configAction;
+    this.configKey = builder.configKey;
+    this.configValue = builder.configValue;
   }
 
   // ========== Getters ==========
@@ -181,6 +196,31 @@ public final class RunConfig {
     return subAgentPromptText;
   }
 
+  /** 是否列出已注册工具 */
+  public boolean listTools() {
+    return listTools;
+  }
+
+  /** 是否显示工具详情 */
+  public boolean toolDetail() {
+    return toolDetail;
+  }
+
+  /** Config 动作 (get/set/show) */
+  public String configAction() {
+    return configAction;
+  }
+
+  /** Config 键名 */
+  public String configKey() {
+    return configKey;
+  }
+
+  /** Config 值 (仅 set 时) */
+  public String configValue() {
+    return configValue;
+  }
+
   // ========== Builder ==========
 
   public static Builder builder() {
@@ -207,6 +247,11 @@ public final class RunConfig {
     private String subAgentSendMessage;
     private String subAgentPromptAgentId;
     private String subAgentPromptText;
+    private boolean listTools;
+    private boolean toolDetail;
+    private String configAction;
+    private String configKey;
+    private String configValue;
 
     private Builder() {}
 
@@ -313,6 +358,31 @@ public final class RunConfig {
       return this;
     }
 
+    public Builder listTools(boolean listTools) {
+      this.listTools = listTools;
+      return this;
+    }
+
+    public Builder toolDetail(boolean toolDetail) {
+      this.toolDetail = toolDetail;
+      return this;
+    }
+
+    public Builder configAction(String configAction) {
+      this.configAction = configAction;
+      return this;
+    }
+
+    public Builder configKey(String configKey) {
+      this.configKey = configKey;
+      return this;
+    }
+
+    public Builder configValue(String configValue) {
+      this.configValue = configValue;
+      return this;
+    }
+
     public RunConfig build() {
       return new RunConfig(this);
     }
@@ -343,6 +413,21 @@ public final class RunConfig {
     }
     if (subAgentConnectName != null) {
       sb.append(", subAgentConnectName='").append(subAgentConnectName).append("'");
+    }
+    if (listTools) {
+      sb.append(", listTools=true");
+    }
+    if (toolDetail) {
+      sb.append(", toolDetail=true");
+    }
+    if (configAction != null) {
+      sb.append(", configAction='").append(configAction).append("'");
+    }
+    if (configKey != null) {
+      sb.append(", configKey='").append(configKey).append("'");
+    }
+    if (configValue != null) {
+      sb.append(", configValue='").append(configValue).append("'");
     }
     sb.append("}");
     return sb.toString();

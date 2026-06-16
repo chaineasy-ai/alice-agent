@@ -128,22 +128,70 @@ class CommandParserSpec extends Specification {
         config.task() == "chat"
     }
 
-    def "should throw ParseException for tools subcommand"() {
+    def "should parse tools subcommand"() {
         when:
-        parser.parse(["tools"] as String[])
+        def config = parser.parse(["tools"] as String[])
 
         then:
-        def e = thrown(CommandParser.ParseException)
-        e.exitCode() == 1
+        config != null
+        config.task() == "tools"
+        config.listTools()
+        !config.toolDetail()
     }
 
-    def "should throw ParseException for config subcommand"() {
+    def "should parse tools subcommand with --detail"() {
         when:
-        parser.parse(["config", "set"] as String[])
+        def config = parser.parse(["tools", "--detail"] as String[])
 
         then:
-        def e = thrown(CommandParser.ParseException)
-        e.exitCode() == 1
+        config != null
+        config.task() == "tools"
+        config.listTools()
+        config.toolDetail()
+    }
+
+    def "should parse config subcommand (show all)"() {
+        when:
+        def config = parser.parse(["config"] as String[])
+
+        then:
+        config != null
+        config.task() == "config"
+        config.configAction() == "show"
+        config.configKey() == null
+        config.configValue() == null
+    }
+
+    def "should parse config subcommand with get"() {
+        when:
+        def config = parser.parse(["config", "get", "openai.api_key"] as String[])
+
+        then:
+        config != null
+        config.task() == "config"
+        config.configAction() == "get"
+        config.configKey() == "openai.api_key"
+        config.configValue() == null
+    }
+
+    def "should parse config subcommand with set"() {
+        when:
+        def config = parser.parse(["config", "set", "openai.api_key", "sk-xxx"] as String[])
+
+        then:
+        config != null
+        config.task() == "config"
+        config.configAction() == "set"
+        config.configKey() == "openai.api_key"
+        config.configValue() == "sk-xxx"
+    }
+
+    def "should parse config subcommand with help"() {
+        when:
+        def config = parser.parse(["config", "--help"] as String[])
+
+        then:
+        config == null
     }
 
     // ========================================================================
@@ -205,5 +253,96 @@ class CommandParserSpec extends Specification {
         config != null
         config.routineCron() == null
         !config.listRoutines()
+    }
+
+    // ========================================================================
+    // sub-agent subcommand
+    // ========================================================================
+
+    def "should parse sub-agent with --spawn goal"() {
+        when:
+        def config = parser.parse(["sub-agent", "--spawn", "analyze logs"] as String[])
+
+        then:
+        config != null
+        config.subAgentSpawnGoal() == "analyze logs"
+        !config.subAgentList()
+    }
+
+    def "should parse sub-agent with --connect and --acp-endpoint"() {
+        when:
+        def config = parser.parse(["sub-agent", "--connect", "worker1", "--acp-endpoint", "http://localhost:8080"] as String[])
+
+        then:
+        config != null
+        config.subAgentConnectName() == "worker1"
+        config.subAgentConnectEndpoint() == "http://localhost:8080"
+    }
+
+    def "should parse sub-agent with --list"() {
+        when:
+        def config = parser.parse(["sub-agent", "--list"] as String[])
+
+        then:
+        config != null
+        config.subAgentList()
+    }
+
+    def "should parse sub-agent with --cancel"() {
+        when:
+        def config = parser.parse(["sub-agent", "--cancel", "abc-123"] as String[])
+
+        then:
+        config != null
+        config.subAgentCancelId() == "abc-123"
+    }
+
+    def "should parse sub-agent with --results"() {
+        when:
+        def config = parser.parse(["sub-agent", "--results", "def-456"] as String[])
+
+        then:
+        config != null
+        config.subAgentResultsId() == "def-456"
+    }
+
+    def "should parse sub-agent with --send and --message"() {
+        when:
+        def config = parser.parse(["sub-agent", "--send", "agent1", "--message", "hello world"] as String[])
+
+        then:
+        config != null
+        config.subAgentSendId() == "agent1"
+        config.subAgentSendMessage() == "hello world"
+    }
+
+    def "should parse sub-agent with --prompt and --agent-id"() {
+        when:
+        def config = parser.parse(["sub-agent", "--prompt", "do task", "--agent-id", "ext-agent"] as String[])
+
+        then:
+        config != null
+        config.subAgentPromptText() == "do task"
+        config.subAgentPromptAgentId() == "ext-agent"
+    }
+
+    def "should return null for --help on sub-agent"() {
+        when:
+        def config = parser.parse(["sub-agent", "--help"] as String[])
+
+        then:
+        config == null
+    }
+
+    def "should parse sub-agent with no options"() {
+        when:
+        def config = parser.parse(["sub-agent"] as String[])
+
+        then:
+        config != null
+        config.subAgentSpawnGoal() == null
+        config.subAgentConnectName() == null
+        !config.subAgentList()
+        config.subAgentCancelId() == null
     }
 }

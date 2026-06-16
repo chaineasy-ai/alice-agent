@@ -1,11 +1,14 @@
 package org.cland.alice.facade.cmd;
 
+import java.util.Map;
 import java.util.UUID;
 import org.cland.alice.agent.command.AgentCommand;
 import org.cland.alice.agent.command.CapabilityCmd;
 import org.cland.alice.agent.command.ControlCmd;
 import org.cland.alice.agent.subagent.SubAgentManager;
 import org.cland.alice.agent.subagent.SubAgentRecord;
+import org.cland.alice.core.agent.AgentConfig;
+import org.cland.alice.facade.cmd.config.AliceConfigStore;
 import org.cland.alice.facade.cmd.config.CommandParser;
 import org.cland.alice.facade.cmd.config.CommandParser.ParseException;
 import org.cland.alice.facade.cmd.config.RunConfig;
@@ -82,19 +85,29 @@ public final class AliceCliLauncher {
       RunConfig config = parser.parse(args);
 
       if (config == null) {
-        // parse 返回 null 表示帮助/版本信息已打印
-        return EXIT_PARAM_ERROR;
+        // parse 返回 null 表示帮助/版本信息已打印 → 成功退出
+        return EXIT_SUCCESS;
       }
 
       logger.info("RunConfig: {}", config);
 
-      // 2. 初始化 ModelProvider
+      // 2. 工具列表命令 — 不走 Agent 执行
+      if (config.listTools()) {
+        return handleListTools(config);
+      }
+
+      // 3. 配置管理命令 — 不走 Agent 执行
+      if (config.configAction() != null) {
+        return handleConfig(config);
+      }
+
+      // 4. 初始化 ModelProvider
       initializeModelProvider();
 
-      // 3. 创建渲染器
+      // 4. 创建渲染器
       OutputRenderer renderer = OutputRenderer.create(config);
 
-      // 4. 执行任务
+      // 5. 执行任务
       ExecutionCoordinator coordinator = new ExecutionCoordinator(config, renderer);
       return coordinator.execute();
 
@@ -252,6 +265,265 @@ public final class AliceCliLauncher {
         yield EXIT_PARAM_ERROR;
       }
     };
+  }
+
+  // ========================================================================
+  // 工具列表
+  // ========================================================================
+
+  /**
+   * 处理 {@code alice tools} 子命令，列出 ToolRegistry 中的已注册工具。
+   *
+   * @param config 运行配置
+   * @return 退出码
+   */
+  private static int handleListTools(RunConfig config) {
+    try {
+      var registry = org.cland.alice.tool.gateway.ToolRegistryHolder.INSTANCE;
+      var tools = registry.allTools();
+
+      if (tools.isEmpty()) {
+        System.out.println("No tools registered.");
+        System.out.println("Use 'alice run --skill <toolset>' or configure MCP to load tools.");
+        return EXIT_SUCCESS;
+      }
+
+      System.out.println("Registered tools (" + tools.size() + "):");
+      System.out.println();
+
+      if (config.toolDetail()) {
+        for (var meta : tools) {
+          System.out.println("  ── " + meta.name() + " ──");
+          System.out.println("     Description: " + meta.description());
+          if (meta.inputSchema() != null && !meta.inputSchema().isEmpty()) {
+            System.out.println("     Parameters:  " + meta.inputSchema());
+          }
+          System.out.println();
+        }
+      } else {
+        for (var meta : tools) {
+          System.out.println("  ⚡ " + meta.name() + " — " + meta.description());
+        }
+        System.out.println();
+        System.out.println("Use 'alice tools --detail' to see parameter schemas.");
+      }
+
+      return EXIT_SUCCESS;
+    } catch (Exception e) {
+      System.err.println("Error listing tools: " + e.getMessage());
+      return EXIT_RUNTIME_ERROR;
+    }
+  }
+
+  // ========================================================================
+  // 配置管理
+  // ========================================================================
+
+  /**
+   * 处理 {@code alice config} 子命令。
+   *
+   * <p>支持:
+   *
+   * <ul>
+   *   <li>{@code alice config} — 显示当前配置概览
+   *   <li>{@code alice config get &lt;key&gt;} — 获取单个配置项
+   *   <li>{@code alice config set &lt;key&gt; &lt;value&gt;} — 设置配置项（当前仅打印模拟）
+   * </ul>
+   */
+  /** 全局配置存储实例（延迟初始化） */
+  private static volatile AliceConfigStore configStore;
+
+  /** 获取或创建配置存储实例。 */
+  private static AliceConfigStore configStore() {
+    if (configStore == null) {
+      synchronized (AliceCliLauncher.class) {
+        if (configStore == null) {
+          configStore = new AliceConfigStore();
+        }
+      }
+    }
+    return configStore;
+  }
+
+  private static int handleConfig(RunConfig config) {
+    try {
+      String action = config.configAction();
+      String key = config.configKey();
+      String value = config.configValue();
+      AliceConfigStore store = configStore();
+
+      if ("set".equals(action)) {
+        if (key == null || value == null) {
+          System.err.println("Usage: alice config set <key> <value>");
+          return EXIT_PARAM_ERROR;
+        }
+        store.set(key, value);
+        System.out.println(
+            "Config '" + key + "' set to '" + value + "' (persisted to ~/.alice/config.json)");
+        return EXIT_SUCCESS;
+      }
+
+      if ("get".equals(action)) {
+        if (key == null) {
+          System.err.println("Usage: alice config get <key>");
+          return EXIT_PARAM_ERROR;
+        }
+        printConfigValue(key, store);
+        return EXIT_SUCCESS;
+      }
+
+      // "show" — 显示全部配置
+      printAllConfig(store);
+      return EXIT_SUCCESS;
+
+    } catch (Exception e) {
+      System.err.println("Error: " + e.getMessage());
+      return EXIT_RUNTIME_ERROR;
+    }
+  }
+
+  /**
+   * 获取配置值的实际值（优先级：环境变量 > 配置文件 > 内建默认值）。
+   *
+   * @param key 点分隔的键名
+   * @param store 配置存储
+   * @return 值，或 {@code null} 表示未设置
+   */
+  private static String resolveConfigValue(String key, AliceConfigStore store) {
+    // 1. 环境变量（最高优先级）
+    String envName = configKeyToEnv(key);
+    if (envName != null) {
+      String envVal = System.getenv(envName);
+      if (envVal != null && !envVal.isEmpty()) {
+        return envVal;
+      }
+    }
+    // 2. 配置文件
+    String stored = store.get(key);
+    if (stored != null) {
+      return stored;
+    }
+    // 3. 内建默认值
+    return switch (key) {
+      case "default.model" -> AgentConfig.DEFAULT_MODEL;
+      case "agent.max_iterations" -> String.valueOf(AgentConfig.DEFAULT_MAX_ITERATIONS);
+      default -> null;
+    };
+  }
+
+  /** 将配置键名映射为环境变量名。 */
+  private static String configKeyToEnv(String key) {
+    return switch (key) {
+      case "openai.api_key", "providers.openai.api_key" -> "OPENAI_API_KEY";
+      case "anthropic.api_key", "providers.anthropic.api_key" -> "ANTHROPIC_API_KEY";
+      default -> null;
+    };
+  }
+
+  /** 获取并打印单个配置项的值及其来源。 */
+  private static void printConfigValue(String key, AliceConfigStore store) {
+    String envName = configKeyToEnv(key);
+
+    // 检查环境变量
+    if (envName != null) {
+      String envVal = System.getenv(envName);
+      if (envVal != null && !envVal.isEmpty()) {
+        System.out.println(
+            key
+                + " = "
+                + envVal.substring(0, Math.min(8, envVal.length()))
+                + "... (from env "
+                + envName
+                + ")");
+        return;
+      }
+    }
+
+    // 检查配置文件
+    String stored = store.get(key);
+    if (stored != null) {
+      String display =
+          key.contains("api_key")
+              ? stored.substring(0, Math.min(8, stored.length())) + "..."
+              : stored;
+      System.out.println(key + " = " + display + " (from ~/.alice/config.json)");
+      return;
+    }
+
+    // 检查内建默认值
+    switch (key) {
+      case "default.model" ->
+          System.out.println(
+              "default.model = " + AgentConfig.DEFAULT_MODEL + " (built-in default)");
+      case "agent.max_iterations" ->
+          System.out.println(
+              "agent.max_iterations = "
+                  + AgentConfig.DEFAULT_MAX_ITERATIONS
+                  + " (built-in default)");
+      default -> System.out.println(key + " = (not set)");
+    }
+  }
+
+  /** 打印所有配置项。 */
+  private static void printAllConfig(AliceConfigStore store) {
+    System.out.println("=== Alice Agent Configuration ===");
+    System.out.println();
+
+    // 读取 providers 嵌套结构
+    var all = store.getAll();
+    System.out.println("-- Model Providers --");
+    @SuppressWarnings("unchecked")
+    var providers = (Map<String, Object>) all.get("providers");
+    if (providers != null && !providers.isEmpty()) {
+      for (var entry : providers.entrySet()) {
+        String providerName = entry.getKey();
+        System.out.println("  [" + providerName + "]");
+        @SuppressWarnings("unchecked")
+        var providerConfig = (Map<String, Object>) entry.getValue();
+        if (providerConfig != null) {
+          for (var pEntry : providerConfig.entrySet()) {
+            String display =
+                pEntry.getKey().contains("api_key")
+                    ? pEntry
+                            .getValue()
+                            .toString()
+                            .substring(0, Math.min(8, pEntry.getValue().toString().length()))
+                        + "..."
+                    : pEntry.getValue().toString();
+            System.out.println("    " + pEntry.getKey() + " = " + display);
+          }
+        }
+      }
+    } else {
+      // 回退到扁平键
+      printConfigValue("openai.api_key", store);
+      printConfigValue("anthropic.api_key", store);
+    }
+
+    System.out.println();
+    System.out.println("-- Agent Defaults --");
+    // 从嵌套或扁平读取
+    String model = store.get("default.model");
+    if (model == null) model = store.get("default_model");
+    if (model != null) {
+      System.out.println("default.model = " + model + " (from ~/.alice/config.json)");
+    } else {
+      printConfigValue("default.model", store);
+    }
+
+    String iterStr = store.get("agent.max_iterations");
+    if (iterStr == null) iterStr = store.get("max_iterations");
+    if (iterStr != null) {
+      System.out.println("agent.max_iterations = " + iterStr + " (from ~/.alice/config.json)");
+    } else {
+      printConfigValue("agent.max_iterations", store);
+    }
+
+    System.out.println();
+    System.out.println("Config file: ~/.alice/config.json");
+    System.out.println("Use 'alice config get <key>' or 'alice config set <key> <value>'");
+    System.out.println(
+        "Known keys: openai.api_key, anthropic.api_key, default.model, agent.max_iterations");
   }
 
   // ========================================================================

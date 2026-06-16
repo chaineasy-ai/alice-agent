@@ -1,6 +1,7 @@
 package org.cland.alice.facade.tui;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
@@ -87,8 +88,13 @@ public class ScreenManager implements AutoCloseable {
   public ScreenManager(EventBridge eventBridge) throws IOException {
     this.eventBridge = eventBridge;
 
+    // 强制 UTF-8 输出编码（解决 Windows GBK 终端中文乱码）
+    System.setProperty("file.encoding", "UTF-8");
+    System.setProperty("sun.stdout.encoding", "UTF-8");
+    System.setProperty("sun.stderr.encoding", "UTF-8");
+
     // 1. 创建 JLine 3 Terminal
-    this.terminal = TerminalBuilder.builder().system(true).build();
+    this.terminal = TerminalBuilder.builder().system(true).encoding(StandardCharsets.UTF_8).build();
 
     // 2. 创建模型补全器（供 /model 命令使用）
     StringsCompleter modelCompleter = new StringsCompleter(MODEL_CANDIDATES);
