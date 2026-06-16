@@ -1,0 +1,61 @@
+# Alice Agent CI — Build, Test & Package
+#
+# 构建全模块，运行所有测试，产出最终终端应用（TUI + CLI）的可分发归档。
+# 最终产物：alice-bootstrap/build/distributions/ — 包含启动脚本和所有依赖的完整运行环境。
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: 25
+          distribution: temurin
+          cache: gradle
+
+      - name: Build all modules
+        run: ./gradlew assemble --no-daemon
+
+      - name: Run all tests
+        run: ./gradlew test --no-daemon
+
+      - name: Build final distribution (CLI + TUI)
+        run: ./gradlew :alice-bootstrap:installDist --no-daemon
+
+      - name: Upload final terminal application artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: alice-agent-dist
+          path: alice-bootstrap/build/install/alice-agent/
+          retention-days: 7
+
+      - name: Verify terminal launcher
+        run: |
+          echo "=== Build Artifacts ==="
+          ls -la alice-bootstrap/build/install/alice-agent/bin/
+          echo ""
+          echo "=== Module JARs ==="
+          ls -la alice-bootstrap/build/install/alice-agent/lib/*.jar | wc -l
+          echo "JARs total"
+          echo ""
+          echo "=== TUI Launcher check ==="
+          if [ -f alice-bootstrap/build/install/alice-agent/bin/alice-agent ]; then
+            echo "✅ Terminal application ready: alice-agent/bin/alice-agent"
+            echo "   Run with --tui flag to start TUI mode"
+          else
+            echo "❌ Terminal application not found"
+            exit 1
+          fi
