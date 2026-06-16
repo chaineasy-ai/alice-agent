@@ -16,6 +16,7 @@ import org.cland.alice.core.planner.Plan;
 import org.cland.alice.memory.wal.WalSession;
 import org.cland.alice.model.Call;
 import org.cland.alice.model.ModelProvider;
+import org.cland.alice.tool.gateway.engine.ExecutionEngine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,6 +47,7 @@ public class AgentExecutor {
   private final Vertx vertx;
   private final Agent agent;
   private final AgentConfig config;
+  private final ExecutionEngine executionEngine;
 
   /** 可选的 WAL 会话，注入后启用双轨制持久化与崩溃恢复 */
   private WalSession wal;
@@ -54,6 +56,11 @@ public class AgentExecutor {
     this.vertx = Objects.requireNonNull(vertx, "vertx must not be null");
     this.agent = Objects.requireNonNull(agent, "agent must not be null");
     this.config = agent.config();
+    // ExecutionEngine 替换已过时的 ToolRegistry.execute()，提供沙箱/超时控制
+    this.executionEngine =
+        agent.toolRegistry() != null
+            ? ExecutionEngine.builder().registry(agent.toolRegistry()).build()
+            : null;
   }
 
   // ========================================================================
@@ -537,8 +544,17 @@ public class AgentExecutor {
         .<StepResult>executeBlocking(
             () -> {
               try {
+                if (executionEngine == null) {
+                  logger.warn("[Micro-ReAct/Tool] no ExecutionEngine available");
+                  return new StepResult.Continue(
+                      Action.revision("No ExecutionEngine for tool: " + action.target()),
+                      Observation.failure("ExecutionEngine not configured"));
+                }
+
+                var result = executionEngine.invoke(action.target(), action.parameters());
                 boolean success =
-                    agent.toolRegistry().execute(action.target(), action.parameters());
+                    result.status()
+                        == org.cland.alice.tool.gateway.engine.ToolResult.Status.SUCCESS;
 
                 // WAL: 记录工具执行结果
                 if (wal != null) {
@@ -554,11 +570,17 @@ public class AgentExecutor {
                   return new StepResult.Continue(
                       Action.llmInference(
                           config.defaultModelId(), "Tool executed, continue reasoning"),
-                      Observation.success("Tool " + action.target() + " executed successfully"));
+                      Observation.success(
+                          "Tool "
+                              + action.target()
+                              + " executed successfully: "
+                              + result.summary()));
                 } else {
                   return new StepResult.Continue(
-                      Action.revision("Tool execution failed: " + action.target()),
-                      Observation.failure("Tool " + action.target() + " returned failure"));
+                      Action.revision(
+                          "Tool execution failed: " + action.target() + " - " + result.summary()),
+                      Observation.failure(
+                          "Tool " + action.target() + " returned failure: " + result.summary()));
                 }
               } catch (Exception e) {
                 // WAL: 工具异常

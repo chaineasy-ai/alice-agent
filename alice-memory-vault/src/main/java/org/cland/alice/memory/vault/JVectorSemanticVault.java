@@ -254,7 +254,8 @@ public final class JVectorSemanticVault implements SemanticVault, Closeable {
         if (index == null) {
           index = builder.build(ravv);
         } else {
-          builder.addGraphNode(localId, ravv);
+          // addGraphNode(int, RandomAccessVectorValues) 已过时，使用 VectorFloat 重载
+          builder.addGraphNode(localId, vectorList.get(localId));
         }
       } catch (Exception e) {
         log.warn("JVector addGraphNode failed (localId={}): {}", localId, e.getMessage());
@@ -262,7 +263,7 @@ public final class JVectorSemanticVault implements SemanticVault, Closeable {
     }
 
     synchronized List<Knowledge> search(float[] qv, int k, double threshold) {
-      if (index == null || index.size() == 0) return List.of();
+      if (index == null || vectorList.isEmpty()) return List.of();
       try {
         VectorFloat<float[]> query = wrap(qv);
         SearchResult result =
@@ -342,7 +343,10 @@ public final class JVectorSemanticVault implements SemanticVault, Closeable {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public VectorFloat<?> getVector(int nodeId) {
+      // getVector(int) is abstract in the interface and required by GraphIndexBuilder /
+      // GraphSearcher
       if (nodeId < 0 || nodeId >= data.size()) return null;
       return data.get(nodeId);
     }
