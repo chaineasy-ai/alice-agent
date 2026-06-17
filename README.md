@@ -21,26 +21,26 @@ struct -i ".git" -i ".gradle" -i "build" -i ".idea" -i ".lazybones" -i "*.class"
 
 ## Format
 Format java code:
-```
+```bash
 ./gradlew spotlessApply
 ```
 
 ## Run Tests
 You can run tests with:
-```
+```bash
 ./gradlew check
 ```
 Gradle HTML report is located in app/build/reports/tests.
 
 Run the sample application with Gradle:
-```
+```bash
 ./gradlew :alice-bootstrap:run
 ```
 
 ## Building the Application
 ### Packaged Distribution
 To package the application for a distribution to be unpacked later:
-```
+```bash
 ./gradlew assembleDist
 ````
 
@@ -48,16 +48,31 @@ The distribution archives are found in `app/build/distributions`
 
 ### Unpacked Application
 You can assemble an "installed" unpacked application with:
-```
+```bash
 ./gradlew installDist
 ```
 
 The application is found `bootstrap/build/install`
 
+### GraalVM Native Image
+Build a native executable (requires GraalVM + `native-image` tool):
+
+```bash
+./gradlew :alice-bootstrap:nativeCompile
+```
+
+Run the native executable directly:
+
+```bash
+./gradlew :alice-bootstrap:nativeRun
+```
+
+The native binary is located in `alice-bootstrap/build/native/nativeCompile/`.
+
 ## Running the Application
 Run the application commands from the application root directory that contains `bin` and `lib` :
 
-```
+```bash
 ./bin/alice-agent 
 ```
 

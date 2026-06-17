@@ -399,9 +399,18 @@ public class AliceTuiLauncher implements AutoCloseable {
     return UUID.randomUUID().toString().substring(0, 12);
   }
 
-  // ========== Main 入口 ==========
+  // ========== 公共启动入口 ==========
 
-  public static void main(String[] args) {
+  /**
+   * 从 {@link FacadeSelector} 调用的公共启动入口。
+   *
+   * <p>在 {@code alice-bootstrap} 模块中，FacadeSelector 不再持有 Agent / AgentConfig， 因此 TUI Launcher
+   * 需要自行初始化 ModelProvider 和 Agent 核心。
+   *
+   * @param args 原始命令行参数（TUI 模式下大部分参数由本方法自行处理）
+   * @return 退出码
+   */
+  public static int launch(String[] args) {
     // 强制 UTF-8 输出编码（解决 Windows GBK 终端中文乱码）
     System.setProperty("file.encoding", "UTF-8");
     System.setProperty("sun.stdout.encoding", "UTF-8");
@@ -419,11 +428,18 @@ public class AliceTuiLauncher implements AutoCloseable {
       AliceTuiLauncher launcher = new AliceTuiLauncher(config);
       launcher.start();
       launcher.run();
+      return 0;
 
     } catch (IOException e) {
       System.err.println("TUI 启动失败: " + e.getMessage());
-      e.printStackTrace();
-      System.exit(1);
+      return 1;
     }
+  }
+
+  // ========== Main 入口 ==========
+
+  public static void main(String[] args) {
+    int exitCode = launch(args);
+    System.exit(exitCode);
   }
 }

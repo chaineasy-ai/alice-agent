@@ -196,6 +196,6 @@
 
 | 门面 | 启动参数 | 入口类 | 适用场景 |
 |------|---------|--------|---------|
-| CLI | `--cmd` | `AliceCliLauncher` | 脚本调用、自动化、CI/CD |
+| CLI | `--cli` | `AliceCliLauncher` | 脚本调用、自动化、CI/CD |
 | TUI | `--tui` | `AliceTuiLauncher` | 本地开发、调试、运维终端 |
 | Web | `--web` | `AliceWebLauncher` | 生产部署、团队协作、可视化监控 |

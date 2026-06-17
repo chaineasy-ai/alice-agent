@@ -26,6 +26,32 @@ updated: "2026-06-17"
 
 ### Features
 
+- **alice-bootstrap: Pure Bootstrapper refactoring** — 模块退化为纯引导程序，彻底解除对 `alice-core-agent`、`alice-model`、`alice-agent-command` 的直接依赖。
+  - 删除 `AliceAgent.java`，其职责（ModelProvider 初始化、AgentConfig 解析、Agent 编排）完全由 facade 模块自行承担
+  - `FacadeSelector` 不再持有 `Agent` 参数，仅接受原始 `String[] args`，业务配置的解析下放至 `AliceCliLauncher`/`AliceTuiLauncher`
+  - `AliceApp.main()` 简化为：检测 facade 类型 → 传递原始 args → 退出码传播
+  - 新增 `AliceTuiLauncher.launch(args)` 自包含公共启动入口，无需外部传入 Agent 实例
+  - `module-info.java` 精简为仅 `requires alice.agent.facade.cmd.main` + `alice.agent.facade.tui.main`
+  - `build.gradle` 移除 `alice-core-agent`、`alice-model`、`alice-agent-command` 实现依赖
+  - 全链路 UTF-8 三级固化：JVM 编译/运行/原生镜像各层独立配置 `-Dfile.encoding=UTF-8`
+  - 新增 GraalVM Native Image 支持：`org.graalvm.buildtools.native` 插件 + `--default-charset=UTF-8`
+  - 文档：更新 `README.md` 添加 GraalVM 构建命令（`nativeCompile`/`nativeRun`）
+
+- **alice-facade-tui/UTF-8 三级编码固化**: 
+  - `AliceTuiLauncher.launch()` 在终端创建前设置 `file.encoding`/`sun.stdout.encoding`/`sun.stderr.encoding` 为 UTF-8
+  - `ScreenManager` 创建 TerminalBuilder 时显式指定 `.encoding(StandardCharsets.UTF_8)`
+  - 所有 TUI 输出严格通过 `terminal.writer()`，杜绝混用 `System.out`
+
+### Docs
+
+- **README.md**: 新增 GraalVM Native Image 构建与运行说明（`nativeCompile`/`nativeRun`）
+
+---
+
+## 20260617
+
+### Features
+
 - **alice-facade-cmd/AliceConfigStore nested provider config**: 重构配置存储以支持混合存储——3+ 段键（`providers.openai.api_key`）存储为嵌套 JSON 对象，已知 2 段键和单段键保持扁平下划线格式（`default_timeout`）。新增 `splitKey()` / `resolvePath()` / `putNested()` / `removePath()` / `deepCopy()` 方法。155 测试全部通过。
 
 - **alice-facade-cmd/Config & Tools subcommands fully implemented**: `tools` 和 `config` 子命令从桩代码（exit 1）升级为完整实现。`config` 子命令支持 `get`/`set`/list；`tools` 子命令通过 `ToolRegistryHolder` 列出已注册工具，支持 `--detail` 参数。

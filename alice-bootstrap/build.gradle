@@ -6,6 +6,7 @@
 plugins {
     id 'groovy'
     id 'application'
+    id 'org.graalvm.buildtools.native' version '0.11.5'
 }
 
 group = "org.cland.alice"
@@ -21,14 +22,13 @@ dependencies {
     implementation 'ch.qos.logback:logback-classic:1.5.16'
     implementation 'ch.qos.logback:logback-core:1.5.16'
 
-    // Local submodule dependencies
-    implementation project(':alice-core-agent')
-    implementation project(':alice-model')
-    implementation project(':alice-agent-command')
+    // Local submodule dependencies — only facade modules
+    // Bootstrap is a Pure Bootstrapper: no Agent/Model/Config awareness.
     implementation project(':alice-facade-cmd')
     implementation project(':alice-facade-tui')
 
-    implementation 'com.google.guava:guava:33.6.0-jre'
+    // Test-only: alice-agent-command types used in dispatch integration tests
+    testImplementation project(':alice-agent-command')
 
     testImplementation 'org.apache.groovy:groovy:4.0.30'
     testImplementation 'org.spockframework:spock-core:2.4-groovy-4.0'
@@ -48,6 +48,29 @@ java {
         languageVersion = JavaLanguageVersion.of(25)
     }
     modularity.inferModulePath = true
+}
+
+// ── JVM 运行编码 ──────────────────────────────────────────────────────────
+// 确保 `./gradlew run` 和分发脚本生成的启动器都带上 UTF-8 编码参数
+tasks.withType(JavaExec).configureEach {
+    jvmArgs("-Dfile.encoding=UTF-8")
+}
+
+application {
+    mainClass = 'org.cland.alice.agent.AliceApp'
+    applicationName = 'alice-agent'
+    applicationDefaultJvmArgs = ["-Dfile.encoding=UTF-8"]
+}
+
+graalvmNative {
+    binaries {
+        main {
+            imageName = 'alice-agent'
+            // 向 GraalVM 编译器传递参数
+            buildArgs.add('-H:+AddAllCharsets') // 确保打包了所有的字符集（包含 UTF-8, GBK 等）
+            buildArgs.add('-Dfile.encoding=UTF-8') // 强制指定运行时默认编码为 UTF-8
+        }
+    }
 }
 
 tasks.withType(JavaCompile).configureEach {
@@ -72,11 +95,6 @@ distributions {
 
 jar {
     archiveBaseName = 'alice-agent'
-}
-
-application {
-    mainClass = 'org.cland.alice.agent.AliceApp'
-    applicationName = 'alice-agent'
 }
 
 tasks.named('test') {
