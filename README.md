@@ -52,7 +52,7 @@ You can assemble an "installed" unpacked application with:
 ./gradlew installDist
 ```
 
-The application is found `app/build/install`
+The application is found `bootstrap/build/install`
 
 ## Running the Application
 Run the application commands from the application root directory that contains `bin` and `lib` :
