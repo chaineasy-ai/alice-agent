@@ -53,6 +53,7 @@ updated: "2026-06-17"
 - **alice-facade-tui/FooterComponent 截断逻辑**: 修复 `plain.length() > width` 时错误截断 ANSI 码导致颜色泄漏的问题。改为逐字符遍历，仅计数可见字符，完整保留 ANSI 色码。
 - **alice-facade-tui/AliceTuiLauncher JANSI 编译错误**: 移除在 `try-catch` 块中对 `org.fusesource.jansi.AnsiConsole` 的硬编码引用，改用 `Class.forName()` 反射调用，消除编译期依赖缺失错误。
 - **alice-bootstrap/native-image 自定义配置**: 移除格式错误的 `jni-config.json`/`reflect-config.json`（对象格式应为数组），依赖插件 `generateResourcesConfigFile` 自动生成。
+- **alice-facade-tui/ScreenManager 输入光标位置错位**: 在 `runInputLoop()` 中每次 `reader.readLine()` 前添加 `\033[J`（ANSI 清除光标到屏幕底端）和 `reader.setVariable(LineReader.LINE_OFFSET, layout.inputRow())`，同步 JLine 内部光标跟踪与布局计算的实际输入行位置，解决光标显示行与输入区不匹配的问题。
 
 ### CI
 
