@@ -18,22 +18,23 @@ import org.jline.reader.*;
 import org.jline.reader.impl.completer.StringsCompleter;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
-import org.jline.utils.InfoCmp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * ScreenManager：基于 JLine 3 的 TUI 核心管理器。
  *
- * <p>对应设计文档 §2 中的 ScreenManager 及 Layout.md 三层单线分割布局。 负责：
+ * <p>对应 Layout.md 三层单线分割布局 v2.0。负责：
  *
  * <ul>
  *   <li>初始化 JLine 3 Terminal + LineReader
- *   <li>维护三层固定布局：上方滚动区 | 中间输入区（含 AUTO_MENU 补全）| 底部状态栏
- *   <li>处理键盘输入（LineReader 原生支持）
- *   <li>驱动渲染更新
- *   <li>处理终端 resize 事件
+ *   <li>维护三层固定布局（Layout.md §7.1 沉浸式三看板）
+ *   <li>强制输入框补全菜单最大行数限制（LIST_MAX=3），杜绝界面整体上移溢出
+ *   <li>处理键盘输入、驱动渲染更新、处理终端 resize
  * </ul>
+ *
+ * <p>所有光标移动和清屏操作使用原始 ANSI 转义码直接写入 terminal.writer()， 避免 JLine InfoCmp.Capability 在
+ * Windows/dumb-terminal 下不可用的问题。
  *
  * <p>参考 docs/alice-facade-tui/Layout.md
  */
@@ -43,6 +44,14 @@ public class ScreenManager implements AutoCloseable {
 
   /** 渲染帧间隔（毫秒） */
   private static final long FRAME_INTERVAL_MS = 100;
+
+  /** 补全菜单最大展示行数 —— 锁定渲染边界，杜绝菜单展开时整体界面位移 */
+  private static final int COMPLETION_LIST_MAX = 3;
+
+  /** ANSI 转义序列（所有光标定位走原生写入，不走 terminal.puts） */
+  private static final String ANSI_CLEAR_SCREEN = "\033[2J\033[H";
+
+  private static final String ANSI_CLEAR_LINE = "\033[K";
 
   private final Terminal terminal;
   private final LineReader reader;
@@ -63,7 +72,7 @@ public class ScreenManager implements AutoCloseable {
   /** 任务提交回调 */
   private Consumer<String> onTaskSubmit;
 
-  /** 清除回调 */
+  /** 清屏回调 */
   private Runnable onClear;
 
   /** 退出回调 */
@@ -78,8 +87,8 @@ public class ScreenManager implements AutoCloseable {
   /** 模型补全列表 */
   private static final List<String> MODEL_CANDIDATES =
       List.of(
-          "deepseek-v4-flash • medium",
-          "deepseek-v4-reasoning • deep",
+          "deepseek-v4-flash \u2022 medium",
+          "deepseek-v4-reasoning \u2022 deep",
           "gpt-4o-mini",
           "claude-3.5-sonnet");
 
@@ -100,12 +109,14 @@ public class ScreenManager implements AutoCloseable {
     StringsCompleter modelCompleter = new StringsCompleter(MODEL_CANDIDATES);
 
     // 3. 创建 LineReader（支持 AUTO_MENU 向上弹窗）
+    //    强制 LIST_MAX=3：补全菜单最多渲染 3 行，超出滚动——从根源锁死渲染边界
+    //    对应 Layout.md §1 视口与边界数学防御策略
     this.reader =
         LineReaderBuilder.builder()
             .terminal(terminal)
             .completer(modelCompleter)
             .option(LineReader.Option.AUTO_MENU, true)
-            .variable(LineReader.MENU_LIST_MAX, 10)
+            .variable(LineReader.LIST_MAX, COMPLETION_LIST_MAX)
             .build();
 
     // 4. 初始化组件
@@ -150,16 +161,23 @@ public class ScreenManager implements AutoCloseable {
 
   /** 启动 TUI */
   public void start() throws IOException {
-    // 清屏
-    terminal.puts(InfoCmp.Capability.clear_screen);
-    terminal.writer().flush();
+    java.io.Writer writer = terminal.writer();
+
+    // 清屏（ANSI 原生序列，兼容 dumb terminal）
+    writer.write(ANSI_CLEAR_SCREEN);
+    writer.flush();
 
     // 首次完整绘制
     fullRedraw();
+
+    // 渲染循环在首次绘制后启动，确保初始状态可见
     renderThread.start();
 
     // 欢迎消息
-    layout.thought().addSystemMessage("Alice Agent v0.1.0 TUI 已启动。输入 /help 查看可用命令。");
+    layout
+        .thought()
+        .addSystemMessage(
+            "Alice Agent v0.1.0 TUI \u5DF2\u542F\u52A8\u3002\u8F93\u5165 /help \u67E5\u770B\u53EF\u7528\u547D\u4EE4\u3002");
     contentDirty.set(true);
   }
 
@@ -170,7 +188,7 @@ public class ScreenManager implements AutoCloseable {
         event -> {
           switch (event) {
             case TuiEvent.StartThinking e -> {
-              layout.thought().addAgentMessage("思考中: " + e.prompt());
+              layout.thought().addAgentMessage("\u601D\u8003\u4E2D: " + e.prompt());
               contentDirty.set(true);
             }
             case TuiEvent.NewThought e -> {
@@ -204,7 +222,7 @@ public class ScreenManager implements AutoCloseable {
               contentDirty.set(true);
             }
             case TuiEvent.TaskError e -> {
-              layout.thought().addSystemMessage("错误: " + e.errorMessage());
+              layout.thought().addSystemMessage("\u9519\u8BEF: " + e.errorMessage());
               state.transitionTo(TuiState.State.ERROR);
               contentDirty.set(true);
             }
@@ -251,56 +269,71 @@ public class ScreenManager implements AutoCloseable {
 
   // ========== 渲染 ==========
 
-  /** 全屏重绘。 绘制 Header + 上分割线 + 滚动区内容 + 下分割线 + 输入区 + 下分割线 + 状态栏。 */
+  /** 将光标移动到终端的指定行（0-indexed）。 */
+  private void cursorLine(int row) {
+    java.io.Writer writer = terminal.writer();
+    try {
+      writer.write("\033[" + (row + 1) + ";1H");
+    } catch (IOException e) {
+      logger.warn("cursorLine failed: row={}", row, e);
+    }
+  }
+
+  /**
+   * 全屏重绘（v2.0 布局）。
+   *
+   * <p>绘制顺序：Header(含暗色延伸线) → 滚动区内容 → 上分割线 → 输入区 → 下分割线 → 状态栏。
+   *
+   * <p>所有光标定位使用原始 ANSI \033[row;colH 序列，避免 InfoCmp.Capability 在 Windows 下失效。
+   */
   private void fullRedraw() {
     java.io.Writer writer = terminal.writer();
 
     try {
-      // 保存光标位置
-      terminal.puts(InfoCmp.Capability.save_cursor);
-
-      // 1. Header
+      // 1. Header（自带暗色分隔线延伸到 [Session: xxx]）
       List<String> headerLines = layout.header().render();
       for (int i = 0; i < headerLines.size(); i++) {
-        terminal.puts(InfoCmp.Capability.cursor_address, layout.header().row() + i, 0);
+        cursorLine(layout.header().row() + i);
         writer.write(headerLines.get(i));
+        writer.write(ANSI_CLEAR_LINE);
       }
 
-      // 2. 上分割线
-      terminal.puts(InfoCmp.Capability.cursor_address, layout.separator1Row(), 0);
-      writer.write(layout.separatorLine());
-
-      // 3. 滚动区内容
+      // 2. 滚动区内容
       List<String> thoughtLines = layout.thought().render();
       for (int i = 0; i < thoughtLines.size(); i++) {
-        terminal.puts(InfoCmp.Capability.cursor_address, layout.contentStartRow() + i, 0);
-        writer.write(thoughtLines.get(i));
+        cursorLine(layout.contentStartRow() + i);
+        if (i < thoughtLines.size()) {
+          writer.write(thoughtLines.get(i));
+        }
+        writer.write(ANSI_CLEAR_LINE);
       }
 
-      // 4. 下分割线 (input上方)
-      terminal.puts(InfoCmp.Capability.cursor_address, layout.separator2Row(), 0);
+      // 3. 上分割线 (content 下方)
+      cursorLine(layout.separator1Row());
       writer.write(layout.separatorLine());
+      writer.write(ANSI_CLEAR_LINE);
 
-      // 5. 输入区行
+      // 4. 输入区行
       List<String> inputLines = layout.input().render();
       for (int i = 0; i < inputLines.size(); i++) {
-        terminal.puts(InfoCmp.Capability.cursor_address, layout.inputRow() + i, 0);
+        cursorLine(layout.inputRow() + i);
         writer.write(inputLines.get(i));
+        writer.write(ANSI_CLEAR_LINE);
       }
 
-      // 6. 下分割线 (input下方)
-      terminal.puts(InfoCmp.Capability.cursor_address, layout.separator3Row(), 0);
+      // 5. 下分割线 (input 下方)
+      cursorLine(layout.separator2Row());
       writer.write(layout.separatorLine());
+      writer.write(ANSI_CLEAR_LINE);
 
-      // 7. 底部状态栏
+      // 6. 底部状态栏（ANSI 256 色）
       List<String> footerLines = layout.footer().render();
       for (int i = 0; i < footerLines.size(); i++) {
-        terminal.puts(InfoCmp.Capability.cursor_address, layout.footerRow() + i, 0);
+        cursorLine(layout.footerRow() + i);
         writer.write(footerLines.get(i));
+        writer.write(ANSI_CLEAR_LINE);
       }
 
-      // 恢复光标位置
-      terminal.puts(InfoCmp.Capability.restore_cursor);
       writer.flush();
 
     } catch (IOException e) {
@@ -308,38 +341,38 @@ public class ScreenManager implements AutoCloseable {
     }
   }
 
-  /** 仅重绘上方滚动区（Header + 上分割线 + 滚动内容 + 下分割线）。 不触碰输入行和状态栏，避免闪烁。 */
+  /**
+   * 仅重绘上方滚动区（Header + 滚动内容 + 上分割线）。
+   *
+   * <p>不触碰输入行和状态栏，避免闪烁。分割线使用 ANSI 暗色渲染。
+   */
   private void redrawScrollArea() {
     java.io.Writer writer = terminal.writer();
 
     try {
-      // 1. Header
+      // 1. Header（自带暗色延伸分隔线）
       List<String> headerLines = layout.header().render();
       for (int i = 0; i < headerLines.size(); i++) {
-        terminal.puts(InfoCmp.Capability.cursor_address, layout.header().row() + i, 0);
+        cursorLine(layout.header().row() + i);
         writer.write(headerLines.get(i));
+        writer.write(ANSI_CLEAR_LINE);
       }
 
-      // 2. 上分割线
-      terminal.puts(InfoCmp.Capability.cursor_address, layout.separator1Row(), 0);
-      writer.write(layout.separatorLine());
-
-      // 3. 滚动区内容（逐行重绘）
+      // 2. 滚动区内容（逐行重绘）
       List<String> thoughtLines = layout.thought().render();
       int contentRows = layout.contentHeight();
       for (int i = 0; i < contentRows; i++) {
-        terminal.puts(InfoCmp.Capability.cursor_address, layout.contentStartRow() + i, 0);
+        cursorLine(layout.contentStartRow() + i);
         if (i < thoughtLines.size()) {
           writer.write(thoughtLines.get(i));
-        } else {
-          // 空行填充
-          writer.write(" ".repeat(layout.terminalWidth()));
         }
+        writer.write(ANSI_CLEAR_LINE);
       }
 
-      // 4. 下分割线 (input上方)
-      terminal.puts(InfoCmp.Capability.cursor_address, layout.separator2Row(), 0);
+      // 3. 上分割线 (content 下方)
+      cursorLine(layout.separator1Row());
       writer.write(layout.separatorLine());
+      writer.write(ANSI_CLEAR_LINE);
 
       writer.flush();
     } catch (IOException e) {
@@ -367,10 +400,10 @@ public class ScreenManager implements AutoCloseable {
   /**
    * 运行主输入循环。
    *
-   * <p>使用 JLine 3 LineReader 的 readLine() 方法处理用户输入。 LineReader 原生支持 AUTO_MENU（自动完成弹窗），
-   * 补全列表在输入行上方展开（向上顶出），覆盖上方滚动区末尾内容。
+   * <p>使用 JLine 3 LineReader 的 readLine() 方法处理用户输入。 LineReader 原生支持 AUTO_MENU（自动完成弹窗）， LIST_MAX=3
+   * 强制限制补全菜单最大行数，从根源锁死渲染边界。
    *
-   * <p>对应 Layout.md §7.2 /model 指令的 AutoComplete Popup Mode。
+   * <p>对应 Layout.md §1 视口与边界数学防御策略 + §7.2 Inline Completion Mode。
    */
   public void runInputLoop() {
     try {
@@ -381,12 +414,12 @@ public class ScreenManager implements AutoCloseable {
           contentDirty.set(false);
         }
 
-        // 定位光标到输入区
-        terminal.puts(InfoCmp.Capability.cursor_address, layout.inputRow(), 0);
+        // 定位光标到输入区（原始 ANSI 序列）
+        cursorLine(layout.inputRow());
         terminal.writer().flush();
 
         // 使用 JLine 3 LineReader 读取输入（支持 AUTO_MENU 补全弹窗）
-        // 补全菜单在输入行上方自然展开，不干扰分割线和状态栏
+        // 补全菜单在输入行上方自然展开，最多 3 行（LIST_MAX=3），不干扰下方分割线和状态栏
         String line;
         try {
           line = reader.readLine(layout.input().prompt());
@@ -423,7 +456,10 @@ public class ScreenManager implements AutoCloseable {
 
         // 检查是否允许提交任务
         if (state.isRunning()) {
-          layout.thought().addSystemMessage("Agent 正在执行中，请等待完成或按 F5 停止。");
+          layout
+              .thought()
+              .addSystemMessage(
+                  "Agent \u6B63\u5728\u6267\u884C\u4E2D\uFF0C\u8BF7\u7B49\u5F85\u5B8C\u6210\u6216\u6309 F5 \u505C\u6B62\u3002");
           contentDirty.set(true);
           continue;
         }
@@ -506,7 +542,7 @@ public class ScreenManager implements AutoCloseable {
       Thread.currentThread().interrupt();
     }
     try {
-      terminal.puts(InfoCmp.Capability.clear_screen);
+      terminal.writer().write(ANSI_CLEAR_SCREEN);
       terminal.writer().flush();
     } catch (Exception e) {
       logger.warn("Error clearing screen on close", e);

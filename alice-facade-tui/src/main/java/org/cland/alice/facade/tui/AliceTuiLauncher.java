@@ -411,10 +411,24 @@ public class AliceTuiLauncher implements AutoCloseable {
    * @return 退出码
    */
   public static int launch(String[] args) {
-    // 强制 UTF-8 输出编码（解决 Windows GBK 终端中文乱码）
+    // 1. 锁死编码
     System.setProperty("file.encoding", "UTF-8");
-    System.setProperty("sun.stdout.encoding", "UTF-8");
-    System.setProperty("sun.stderr.encoding", "UTF-8");
+
+    // 2. 【核心修复】强行通知 JLine 允许在 Windows 10+ / Linux 管道中使用 ANSI 逃逸码
+    System.setProperty("org.jline.terminal.jansi", "true");
+    System.setProperty("org.jline.terminal.exec", "true");
+
+    // 3. 如果在 Windows 下，强制开启原生控制台虚拟终端模式
+    // 这能让左边那些 [1;1H 控制码瞬间被终端本身消化掉，变成真正的物理定位
+    try {
+      if (System.getProperty("os.name").toLowerCase().contains("win")) {
+        // 反射安全调用 JANSI，完美契合 GraalVM AOT（即使无硬编码编译依赖也能降级正常编译）
+        Class<?> ansiConsole = Class.forName("org.fusesource.jansi.AnsiConsole");
+        ansiConsole.getMethod("systemInstall").invoke(null);
+      }
+    } catch (Throwable t) {
+      // 静默降级：说明处于纯 Linux SSH 或者无需特权接管的环境
+    }
 
     try {
       String apiKey = System.getenv("OPENAI_API_KEY");

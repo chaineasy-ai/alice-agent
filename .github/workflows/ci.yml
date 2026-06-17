@@ -1,7 +1,15 @@
-# Alice Agent CI — Build, Test & Package
+# Alice Agent CI — Build, Test, Package & Native Image
 #
 # 构建全模块，运行所有测试，产出最终终端应用（TUI + CLI）的可分发归档。
-# 最终产物：alice-bootstrap/build/distributions/ — 包含启动脚本和所有依赖的完整运行环境。
+# 额外构建 GraalVM Native Image 可执行文件，大幅提升启动速度和降低内存占用。
+#
+# Native Image 产物：
+#   alice-bootstrap/build/native/nativeCompile/alice-agent*
+#     — Linux/macOS: ELF/Mach-O 可执行文件（压缩后约 20-30MB）
+#
+# 最终分发包：
+#   alice-bootstrap/build/install/alice-agent/
+#     — JVM 运行时（启动脚本 + 所有依赖 JAR）
 
 name: CI
 
@@ -35,17 +43,17 @@ jobs:
       - name: Run all tests
         run: ./gradlew test --no-daemon
 
-      - name: Build final distribution (CLI + TUI)
+      - name: Build final JVM distribution (CLI + TUI)
         run: ./gradlew :alice-bootstrap:installDist --no-daemon
 
-      - name: Upload final terminal application artifact
+      - name: Upload JVM distribution artifact
         uses: actions/upload-artifact@v4
         with:
-          name: alice-agent-dist
+          name: alice-agent-jvm-dist
           path: alice-bootstrap/build/install/alice-agent/
           retention-days: 7
 
-      - name: Verify terminal launcher
+      - name: Verify JVM launcher
         run: |
           echo "=== Build Artifacts ==="
           ls -la alice-bootstrap/build/install/alice-agent/bin/
@@ -54,11 +62,55 @@ jobs:
           ls -la alice-bootstrap/build/install/alice-agent/lib/*.jar | wc -l
           echo "JARs total"
           echo ""
-          echo "=== TUI Launcher check ==="
+          echo "=== Launcher check ==="
           if [ -f alice-bootstrap/build/install/alice-agent/bin/alice-agent ]; then
-            echo "✅ Terminal application ready: alice-agent/bin/alice-agent"
-            echo "   Run with --tui flag to start TUI mode"
+            echo "✅ JVM distribution ready: alice-agent/bin/alice-agent"
           else
-            echo "❌ Terminal application not found"
+            echo "❌ JVM distribution not found"
             exit 1
           fi
+
+  native-image:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up GraalVM JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: 25
+          distribution: graalvm
+          cache: gradle
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Install native-image tool
+        run: |
+          gu install native-image || echo "native-image already installed"
+
+      - name: Build Native Image
+        run: ./gradlew :alice-bootstrap:nativeCompile --no-daemon
+
+      - name: Verify native binary
+        run: |
+          echo "=== Native Image Binary ==="
+          ls -lh alice-bootstrap/build/native/nativeCompile/
+          echo ""
+          if [ -f alice-bootstrap/build/native/nativeCompile/alice-agent ]; then
+            file alice-bootstrap/build/native/nativeCompile/alice-agent
+            echo ""
+            echo "✅ GraalVM Native Image built successfully"
+          else
+            echo "❌ Native image binary not found"
+            exit 1
+          fi
+
+      - name: Upload Native Image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: alice-agent-native
+          path: alice-bootstrap/build/native/nativeCompile/alice-agent*
+          retention-days: 7

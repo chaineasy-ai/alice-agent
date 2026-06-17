@@ -26,25 +26,37 @@ updated: "2026-06-17"
 
 ### Features
 
-- **alice-bootstrap: Pure Bootstrapper refactoring** — 模块退化为纯引导程序，彻底解除对 `alice-core-agent`、`alice-model`、`alice-agent-command` 的直接依赖。
-  - 删除 `AliceAgent.java`，其职责（ModelProvider 初始化、AgentConfig 解析、Agent 编排）完全由 facade 模块自行承担
-  - `FacadeSelector` 不再持有 `Agent` 参数，仅接受原始 `String[] args`，业务配置的解析下放至 `AliceCliLauncher`/`AliceTuiLauncher`
-  - `AliceApp.main()` 简化为：检测 facade 类型 → 传递原始 args → 退出码传播
-  - 新增 `AliceTuiLauncher.launch(args)` 自包含公共启动入口，无需外部传入 Agent 实例
-  - `module-info.java` 精简为仅 `requires alice.agent.facade.cmd.main` + `alice.agent.facade.tui.main`
-  - `build.gradle` 移除 `alice-core-agent`、`alice-model`、`alice-agent-command` 实现依赖
-  - 全链路 UTF-8 三级固化：JVM 编译/运行/原生镜像各层独立配置 `-Dfile.encoding=UTF-8`
-  - 新增 GraalVM Native Image 支持：`org.graalvm.buildtools.native` 插件 + `--default-charset=UTF-8`
-  - 文档：更新 `README.md` 添加 GraalVM 构建命令（`nativeCompile`/`nativeRun`）
+- **alice-facade-tui/TUI v2.0 布局重构**: 基于 `docs/alice-facade-tui/Layout.md` v2.0 重写 TUI 布局，减少固定行数并融合分割线。
+  - **合并顶部分割线到 Header**: Header 行自带 ANSI 暗色 `─` 延伸到 `[Session: xxx]` 标签，移除独立的上方分隔行，FIXED_ROWS 从 6 → 5
+  - **HeaderComponent**: 新增 `sessionLabel` 字段 + setter/getter；右侧对齐 `[Session: xxx]`；格式为 `🤖 alice-agent v0.1.0 ───────────── [Session: xxx]`
+  - **FooterComponent**: ANSI 256 色分级渲染——橙色 `#214m` 费用、蓝色 `#75m` 速率、绿色 `#118m` 模型、紫色 `#141m` 工具；新增 `stripAnsi()` helper 精确计算宽度
+  - **TuiLayout**: 移除顶部分隔行；`separator1Row` = content-input 分界，`separator2Row` = input-footer 分界；使用 ANSI dim `\033[38;5;242m` 渲染分割线
+  - **ScreenManager**: 全部 `terminal.puts(InfoCmp.Capability.*)` 替换为直接 ANSI 转义码写入 `terminal.writer()`；新增 `COMPLETION_LIST_MAX=3` 常量锁定补丁菜单边界
+  - **固定输入框补全列表硬限 3 行**: `reader.setVariable(LineReader.LIST_MAX, 3)` 防止布局偏移
 
-- **alice-facade-tui/UTF-8 三级编码固化**: 
-  - `AliceTuiLauncher.launch()` 在终端创建前设置 `file.encoding`/`sun.stdout.encoding`/`sun.stderr.encoding` 为 UTF-8
-  - `ScreenManager` 创建 TerminalBuilder 时显式指定 `.encoding(StandardCharsets.UTF_8)`
-  - 所有 TUI 输出严格通过 `terminal.writer()`，杜绝混用 `System.out`
+- **alice-bootstrap/GraalVM Native Image 构建链路**: 完整支持 `nativeCompile` 任务，解决 Windows 原生二进制 TUI 运行问题。
+  - 升级 `org.graalvm.buildtools.native` 插件至 `0.11.5`
+  - 添加 JANSI `2.4.1` + JNA `5.14.0` 显式依赖（GraalVM AOT 必需）
+  - 构建参数：`--initialize-at-run-time` 推迟 Netty/Vert.x/JANSI/JNA 初始化到运行时
+  - `--enable-native-access=ALL-UNNAMED` + `--add-opens=java.base/java.lang=ALL-UNNAMED`
+  - 反射安全调用 `AnsiConsole.systemInstall()`（`Class.forName` 动态加载）
+  - 设置 `-Dsun.stdout.encoding=UTF-8`、`-Dsun.stderr.encoding=UTF-8` 固化编码
 
-### Docs
+- **CI 流水线（`.github/workflows/ci.yml`）**: 新增并行 `native-image` 任务。
+  - `build` 任务：Temurin 25 + `cache: gradle` → `assemble` → `test` → `installDist` → 上传 JVM 分发包
+  - `native-image` 任务：GraalVM 25 → `gu install native-image` → `nativeCompile` → 上传原生二进制
+  - 触发条件：PR 到 `main` + push 到 `main`/`develop`
 
-- **README.md**: 新增 GraalVM Native Image 构建与运行说明（`nativeCompile`/`nativeRun`）
+### Fixes
+
+- **alice-facade-tui/HeaderComponent 可见宽度计算**: 修复因未考虑 ANSI 转义码字节长度导致的 `─` 分隔线不能占满终端宽度的问题。padding 和 truncation 现在基于可见字符计数而非字符串字节长度。
+- **alice-facade-tui/FooterComponent 截断逻辑**: 修复 `plain.length() > width` 时错误截断 ANSI 码导致颜色泄漏的问题。改为逐字符遍历，仅计数可见字符，完整保留 ANSI 色码。
+- **alice-facade-tui/AliceTuiLauncher JANSI 编译错误**: 移除在 `try-catch` 块中对 `org.fusesource.jansi.AnsiConsole` 的硬编码引用，改用 `Class.forName()` 反射调用，消除编译期依赖缺失错误。
+- **alice-bootstrap/native-image 自定义配置**: 移除格式错误的 `jni-config.json`/`reflect-config.json`（对象格式应为数组），依赖插件 `generateResourcesConfigFile` 自动生成。
+
+### CI
+
+- **`.github/workflows/ci.yml` parallel native-image build**: 新建 `native-image` 并行 job，避免所有构建强制走 GraalVM，分开缓存和构建环境。
 
 ---
 

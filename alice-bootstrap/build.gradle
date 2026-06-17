@@ -66,9 +66,37 @@ graalvmNative {
     binaries {
         main {
             imageName = 'alice-agent'
-            // 向 GraalVM 编译器传递参数
-            buildArgs.add('-H:+AddAllCharsets') // 确保打包了所有的字符集（包含 UTF-8, GBK 等）
-            buildArgs.add('-Dfile.encoding=UTF-8') // 强制指定运行时默认编码为 UTF-8
+
+            // 1. 【核心修复】解锁实验性参数（必须放在最前面，压制 json-schema-validator 的警告）
+            buildArgs.add('-H:+UnlockExperimentalVMOptions')
+
+            // 2. 【核心修复】用最高兼容性的 -D 语法锁死编译期和运行期编码
+            // GraalVM 会在 AOT 阶段捕获这个系统变量并固化进原生快照的 System.getProperties() 中
+            buildArgs.add('-Dfile.encoding=UTF-8')
+            buildArgs.add('-Dsun.stdout.encoding=UTF-8')
+            buildArgs.add('-Dsun.stderr.encoding=UTF-8')
+            buildArgs.add('-H:+AddAllCharsets')
+
+            // 3. Vert.x / Netty / JNA: 运行时初始化配置
+            buildArgs.add('--initialize-at-run-time=io.netty.util.internal.logging')
+            buildArgs.add('--initialize-at-run-time=io.netty.util.internal.PlatformDependent')
+            buildArgs.add('--initialize-at-run-time=io.vertx')
+            buildArgs.add('--initialize-at-run-time=com.sun.jna')
+            buildArgs.add('--initialize-at-run-time=org.jline')
+
+            // JANSI: 必须在运行时初始化，防止 AOT 阶段加载 Windows DLL 失败
+            buildArgs.add('--initialize-at-run-time=org.fusesource.jansi')
+            buildArgs.add('--initialize-at-run-time=org.fusesource.hawtjni')
+            buildArgs.add('--initialize-at-run-time=org.jline.terminal.impl.jansi')
+
+            // 4. Java 25 模块化加固与 JLine 管道反射开放
+            buildArgs.add('--enable-native-access=ALL-UNNAMED')
+            buildArgs.add('--add-opens=java.base/java.lang=ALL-UNNAMED')
+            buildArgs.add('--add-opens=java.base/io=ALL-UNNAMED')
+
+            buildArgs.add('--initialize-at-run-time=org.jline.terminal.impl.jna.win.JnaWinSysTerminal')
+            buildArgs.add('--initialize-at-run-time=org.jline.terminal.impl.jna.linux.LinuxNativeTerminal')
+            // 确保引入了 JLine 的 JNA 适配包，这是脱离 JVM 后原生程序能抓到系统控制台句柄的底座
         }
     }
 }

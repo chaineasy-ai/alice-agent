@@ -8,28 +8,28 @@ import org.cland.alice.facade.tui.component.*;
  *
  * <p>对应 docs/alice-facade-tui/Layout.md §7.1 沉浸式三看板常态布局（TAO Standard Mode）。
  *
- * <p>通过两条统一单线 `────────────────────────────────────────` 将终端垂直划分为三大固定区域：
+ * <p>布局结构（v2.0 终极版）：
  *
  * <pre>
- *  alice v0.1.0                                                                      ← Header (1行)
- * ────────────────────────────────────────────────────────────────────────────────   ← 上分割线 (1行)
- *  [T Thought]: ...                                                                   ← 上方滚动区（可变高度）
+ *  \uD83E\uDD16 alice-agent v0.1.0 \u2500\u2500\u2500\u2500\u2500 [Session: xxx]          ← Header (1行，自带末端分隔线)
+ *  [T Thought]: ...                                                                  ← 上方滚动区（可变高度）
  *  [A Action ]: ...
  *  [O Observe]: ...
- *                                                                                     ← 空行
- * ────────────────────────────────────────────────────────────────────────────────   ← 下分割线 (1行)
- *  > /_                                                                              ← 居中输入区域 (1行)
- * ────────────────────────────────────────────────────────────────────────────────   ← 下分割线 (1行)
- *  💰 Cost: $0.041 | 📊 Speed: 125 t/s | 🧠 Model: ... | 🔌 Active Tool: ...        ← 底部状态栏 (1行)
+ * \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500   ← 上分割线 (1行)
+ *  > /_                                                                              ← 居中输入区 (1行)
+ * \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500   ← 下分割线 (1行)
+ *  \u001B[38;5;214m\uD83D\uDCB0 $0.041\u001B[0m \u001B[38;5;242m\u2502\u001B[0m ...       ← 底部状态栏 (1行，ANSI 256 色)
  * </pre>
  *
- * <p>分区规则：
+ * <p>分区规则（v2.0）：
  *
  * <ol>
- *   <li>上方滚动区：业务日志、思考/动作/观测流输出，内容正常向上滚动
- *   <li>中间输入区：被两条分割线包裹
- *   <li>底部状态栏：计费、速率、模型、工具等核心指标，全程固定在页面最底端
+ *   <li>上方滚动区：Header 行之后（Header 自带暗色分隔线），业务日志向上滚动
+ *   <li>中间输入区：被两条独立分割线包裹
+ *   <li>底部状态栏：ANSI 彩色渲染，全程物理固定
  * </ol>
+ *
+ * <p>固定非内容行数 = Header(1) + 上分割线(1) + Input(1) + 下分割线(1) + Status(1) = 5
  */
 public class TuiLayout {
 
@@ -40,12 +40,15 @@ public class TuiLayout {
   public static final int INPUT_HEIGHT = 1;
   public static final int STATUS_HEIGHT = 1;
 
-  /** 固定非内容行数 = Header + 上分割线 + 下分割线 + Input + 下分割线 + Status = 6 */
+  /** 固定非内容行数 = Header + 上分割线 + Input + 下分割线 + Status = 5 */
   public static final int FIXED_ROWS =
-      HEADER_HEIGHT + SEPARATOR_HEIGHT + SEPARATOR_HEIGHT + INPUT_HEIGHT + STATUS_HEIGHT;
+      HEADER_HEIGHT + SEPARATOR_HEIGHT + INPUT_HEIGHT + SEPARATOR_HEIGHT + STATUS_HEIGHT;
 
-  /** 分割线字符 */
+  /** 分割线字符 (ANSI 暗色) */
   static final char SEPARATOR_CHAR = '\u2500'; // ─
+
+  static final String ANSI_DIM_SEP = "\u001B[38;5;242m";
+  static final String ANSI_RESET = "\u001B[0m";
 
   private final HeaderComponent header;
   private final ThoughtComponent thought;
@@ -58,13 +61,12 @@ public class TuiLayout {
   private int terminalHeight;
 
   /** 各区域的起始行 */
-  private int separator1Row;
-
   private int contentStartRow;
+
   private int contentHeight;
-  private int separator2Row;
+  private int separator1Row; // content 和 input 之间的分割线
   private int inputRow;
-  private int separator3Row;
+  private int separator2Row; // input 和 footer 之间的分割线
   private int footerRow;
 
   public TuiLayout(
@@ -86,35 +88,30 @@ public class TuiLayout {
     // 布局计算（从顶到底）
     int currentRow = 0;
 
-    // 1. Header: row 0
+    // 1. Header: row 0 (自带暗色分隔线，不占用额外行)
     header.setBounds(currentRow, 0, this.terminalWidth, HEADER_HEIGHT);
     currentRow += HEADER_HEIGHT;
 
-    // 2. 上分割线: row 1
-    separator1Row = currentRow;
-    currentRow += SEPARATOR_HEIGHT;
-
-    // 3. 上方滚动区: 剩余高度减去固定底部区域
+    // 2. 上方滚动区: 直接从 Header 下一行开始
     contentStartRow = currentRow;
     contentHeight = this.terminalHeight - FIXED_ROWS;
-
     thought.setBounds(contentStartRow, 0, this.terminalWidth, contentHeight);
     currentRow = contentStartRow + contentHeight;
 
-    // 4. 下分割线 (input上方)
-    separator2Row = currentRow;
+    // 3. 上分割线 (content 和 input 之间)
+    separator1Row = currentRow;
     currentRow += SEPARATOR_HEIGHT;
 
-    // 5. 输入区
+    // 4. 输入区
     inputRow = currentRow;
     input.setBounds(inputRow, 0, this.terminalWidth, INPUT_HEIGHT);
     currentRow += INPUT_HEIGHT;
 
-    // 6. 下分割线 (input下方)
-    separator3Row = currentRow;
+    // 5. 下分割线 (input 和 footer 之间)
+    separator2Row = currentRow;
     currentRow += SEPARATOR_HEIGHT;
 
-    // 7. 底部状态栏
+    // 6. 底部状态栏
     footerRow = currentRow;
     footer.setBounds(footerRow, 0, this.terminalWidth, STATUS_HEIGHT);
 
@@ -139,19 +136,14 @@ public class TuiLayout {
     return inputRow;
   }
 
-  /** 获取上分割线行号 */
+  /** 获取 content 下方分割线行号 */
   public int separator1Row() {
     return separator1Row;
   }
 
-  /** 获取 input 上方分割线行号 */
+  /** 获取 input 下方分割线行号 */
   public int separator2Row() {
     return separator2Row;
-  }
-
-  /** 获取 input 下方分割线行号 */
-  public int separator3Row() {
-    return separator3Row;
   }
 
   /** 获取底部状态栏行号 */
@@ -164,12 +156,18 @@ public class TuiLayout {
     return footerRow + STATUS_HEIGHT - 1;
   }
 
-  /** 生成分割线字符串 */
+  /**
+   * 生成 ANSI 暗色分割线字符串。
+   *
+   * <p>使用 \u001B[38;5;242m（暗灰色）绘制，降低视觉噪音。
+   */
   public String separatorLine() {
-    StringBuilder sb = new StringBuilder(terminalWidth);
+    StringBuilder sb = new StringBuilder(terminalWidth + 16);
+    sb.append(ANSI_DIM_SEP);
     for (int i = 0; i < terminalWidth; i++) {
       sb.append(SEPARATOR_CHAR);
     }
+    sb.append(ANSI_RESET);
     return sb.toString();
   }
 

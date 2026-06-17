@@ -12,3 +12,9 @@ updated: "2026-06-13"
 ```bash
 ./alice-bootstrap/build/install/alice-agent/bin/alice-agent --tui
 ```
+# win
+```
+@echo off
+chcp 65001 >nul
+alice-bootstrap.exe
+```
