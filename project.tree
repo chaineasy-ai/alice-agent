@@ -220,7 +220,6 @@
 │      └── resources
 ├── alice-facade-cmd
 │  ├── ~
-│  │  └── .alice
 │  ├── build.gradle
 │  └── src
 │    ├── main
@@ -617,7 +616,6 @@
 │  ├── case
 │  │  └── infinite-loop-ppao.md
 │  ├── CHANGELOG规范.md
-│  ├── cli
 │  ├── config
 │  │  ├── config.json
 │  │  ├── example.yaml
@@ -637,19 +635,11 @@
 │  ├── module-info
 │  │  └── README.md
 │  ├── OpenAI Chat Completions 消息对象规范.md
-│  ├── README.md
-│  ├── tui
-│  └── wal
-├── dtcw
+│  └── README.md
 ├── e2e
-│  ├── __pycache__
-│  │  └── alice_agent_e2e.cpython-312.pyc
 │  ├── aimock
 │  ├── alice_agent_e2e.py
 │  ├── gemma4
-│  │  ├── __pycache__
-│  │  │  ├── gemma_4_client.cpython-312.pyc
-│  │  │  └── gemma4_e2e_test.cpython-312.pyc
 │  │  ├── gemma_4_client.py
 │  │  ├── gemma4_e2e_test.py
 │  │  ├── pyproject.toml
@@ -694,21 +684,19 @@
 │  │  ├── research.md
 │  │  ├── spec.md
 │  │  └── tasks.md
-│  ├── 003-sub-agent-acp
-│  │  ├── checklists
-│  │  │  └── requirements.md
-│  │  ├── contracts
-│  │  │  ├── AcpClient-contract.md
-│  │  │  ├── SubAgentCmd-contract.md
-│  │  │  └── SubAgentRegistry-contract.md
-│  │  ├── data-model.md
-│  │  ├── plan.md
-│  │  ├── quickstart.md
-│  │  ├── research.md
-│  │  ├── spec.md
-│  │  └── tasks.md
-│  └── 004-bootstrap-pure-bootstrapper
-│    └── checklists
+│  └── 003-sub-agent-acp
+│    ├── checklists
+│    │  └── requirements.md
+│    ├── contracts
+│    │  ├── AcpClient-contract.md
+│    │  ├── SubAgentCmd-contract.md
+│    │  └── SubAgentRegistry-contract.md
+│    ├── data-model.md
+│    ├── plan.md
+│    ├── quickstart.md
+│    ├── research.md
+│    ├── spec.md
+│    └── tasks.md
 ├── TECH_STACK.md
 └── todos
   └── TODO-spec.md
