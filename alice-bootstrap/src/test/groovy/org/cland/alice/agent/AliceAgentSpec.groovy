@@ -1,8 +1,12 @@
 /*
- * Spock specification for alice-bootstrap module (Pure Bootstrapper).
+ * Spock specification for alice-bootstrap module (Pure Bootstrapper, SPI-based).
  *
- * Tests FacadeSelector routing and AliceApp exit codes.
+ * Tests FacadeSelector SPI discovery and AliceApp exit codes.
  * Does NOT test Agent/Model/Config — those are handled by facade modules.
+ *
+ * Note: These tests require alice-facade-cmd on the test classpath so that
+ * ServiceLoader can discover AliceCliFacade. The bootstrap build.gradle
+ * declares testImplementation project(':alice-facade-cmd') for this reason.
  */
 package org.cland.alice.agent
 
@@ -23,51 +27,31 @@ class AliceAgentSpec extends Specification {
     }
 
     // ================================================================
-    // FacadeSelector routing logic
+    // FacadeSelector.launch() — SPI-based routing
     // ================================================================
 
-    def "FacadeSelector detects TUI mode from --tui flag"() {
+    def "FacadeSelector.launch with no args delegates to CLI facade (requires subcommand → exit 2)"() {
         expect:
-        FacadeSelector.detect(["--tui"] as String[]) == FacadeSelector.FacadeType.TUI
+        FacadeSelector.launch([] as String[]) == AliceApp.EXIT_PARAM_ERROR
     }
 
-    def "FacadeSelector detects TUI mode from -t flag"() {
+    def "FacadeSelector.launch with null args returns runtime error (NPE from picocli)"() {
         expect:
-        FacadeSelector.detect(["-t"] as String[]) == FacadeSelector.FacadeType.TUI
+        FacadeSelector.launch(null) == AliceApp.EXIT_RUNTIME_ERROR
     }
 
-    def "FacadeSelector detects CLI mode from --cli flag"() {
+    def "FacadeSelector.launch with --cli flag delegates to CLI facade"() {
         expect:
-        FacadeSelector.detect(["--cli"] as String[]) == FacadeSelector.FacadeType.CLI
+        FacadeSelector.launch(["--cli"] as String[]) == AliceApp.EXIT_PARAM_ERROR
     }
 
-    def "FacadeSelector defaults to CLI when no flags given"() {
+    def "FacadeSelector.launch with --tui flag delegates to TUI facade (returns 0 in test mode)"() {
         expect:
-        FacadeSelector.detect([] as String[]) == FacadeSelector.FacadeType.CLI
-        FacadeSelector.detect(null) == FacadeSelector.FacadeType.CLI
+        FacadeSelector.launch(["--tui"] as String[]) == AliceApp.EXIT_SUCCESS
     }
 
-    def "FacadeSelector --cli overrides --tui"() {
+    def "FacadeSelector.launch with 'run' subcommand delegates to AliceCliLauncher"() {
         expect:
-        FacadeSelector.detect(["--tui", "--cli"] as String[]) == FacadeSelector.FacadeType.CLI
-    }
-
-    // ================================================================
-    // FacadeSelector.launch() basic smoke tests
-    // ================================================================
-
-    def "FacadeSelector.launch CLI with no args returns EXIT_SUCCESS (prints help)"() {
-        expect:
-        FacadeSelector.launch(FacadeSelector.FacadeType.CLI, [] as String[]) == AliceApp.EXIT_SUCCESS
-    }
-
-    def "FacadeSelector.launch CLI with null args returns EXIT_SUCCESS (prints help)"() {
-        expect:
-        FacadeSelector.launch(FacadeSelector.FacadeType.CLI, null) == AliceApp.EXIT_SUCCESS
-    }
-
-    def "FacadeSelector.launch CLI with 'run' subcommand delegates to AliceCliLauncher"() {
-        expect:
-        FacadeSelector.launch(FacadeSelector.FacadeType.CLI, ["run", "测试任务"] as String[]) == AliceApp.EXIT_SUCCESS
+        FacadeSelector.launch(["run", "测试任务"] as String[]) == AliceApp.EXIT_SUCCESS
     }
 }

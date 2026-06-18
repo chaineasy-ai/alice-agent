@@ -7,9 +7,8 @@
  * 不涉及真实的 LLM 调用、TUI 屏幕或文件系统 IO。
  * 仅验证 dispatch switch 表达式能接收所有 AgentCommand 子类型并正确路由。
  *
- * 注意：alice-bootstrap 现已退化为 Pure Bootstrapper，不再持有 Agent/Model/Config。
- *       AliceCliLauncher 的 dispatchCommand 属于 alice-facade-cmd 模块的职责，
- *       此处仅做集成验证，确保链路可达。
+ * 注意：alice-bootstrap 使用 SPI 发现 facade 模块。以下测试依赖于
+ *       alice-facade-cmd 在测试 classpath 上（通过 testImplementation 引入）。
  */
 package org.cland.alice.agent
 
@@ -24,59 +23,27 @@ class CommandDispatchLoopSpec extends Specification {
     static final String TRACE   = "test-trace"
 
     // ================================================================
-    // 1. FacadeSelector 选择逻辑
+    // 1. FacadeSelector.launch()  SPI 路由验证
     // ================================================================
 
-    def "FacadeSelector.detect() 默认返回 CLI"() {
+    def "FacadeSelector.launch 无参数时通过 CLI facade 返回 EXIT_PARAM_ERROR"() {
         expect:
-        FacadeSelector.detect([]        as String[]) == FacadeSelector.FacadeType.CLI
-        FacadeSelector.detect(null                  ) == FacadeSelector.FacadeType.CLI
-        FacadeSelector.detect(["--cli"] as String[]) == FacadeSelector.FacadeType.CLI
-        FacadeSelector.detect(["-c"]    as String[]) == FacadeSelector.FacadeType.CLI
+        FacadeSelector.launch([] as String[]) == AliceApp.EXIT_PARAM_ERROR
     }
 
-    def "FacadeSelector.detect() 识别 TUI 模式"() {
+    def "FacadeSelector.launch 使用 run 子命令传入 CLI 层"() {
         expect:
-        FacadeSelector.detect(["--tui"] as String[]) == FacadeSelector.FacadeType.TUI
-        FacadeSelector.detect(["-t"]    as String[]) == FacadeSelector.FacadeType.TUI
+        FacadeSelector.launch(["run", "测试任务"] as String[]) == AliceApp.EXIT_SUCCESS
     }
 
-    def "FacadeSelector.detect() 中 --cli 覆盖 --tui"() {
+    def "FacadeSelector.launch 使用 --tui 触发 TUI facade 发现"() {
         expect:
-        FacadeSelector.detect(["--tui", "--cli"] as String[]) == FacadeSelector.FacadeType.CLI
+        FacadeSelector.launch(["--tui"] as String[]) == AliceApp.EXIT_SUCCESS
     }
 
-    // ================================================================
-    // 2. FacadeSelector.launch() 启动链路验证
-    // ================================================================
-
-    def "launch CLI 无参数时打印帮助并返回 EXIT_SUCCESS"() {
-        when:
-        def exitCode = FacadeSelector.launch(FacadeSelector.FacadeType.CLI, [] as String[])
-
-        then:
-        exitCode == AliceApp.EXIT_SUCCESS
-    }
-
-    def "launch CLI 使用 run 子命令传入 CLI 层"() {
-        when:
-        def exitCode = FacadeSelector.launch(FacadeSelector.FacadeType.CLI, ["run", "测试任务"] as String[])
-
-        then:
-        exitCode == AliceApp.EXIT_SUCCESS  // 链路到达了 CLI run() 并成功执行
-    }
-
-    def "launch TUI 时 FacadeSelector 路由到 AliceTuiLauncher 链路验证 — 仅验证路由方法不抛异常"() {
-        when:
-        // 注意：AliceTuiLauncher.launch() 在无 ANSI 终端的测试环境中会创建
-        // "dumb terminal" 并进入输入循环，产生大量 TUI 垃圾输出。
-        // 因此不在单元测试中实际调用，仅验证 FacadeSelector 的路由成立。
-        def detectedType = FacadeSelector.detect(["--tui"] as String[])
-
-        then:
-        detectedType == FacadeSelector.FacadeType.TUI
-        // FacadeSelector.launch(TUI, args) 会调用 AliceTuiLauncher.launch(args)
-        // 该调用链路在集成/手动测试中验证
+    def "FacadeSelector.launch 使用 --cli 触发 CLI facade"() {
+        expect:
+        FacadeSelector.launch(["--cli"] as String[]) == AliceApp.EXIT_PARAM_ERROR
     }
 
     // ================================================================
