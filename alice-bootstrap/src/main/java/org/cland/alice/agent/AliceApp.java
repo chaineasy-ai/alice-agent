@@ -4,6 +4,8 @@
  * 对应设计文档 §2.2 中 AliceApp 实体：
  *   纯引导程序 (Pure Bootstrapper)，不感知任何业务配置或 Agent 内核。
  *   仅负责 JVM 级初始化、基础路由参数解析、以及将控制权移交给选定的 Facade。
+ *
+ * Facade 发现通过 SPI (ServiceLoader) 完成 — 无需编译期依赖具体 facade 模块。
  */
 package org.cland.alice.agent;
 
@@ -17,8 +19,7 @@ import org.slf4j.LoggerFactory;
  *
  * <ol>
  *   <li>初始化 JVM 级基础设施（日志、ShutdownHook）
- *   <li>调用 {@link FacadeSelector} 检测交互模式
- *   <li>将原始命令行参数传递给选定的 Facade Launcher
+ *   <li>调用 {@link FacadeSelector} 通过 SPI 发现并启动 Facade
  *   <li>将退出码传播给 JVM
  * </ol>
  *
@@ -53,14 +54,10 @@ public final class AliceApp {
     // 1. 注册 JVM 关闭钩子
     Runtime.getRuntime().addShutdownHook(new Thread(() -> logger.info("JVM shutting down...")));
 
-    // 2. 仅解析基础路由参数（--tui / --cli），不涉及任何业务配置
-    FacadeSelector.FacadeType facadeType = FacadeSelector.detect(args);
-    logger.info("Facade selected: {}", facadeType);
+    // 2. 通过 SPI 发现并启动 Facade
+    int exitCode = FacadeSelector.launch(args);
 
-    // 3. 将原始参数原封不动传递给 Facade Launcher，由 Facade 内部自行解析业务配置
-    int exitCode = FacadeSelector.launch(facadeType, args);
-
-    // 4. 退出
+    // 3. 退出
     logger.info("Alice Agent exiting with code {}", exitCode);
     System.exit(exitCode);
   }

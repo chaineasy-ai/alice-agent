@@ -25,6 +25,7 @@ dependencies {
     implementation 'ch.qos.logback:logback-core:1.5.16'
 
     // Internal modules
+    implementation project(':alice-bootstrap')
     implementation project(':alice-core-agent')
     implementation project(':alice-env-adapter')
     implementation project(':alice-model')

@@ -1,141 +1,88 @@
 /*
- * Alice Agent — Facade 选择器 (Pure Bootstrapper)
+ * Alice Agent — Facade 选择器 (Pure Bootstrapper, SPI-based)
  *
- * 对应设计文档 §2.2 中 FacadeSelector 实体：
- *   纯路由工具，仅通过过滤原始参数（--tui / --cli）来决定外壳路由。
- *   不再持有 Agent / AgentConfig 等业务对象，仅传递原始 String[] args。
+ * 通过 ServiceLoader 在运行时发现 facade 实现，消除编译期对外观模块的强依赖。
+ * 每个 facade 模块实现 AliceFacade SPI 接口并通过 META-INF/services 注册。
  */
 package org.cland.alice.agent;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.ServiceLoader;
+import org.cland.alice.agent.spi.AliceFacade;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * 外观选择器，根据纯路由参数决定启动 CLI 还是 TUI 模式。
+ * 外观选择器，通过 SPI 动态发现 Facade 实现。
  *
- * <p>对应设计文档类图中 FacadeSelector 的职责：
+ * <p>职责：
  *
  * <ul>
- *   <li>分析启动参数，确定 Facade 类型
- *   <li>将原始参数传递给对应的 Launcher
+ *   <li>分析启动参数，通过 {@link ServiceLoader} 发现匹配的 Facade
+ *   <li>将原始参数传递给选定的 Facade
+ *   <li>未匹配时回退到默认 CLI Facade
  *   <li>统一处理启动失败的回退逻辑
  * </ul>
  *
- * <p>此模块不依赖 {@code alice-core-agent}、{@code alice-model} 或任何业务配置。 业务配置的加载与内核装配由 Facade 模块在内部完成。
+ * <p>此模块不依赖 {@code alice-core-agent}、{@code alice-model} 或任何业务配置。
  */
 public final class FacadeSelector {
 
   private static final Logger logger = LoggerFactory.getLogger(FacadeSelector.class);
 
-  /** 支持的 Facade 类型 */
-  public enum FacadeType {
-    /** 命令行交互模式（默认） */
-    CLI,
-    /** 终端 TUI 模式 */
-    TUI
-  }
-
-  private FacadeSelector() {
-    // 工具类，不可实例化
-  }
+  private FacadeSelector() {}
 
   /**
-   * 检测启动模式。
+   * 通过 SPI 发现并启动 Facade。
    *
-   * <p>规则：
-   *
-   * <ul>
-   *   <li>如果参数包含 {@code --tui} 或 {@code -t}，返回 TUI 模式
-   *   <li>如果参数包含 {@code --cli} 或 {@code -c}，返回 CLI 模式
-   *   <li>其他情况，默认返回 CLI 模式
-   * </ul>
+   * <p>参数 {@code --facade <name>} 显式指定外观名称，否则使用默认 CLI。
    *
    * @param args 原始命令行参数
-   * @return 检测到的 Facade 类型
+   * @return 退出码
    */
-  public static FacadeType detect(String[] args) {
-    if (args == null || args.length == 0) {
-      return FacadeType.CLI;
-    }
+  public static int launch(String[] args) {
+    // 1. 加载所有 SPI Facade
+    List<AliceFacade> facades = new ArrayList<>();
+    ServiceLoader.load(AliceFacade.class).forEach(facades::add);
 
-    boolean hasTuiFlag = false;
-    boolean hasCliFlag = false;
-
-    for (String arg : args) {
-      switch (arg) {
-        case "--tui":
-        case "-t":
-          hasTuiFlag = true;
-          break;
-        case "--cli":
-        case "-c":
-          hasCliFlag = true;
-          break;
-        default:
-          break;
-      }
-    }
-
-    if (hasTuiFlag && !hasCliFlag) {
-      return FacadeType.TUI;
-    }
-
-    return FacadeType.CLI;
-  }
-
-  /**
-   * 根据指定类型启动并运行对应的 Launcher。
-   *
-   * <p>这是一个阻塞调用，直到 Launcher 执行完毕才会返回。
-   *
-   * <p>业务配置解析、ModelProvider 初始化、Agent 内核装配等交由 Facade 模块内部完成。
-   *
-   * @param type Facade 类型
-   * @param args 原始命令行参数（原封不动传递给 Facade）
-   * @return 退出码（0 成功，非 0 失败）
-   */
-  public static int launch(FacadeType type, String[] args) {
-    logger.info("Launching {} facade...", type);
-
-    return switch (type) {
-      case CLI -> launchCli(args);
-      case TUI -> launchTui(args);
-    };
-  }
-
-  /**
-   * 启动 CLI 模式。
-   *
-   * <p>委托给 {@code org.cland.alice.facade.cmd.AliceCliLauncher}。
-   */
-  private static int launchCli(String[] args) {
-    try {
-      String[] filteredArgs = filterAppArgs(args);
-
-      if (filteredArgs == null || filteredArgs.length == 0) {
-        // 没有提供子命令时打印友好提示
-        printUsage();
-        return AliceApp.EXIT_SUCCESS;
-      }
-
-      return org.cland.alice.facade.cmd.AliceCliLauncher.run(filteredArgs);
-    } catch (Exception e) {
-      logger.error("CLI launch failed", e);
+    if (facades.isEmpty()) {
+      logger.error("No AliceFacade SPI implementations found on classpath");
+      printUsage();
       return AliceApp.EXIT_RUNTIME_ERROR;
     }
-  }
 
-  /**
-   * 启动 TUI 模式。
-   *
-   * <p>委托给 {@code org.cland.alice.facade.tui.AliceTuiLauncher}。 由 TUI Launcher 内部自行初始化
-   * ModelProvider 和 Agent 核心。
-   */
-  private static int launchTui(String[] args) {
+    // 2. 解析 --facade <name> 参数
+    String facadeName = extractFacadeArg(args);
+    if (facadeName == null) {
+      // 兼容旧参数：--tui → tui
+      if (hasArg(args, "--tui") || hasArg(args, "-t")) {
+        facadeName = "tui";
+      } else {
+        // 默认 CLI
+        facadeName = "cli";
+      }
+    }
+
+    logger.info("Facade selected: {}", facadeName);
+
+    // 3. 查找匹配的 Facade
+    AliceFacade facade = findFacade(facades, facadeName);
+    if (facade == null) {
+      logger.error(
+          "No facade found for name: {} (available: {})",
+          facadeName,
+          facades.stream().map(AliceFacade::name).toList());
+      printUsage();
+      return AliceApp.EXIT_PARAM_ERROR;
+    }
+
+    // 4. 启动
     try {
-      return org.cland.alice.facade.tui.AliceTuiLauncher.launch(args);
+      String[] filteredArgs = filterBootstrapArgs(args);
+      return facade.launch(filteredArgs);
     } catch (Exception e) {
-      logger.error("TUI launch failed", e);
+      logger.error("Facade '{}' launch failed", facadeName, e);
       return AliceApp.EXIT_RUNTIME_ERROR;
     }
   }
@@ -144,11 +91,60 @@ public final class FacadeSelector {
   // 辅助
   // ========================================================================
 
-  /** 打印 bootstrap 级别的使用提示。 */
+  private static AliceFacade findFacade(List<AliceFacade> facades, String name) {
+    for (AliceFacade f : facades) {
+      if (f.name().equalsIgnoreCase(name)) {
+        return f;
+      }
+    }
+    return null;
+  }
+
+  private static String extractFacadeArg(String[] args) {
+    if (args == null) return null;
+    for (int i = 0; i < args.length - 1; i++) {
+      if ("--facade".equals(args[i])) {
+        return args[i + 1];
+      }
+    }
+    return null;
+  }
+
+  private static boolean hasArg(String[] args, String flag) {
+    if (args == null) return false;
+    for (String arg : args) {
+      if (arg.equals(flag)) return true;
+    }
+    return false;
+  }
+
+  private static String[] filterBootstrapArgs(String[] args) {
+    if (args == null || args.length == 0) return args;
+    List<String> filtered = new ArrayList<>();
+    for (int i = 0; i < args.length; i++) {
+      if ("--facade".equals(args[i])) {
+        i++; // skip next arg
+        continue;
+      }
+      if ("--tui".equals(args[i])
+          || "-t".equals(args[i])
+          || "--cli".equals(args[i])
+          || "-c".equals(args[i])) {
+        continue;
+      }
+      filtered.add(args[i]);
+    }
+    return filtered.toArray(new String[0]);
+  }
+
   private static void printUsage() {
     System.out.println("Alice Agent v0.1.0 - AI-powered autonomous agent");
     System.out.println();
-    System.out.println("Usage: alice [--tui] <command> [options]");
+    System.out.println("Usage: alice [--facade <name>] <command> [options]");
+    System.out.println();
+    System.out.println("Facades (SPI):");
+    System.out.println("  cli    Command-line interface (default)");
+    System.out.println("  tui    Terminal UI interface");
     System.out.println();
     System.out.println("Commands:");
     System.out.println("  run     Execute a single task and exit");
@@ -159,36 +155,14 @@ public final class FacadeSelector {
     System.out.println("  sub-agent Manage sub-agents");
     System.out.println();
     System.out.println("Options:");
-    System.out.println("  --tui, -t     Start in TUI (terminal UI) mode");
-    System.out.println("  --cli, -c     Force CLI mode (default)");
-    System.out.println("  --help, -h    Show this help message and exit");
+    System.out.println("  --facade <name>   Select facade (cli/tui)");
+    System.out.println("  --tui, -t         Shortcut for --facade tui");
+    System.out.println("  --cli, -c         Shortcut for --facade cli");
+    System.out.println("  --help, -h        Show this help message and exit");
     System.out.println();
     System.out.println("Examples:");
     System.out.println("  alice run \"What is the capital of France?\"");
     System.out.println("  alice --tui");
-    System.out.println("  alice run \"Write a poem\" --model gpt-4o --verbose");
-  }
-
-  /** 过滤掉 bootstrap 级别的参数，只保留传递给 Facade 的参数。 */
-  private static String[] filterAppArgs(String[] args) {
-    if (args == null || args.length == 0) {
-      return args;
-    }
-
-    java.util.List<String> filtered = new java.util.ArrayList<>();
-    for (String arg : args) {
-      switch (arg) {
-        case "--tui":
-        case "-t":
-        case "--cli":
-        case "-c":
-          // bootstrap 级别参数，不传递给 facade
-          break;
-        default:
-          filtered.add(arg);
-          break;
-      }
-    }
-    return filtered.toArray(new String[0]);
+    System.out.println("  alice --facade web");
   }
 }

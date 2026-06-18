@@ -1,0 +1,76 @@
+/*
+ * alice-facade-web: Web Facade — Quarkus Reactive REST API
+ *
+ * Strictly depends only on alice-agent-command for command contracts.
+ * NO dependency on alice-core-agent or any core implementation.
+ */
+
+plugins {
+    id 'groovy'
+    id 'java-library'
+}
+
+group = "org.cland.alice"
+version = "0.1.0"
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // === Internal module — only command contracts ===
+    implementation project(':alice-agent-command')
+
+    // === Quarkus BOM — manages all Quarkus artifact versions ===
+    implementation platform('io.quarkus:quarkus-bom:3.21.3')
+
+    // Quarkus RESTEasy Reactive (JAX-RS)
+    implementation 'io.quarkus.resteasy.reactive:resteasy-reactive'
+
+    // Quarkus Jackson
+    implementation 'io.quarkus.resteasy.reactive:resteasy-reactive-jackson'
+
+    // Quarkus Arc (CDI container)
+    implementation 'io.quarkus:quarkus-arc'
+
+    // Jackson
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.3'
+    implementation 'com.fasterxml.jackson.core:jackson-core:2.18.3'
+
+    // === SLF4J + Logback ===
+    implementation 'org.slf4j:slf4j-api:2.0.16'
+    implementation 'ch.qos.logback:logback-classic:1.5.16'
+    implementation 'ch.qos.logback:logback-core:1.5.16'
+
+    // === Test ===
+    testImplementation 'org.apache.groovy:groovy:4.0.30'
+    testImplementation 'org.spockframework:spock-core:2.4-groovy-4.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'org.slf4j:slf4j-api:2.0.16'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+    modularity.inferModulePath = true
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 25
+    options.encoding = 'UTF-8'
+}
+
+tasks.withType(GroovyCompile).configureEach {
+    sourceCompatibility = '25'
+    targetCompatibility = '25'
+    options.encoding = 'UTF-8'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+jar {
+    archiveBaseName = 'alice-facade-web'
+}

@@ -1,4 +1,8 @@
 module alice.agent.facade.tui.main {
+  // SPI: provide AliceFacade implementation for bootstrap
+  provides org.cland.alice.agent.spi.AliceFacade with
+      org.cland.alice.facade.tui.AliceTuiFacade;
+
   exports org.cland.alice.facade.tui;
   exports org.cland.alice.facade.tui.bridge;
   exports org.cland.alice.facade.tui.command;
@@ -6,6 +10,7 @@ module alice.agent.facade.tui.main {
   exports org.cland.alice.facade.tui.layout;
   exports org.cland.alice.facade.tui.state;
 
+  requires alice.agent.app.main;
   requires alice.agent.alice.core.agent.main;
   requires alice.agent.alice.env.adapter.main;
   requires alice.agent.alice.model.main;

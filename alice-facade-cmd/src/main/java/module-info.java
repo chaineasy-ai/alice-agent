@@ -5,6 +5,11 @@ module alice.agent.facade.cmd.main {
 
   opens org.cland.alice.facade.cmd.config;
 
+  // SPI: provide AliceFacade implementation for bootstrap
+  provides org.cland.alice.agent.spi.AliceFacade with
+      org.cland.alice.facade.cmd.AliceCliFacade;
+
+  requires alice.agent.app.main;
   requires alice.agent.alice.core.agent.main;
   requires alice.agent.alice.model.main;
   requires alice.agent.command.main;

@@ -181,7 +181,7 @@
 | alice-bootstrap | facade-cmd, facade-tui, facade-web | - |
 | alice-facade-cmd | core-agent | bootstrap |
 | alice-facade-tui | core-agent | bootstrap |
-| alice-facade-web | core-agent, planner, memory-vault, tool-gateway | bootstrap |
+| alice-facade-web | core-agent | bootstrap |
 | alice-core-agent | planner, memory-vault, tool-gateway | facade-cmd, facade-tui, facade-web |
 | alice-core-planner | model, memory-vault | core-agent |
 | alice-memory-vault | - | core-agent, core-planner, guardrail |

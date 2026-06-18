@@ -17,19 +17,16 @@ repositories {
 }
 
 dependencies {
-    // === SLF4J + Logback (replaces System.getLogger) ===
+    // === SLF4J + Logback ===
     implementation 'org.slf4j:slf4j-api:2.0.16'
     implementation 'ch.qos.logback:logback-classic:1.5.16'
     implementation 'ch.qos.logback:logback-core:1.5.16'
 
-    // Local submodule dependencies — only facade modules
-    // Bootstrap is a Pure Bootstrapper: no Agent/Model/Config awareness.
-    implementation project(':alice-facade-cmd')
-    implementation project(':alice-facade-tui')
+    // Facade modules are discovered at runtime via SPI (ServiceLoader).
+    // Compile-time dependency is only on the SPI interface in this module.
+    // At runtime, the classpath must include the desired facade module(s).
 
-    // Test-only: alice-agent-command types used in dispatch integration tests
-    testImplementation project(':alice-agent-command')
-
+    // Test-only dependencies
     testImplementation 'org.apache.groovy:groovy:4.0.30'
     testImplementation 'org.spockframework:spock-core:2.4-groovy-4.0'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -50,8 +47,7 @@ java {
     modularity.inferModulePath = true
 }
 
-// ── JVM 运行编码 ──────────────────────────────────────────────────────────
-// 确保 `./gradlew run` 和分发脚本生成的启动器都带上 UTF-8 编码参数
+// ── JVM 运行编码 ──
 tasks.withType(JavaExec).configureEach {
     jvmArgs("-Dfile.encoding=UTF-8")
 }
@@ -67,36 +63,28 @@ graalvmNative {
         main {
             imageName = 'alice-agent'
 
-            // 1. 【核心修复】解锁实验性参数（必须放在最前面，压制 json-schema-validator 的警告）
             buildArgs.add('-H:+UnlockExperimentalVMOptions')
-
-            // 2. 【核心修复】用最高兼容性的 -D 语法锁死编译期和运行期编码
-            // GraalVM 会在 AOT 阶段捕获这个系统变量并固化进原生快照的 System.getProperties() 中
             buildArgs.add('-Dfile.encoding=UTF-8')
             buildArgs.add('-Dsun.stdout.encoding=UTF-8')
             buildArgs.add('-Dsun.stderr.encoding=UTF-8')
             buildArgs.add('-H:+AddAllCharsets')
 
-            // 3. Vert.x / Netty / JNA: 运行时初始化配置
             buildArgs.add('--initialize-at-run-time=io.netty.util.internal.logging')
             buildArgs.add('--initialize-at-run-time=io.netty.util.internal.PlatformDependent')
             buildArgs.add('--initialize-at-run-time=io.vertx')
             buildArgs.add('--initialize-at-run-time=com.sun.jna')
             buildArgs.add('--initialize-at-run-time=org.jline')
 
-            // JANSI: 必须在运行时初始化，防止 AOT 阶段加载 Windows DLL 失败
             buildArgs.add('--initialize-at-run-time=org.fusesource.jansi')
             buildArgs.add('--initialize-at-run-time=org.fusesource.hawtjni')
             buildArgs.add('--initialize-at-run-time=org.jline.terminal.impl.jansi')
 
-            // 4. Java 25 模块化加固与 JLine 管道反射开放
             buildArgs.add('--enable-native-access=ALL-UNNAMED')
             buildArgs.add('--add-opens=java.base/java.lang=ALL-UNNAMED')
             buildArgs.add('--add-opens=java.base/io=ALL-UNNAMED')
 
             buildArgs.add('--initialize-at-run-time=org.jline.terminal.impl.jna.win.JnaWinSysTerminal')
             buildArgs.add('--initialize-at-run-time=org.jline.terminal.impl.jna.linux.LinuxNativeTerminal')
-            // 确保引入了 JLine 的 JNA 适配包，这是脱离 JVM 后原生程序能抓到系统控制台句柄的底座
         }
     }
 }
@@ -112,7 +100,6 @@ tasks.withType(GroovyCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
-// 针对 application 插件自动生成的分发任务
 distributions {
     main {
         contents {

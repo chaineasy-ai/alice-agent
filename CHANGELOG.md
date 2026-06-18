@@ -16,11 +16,35 @@ scope:
   - "alice-agent-command"
   - "alice-facade-cmd"
   - "alice-facade-tui"
+  - "alice-facade-web"
 status: "active"
-updated: "2026-06-18"
+updated: "2026-06-19"
 ---
 
 # Changelog
+
+## 20260619
+
+### Features
+
+- **alice-bootstrap/SPI 外观发现系统**: 将 Facade 选择从硬编码枚举重构为 SPI (ServiceLoader) 模式。
+  - 新增 `AliceFacade` SPI 接口（`name()` + `launch(String[])`），位于 `alice-bootstrap` 模块的 `spi` 包
+  - `FacadeSelector.launch()` 现通过 `ServiceLoader.load(AliceFacade.class)` 在运行时发现 facade 实现
+  - 支持 `--facade <name>` 参数显式选择外观，保留 `--tui`/`-t` 和 `--cli`/`-c` 向后兼容
+  - 未找到匹配 facade 时输出完整使用帮助
+  - `alice-bootstrap` 的 `module-info.java` 移除对具体 facade 模块的 `requires`，改为 `uses org.cland.alice.agent.spi.AliceFacade`
+  - `build.gradle` 移除硬编码 facade 子模块依赖
+  - 新增 facade 模块仅需：实现 `AliceFacade` → 注册 `META-INF/services` → 声明 `provides` → 通过 `--facade <name>` 启动，无需修改 bootstrap
+
+- **alice-facade-cmd, alice-facade-tui/SPI 实现**: 两个 facade 模块各自实现 `AliceFacade` SPI 接口并注册。
+  - `AliceCliFacade`（name: `"cli"`）— 委托 `AliceCliLauncher.run()`
+  - `AliceTuiFacade`（name: `"tui"`）— 委托 `AliceTuiLauncher.launch()`
+  - 各模块 `module-info.java` 新增 `provides org.cland.alice.agent.spi.AliceFacade with ...`
+  - 各模块 `build.gradle` 新增 `implementation project(':alice-bootstrap')`
+
+- **docs: 统一 Build & Run 文档**: 新增 `docs/alice-bootstrap/BUILD.md` 主构建指南，补充 `docs/alice-facade-cmd/BUILD.md` 和 `docs/alice-facade-web/BUILD.md` 模块构建笔记。
+  - 涵盖 CLI/TUI/Web 三种外观的运行方式、分发打包、SPI 发现原理、添加新 facade 的步骤
+  - 统一 YAML 前端块格式
 
 ## 20260618
 

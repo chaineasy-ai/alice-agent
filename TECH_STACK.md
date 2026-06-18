@@ -20,3 +20,4 @@ status: "active"
 updated: "2026-06-13"
 ---
 [JLine 3](https://jline.org/docs/intro)
+[vert.x](https://github.com/eclipse-vertx/vert.x)
