@@ -21,6 +21,8 @@ import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
 import org.cland.alice.facade.tui.bridge.EventBridge;
 import org.cland.alice.facade.tui.state.TuiState;
+import org.cland.alice.model.ModelConfigLoader;
+import org.cland.alice.model.ModelProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -431,9 +433,35 @@ public class AliceTuiLauncher implements AutoCloseable {
     }
 
     try {
+      // 4. 加载模型配置（~/.alice/model.json）
+      ModelConfigLoader configLoader = new ModelConfigLoader();
+      try {
+        configLoader.load();
+        configLoader.registerTo(ModelProvider.getInstance());
+        logger.info("Loaded {} model provider(s) from config", configLoader.getProviders().size());
+      } catch (Exception e) {
+        logger.warn("Failed to load model config, using defaults: {}", e.getMessage());
+      }
+
+      // 5. 注册内置模型枚举
+      ModelProvider.getInstance().registerBuiltinModels();
+
+      // 6. 确定默认模型
       String apiKey = System.getenv("OPENAI_API_KEY");
       if (apiKey == null || apiKey.isEmpty()) {
         System.err.println("Warning: OPENAI_API_KEY not set, LLM features will be unavailable.");
+      }
+
+      String deepseekKey = System.getenv("DEEPSEEK_API_KEY");
+      if (deepseekKey != null && !deepseekKey.isEmpty()) {
+        // 如果配置加载没有注册 DeepSeek，手动注册一个（DeepSeek API 与 OpenAI 兼容）
+        if (ModelProvider.getInstance().getSupplier("deepseek-chat") == null) {
+          ModelProvider.getInstance()
+              .registerSupplier(
+                  new org.cland.alice.model.supplier.OpenAiSupplier(
+                      "deepseek", deepseekKey, "https://api.deepseek.com/v1/chat/completions"));
+          logger.info("Registered DeepSeek supplier via OpenAiSupplier (OpenAI-compatible)");
+        }
       }
 
       AgentConfig config =

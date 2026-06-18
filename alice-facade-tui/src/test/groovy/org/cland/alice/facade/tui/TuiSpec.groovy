@@ -35,15 +35,15 @@ class TuiSpec extends Specification {
         state.current() == TuiState.State.INPUTING
     }
 
-    def "TuiState rejects invalid IDLE -> RUNNING"() {
+    def "TuiState transitions IDLE -> RUNNING"() {
         given: "a TuiState at IDLE"
         def state = new TuiState()
 
         when: "transitioning to RUNNING"
         state.transitionTo(TuiState.State.RUNNING)
 
-        then: "IllegalStateException is thrown"
-        thrown(IllegalStateException)
+        then: "state is RUNNING"
+        state.current() == TuiState.State.RUNNING
     }
 
     def "TuiState isInputable returns true for IDLE"() {

@@ -17,14 +17,43 @@ scope:
   - "alice-facade-cmd"
   - "alice-facade-tui"
 status: "active"
-updated: "2026-06-17"
+updated: "2026-06-18"
 ---
 
 # Changelog
 
-## 20260617
+## 20260618
 
 ### Features
+
+- **alice-model/ModelConfigLoader — 模型配置加载系统**: 实现 `docs/alice-model/CONFIG.md` 规范的配置加载器，支持从 `~/.alice/model.json` 读取 `openai_compatible` 提供商配置。
+  - 解析 `language_models.openai_compatible` 下任意数量的提供商（openai, deepseek, local 等）
+  - 展开 `${ENV_VAR}` 环境变量引用（如 `${DEEPSEEK_API_KEY}`）
+  - 校验规则：`api_url` 必须以 `http://` 或 `https://` 开头、`max_tokens >= max_output_tokens`、无模型的提供商自动跳过
+  - `registerTo(ModelProvider)` 按名称自动创建适配器：`openai`/`deepseek`/未知 → `OpenAiSupplier`、`gemma4`/`gemma` → `Gemma4Supplier`
+  - 自包含 JSON 解析器，零外部 JSON 库依赖
+  - 12 个 Spock 测试覆盖全部路径（`ModelConfigLoaderSpec.groovy`）
+
+- **alice-model/DeepSeek (OpenAI-compatible) 集成**: DeepSeek API 与 OpenAI Chat Completion 协议完全兼容，故直接复用 `OpenAiSupplier` 即可。
+  - `ModelConfigLoader` 自动识别 `deepseek` 提供商并创建 `OpenAiSupplier(name, apiKey, "https://api.deepseek.com/v1/chat/completions")`
+  - `AliceCliLauncher.initializeModelProvider()`: 新增 `DEEPSEEK_API_KEY` 环境变量注册（环境变量优先级低于配置文件）
+  - `AliceTuiLauncher.launch()`: 新增 `ModelConfigLoader` 加载 + `DEEPSEEK_API_KEY` 降级注册
+  - E2E 验证：`run 'Say hello' --model deepseek-chat` → `Hello!` (1 次迭代)
+
+- **docs/e2e 测试文档**: 新增 CLI e2e 测试文档。
+  - `docs/alice-facade-cmd/e2e/case.md`: 4 个测试用例（基础推理/数值推理/默认模型/中文输入），含预期结果和实测结果
+  - `docs/alice-facade-cmd/e2e/README.md`: 完整测试指南（4 种测试方式/供应商矩阵/PPAO 终止验证/配置/检查清单）
+  - `docs/case/infinite-loop-ppao.md`: PPAO 无限循环故障案例文档
+
+### Fixes
+
+- **alice-core-agent/AgentExecutor — PPAO 循环永不终止 (5 处 Bug)**: 修复 Agent 在 LLM 成功返回后进入无限推理循环的问题。详见 `docs/case/infinite-loop-ppao.md`。
+  - `dispatchLlmInference` 成功路径: `Continue(Action.finish())` → `Finish(content, msg)` —— `shouldFinish()` 只认 `result instanceof Finish`，`Continue(FINISH)` 语义上永远不触发终止
+  - `dispatchLlmInference` 失败路径: `Continue(revision)` → `Failure(msg)` —— LLM 调用失败不可恢复，不应进入 Revision 重试
+  - `dispatchToolCall` 失败路径: `Continue(revision)` → `Failure(msg)` —— 同上，工具调用失败直接熔断
+  - `verifyPost`: 新增 `Finish/Failure` 短路检查 —— 终态结果不再经过审计管线，立即设置 `Phase.FINISH`
+  - `reflect`: 新增 `Phase.FINISH` 短路返回 —— `reflect` 不再将已设置的 `FINISH` 相位回退为 `REFLECTING`
+  - `loopBody` 递归: 新增 `ctx.incrementIteration()` —— 每轮 Macro 迭代递增计数器，确保 `isMaxIterationsReached()` 兜底熔断生效
 
 - **alice-facade-tui/TUI v2.0 布局重构**: 基于 `docs/alice-facade-tui/Layout.md` v2.0 重写 TUI 布局，减少固定行数并融合分割线。
   - **合并顶部分割线到 Header**: Header 行自带 ANSI 暗色 `─` 延伸到 `[Session: xxx]` 标签，移除独立的上方分隔行，FIXED_ROWS 从 6 → 5

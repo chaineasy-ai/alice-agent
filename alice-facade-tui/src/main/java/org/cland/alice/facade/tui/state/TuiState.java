@@ -14,8 +14,10 @@ package org.cland.alice.facade.tui.state;
  *             |         v                     v           |
  *             |    +---------+          +----------+      |
  *             +----+  ERROR  |<---------+ INTERVENE|<-----+
- *                  | (报错)  |          | (人工干预)|
- *                  +---------+          +----------+
+ *             |    | (报错)  |          | (人工干预)|
+ *             |    +---------+          +----------+
+ *             |
+ *             +-----------> (直接提交, 跳过 INPUTING)
  * </pre>
  */
 public final class TuiState {
@@ -69,7 +71,7 @@ public final class TuiState {
 
   private static boolean canTransition(State from, State to) {
     return switch (from) {
-      case IDLE -> to == State.INPUTING || to == State.ERROR;
+      case IDLE -> to == State.INPUTING || to == State.RUNNING || to == State.ERROR;
       case INPUTING -> to == State.RUNNING || to == State.IDLE || to == State.ERROR;
       case RUNNING -> to == State.IDLE || to == State.INTERVENE || to == State.ERROR;
       case INTERVENE -> to == State.RUNNING || to == State.IDLE || to == State.ERROR;

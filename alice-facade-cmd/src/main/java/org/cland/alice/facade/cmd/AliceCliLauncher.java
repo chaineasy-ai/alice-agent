@@ -13,6 +13,7 @@ import org.cland.alice.facade.cmd.config.CommandParser;
 import org.cland.alice.facade.cmd.config.CommandParser.ParseException;
 import org.cland.alice.facade.cmd.config.RunConfig;
 import org.cland.alice.facade.cmd.render.OutputRenderer;
+import org.cland.alice.model.ModelConfigLoader;
 import org.cland.alice.model.ModelProvider;
 import org.cland.alice.model.supplier.ClaudeSupplier;
 import org.cland.alice.model.supplier.OpenAiSupplier;
@@ -538,22 +539,52 @@ public final class AliceCliLauncher {
   private static void initializeModelProvider() {
     try {
       ModelProvider provider = ModelProvider.getInstance();
+
+      // 1. 加载 ~/.alice/model.json 配置文件
+      try {
+        ModelConfigLoader configLoader = new ModelConfigLoader();
+        configLoader.load();
+        configLoader.registerTo(provider);
+        logger.info(
+            "Loaded {} model provider(s) from ~/.alice/model.json",
+            configLoader.getProviders().size());
+      } catch (Exception e) {
+        logger.debug("No model config found, using env vars: {}", e.getMessage());
+      }
+
+      // 2. 注册内置模型枚举
       provider.registerBuiltinModels();
 
+      // 3. 从环境变量注册供应商（优先级低于配置文件）
       String openAiKey = System.getenv("OPENAI_API_KEY");
       if (openAiKey != null && !openAiKey.isEmpty()) {
-        provider.registerSupplier(new OpenAiSupplier(openAiKey));
-        logger.info("OpenAI supplier registered");
+        if (provider.getSupplier("gpt-4o-mini") == null) {
+          provider.registerSupplier(new OpenAiSupplier(openAiKey));
+          logger.info("OpenAI supplier registered from env var");
+        }
       } else {
         logger.warn("OPENAI_API_KEY not set. Set it via environment variable to enable LLM calls.");
       }
 
       String anthropicKey = System.getenv("ANTHROPIC_API_KEY");
       if (anthropicKey != null && !anthropicKey.isEmpty()) {
-        provider.registerSupplier(new ClaudeSupplier(anthropicKey));
-        logger.info("Anthropic Claude supplier registered");
+        if (provider.getSupplier("claude-3-5-sonnet-latest") == null) {
+          provider.registerSupplier(new ClaudeSupplier(anthropicKey));
+          logger.info("Anthropic Claude supplier registered from env var");
+        }
       } else {
         logger.warn("ANTHROPIC_API_KEY not set. LLM calls via Anthropic will be unavailable.");
+      }
+
+      // 4. DeepSeek (OpenAI-compatible) 从环境变量注册
+      String deepseekKey = System.getenv("DEEPSEEK_API_KEY");
+      if (deepseekKey != null && !deepseekKey.isEmpty()) {
+        if (provider.getSupplier("deepseek-chat") == null) {
+          provider.registerSupplier(
+              new OpenAiSupplier(
+                  "deepseek", deepseekKey, "https://api.deepseek.com/v1/chat/completions"));
+          logger.info("DeepSeek supplier registered from env var (OpenAI-compatible)");
+        }
       }
     } catch (Exception e) {
       logger.warn("ModelProvider initialization failed (some features may be unavailable)", e);

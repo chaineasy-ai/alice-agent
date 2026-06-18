@@ -172,6 +172,8 @@ public class AgentExecutor {
                     "Agent {} PPAO loop finished (iter={})", agent.agentId(), ctx.iteration());
                 return Future.succeededFuture(ctx);
               }
+              // 每轮 Macro 迭代递增计数器，确保 isMaxIterationsReached 兜底生效
+              ctx.incrementIteration();
               return loopBody(ctx);
             });
   }
@@ -488,16 +490,15 @@ public class AgentExecutor {
                     wal.assistant(ctx.sessionId(), content);
                   }
 
-                  return new StepResult.Continue(Action.finish(), Observation.success(content));
+                  // 返回 Finish 而非 Continue(Action.finish()) 以触发 shouldFinish 终止
+                  return new StepResult.Finish(content, "LLM response received");
                 } else {
                   // WAL: 记录失败的 LLM 回复
                   if (wal != null) {
                     wal.assistant(ctx.sessionId(), "[LLM Error: " + call.status() + "]");
                   }
 
-                  return new StepResult.Continue(
-                      Action.revision("LLM call failed: " + call.status()),
-                      Observation.failure("LLM call failed: " + call.status()));
+                  return new StepResult.Failure("LLM call failed: " + call.status());
                 }
               } catch (Exception e) {
                 logger.error("[Micro-ReAct/LLM] error", e);
@@ -679,9 +680,12 @@ public class AgentExecutor {
     AgentContext ctx = stepWithCtx.context();
     logger.debug("[Reflect] phase={}", ctx.currentPhase());
 
-    if (ctx.currentPhase() != AgentContext.Phase.FINISH) {
-      ctx.transitionTo(AgentContext.Phase.REFLECTING);
+    // 如果已经是终态，直接返回
+    if (ctx.currentPhase() == AgentContext.Phase.FINISH) {
+      return Future.succeededFuture(ctx);
     }
+
+    ctx.transitionTo(AgentContext.Phase.REFLECTING);
 
     // 提取 Revision 反馈
     if (stepWithCtx.result() instanceof StepResult.Continue cont) {
