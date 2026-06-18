@@ -64,9 +64,17 @@ Distribution archives are in `alice-bootstrap/build/distributions`.
 Application binaries are at `alice-bootstrap/build/install/alice-agent/bin/`.
 
 ### GraalVM Native Image
+
+Build native executable:
 ```bash
 ./gradlew :alice-bootstrap:nativeCompile
 ```
+
+Run native executable directly (fastest startup):
+```bash
+./gradlew :alice-bootstrap:nativeRun
+```
+
 Native binary is located in `alice-bootstrap/build/native/nativeCompile/`.
 
 ## Additional Information
