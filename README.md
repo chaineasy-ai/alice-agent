@@ -2,86 +2,76 @@
 
 A modular Java agent framework built with Gradle and Spock.
 
-## project structure
-See [project.tree](./project.tree) for the full project structure (sourced from Git history).
+## Project Structure
 
-## project tech stack
-See 
+See [project.tree](./project.tree) for the full project structure (generated via `struct` CLI).
 
+## Tech Stack
 
-## Using the project: 
-1. Add any dependencies to build.gradle.
-2. Add logic to AliceAgent.java.
+See [TECH_STACK.md](./TECH_STACK.md) for details.
 
-## Proj Structure
-Generate Proj Structure
-```base
-tree -I ".git|.gradle|build|.idea|.lazybones|*.class|*.jar|.vscode|.bevel|docs|test|resources|logs|specs|e2e|todos" --prune > project.tree
-```
-or
+## Quick Start
+
 ```bash
-struct -i ".git" -i ".gradle" -i "build" -i ".idea" -i ".lazybones" -i "*.class" -i "*.jar" -i ".vscode" -i ".bevel" -i "docs/*" -i "test" -i "resources" -i "logs" -s -o project.tree 
+# Build the entire project
+./gradlew clean build
+
+# Run tests
+./gradlew check
 ```
 
-## Format
-Format java code:
+## Generate Project Tree
+
+```bash
+struct -i ".git" -i ".gradle" -i "build" -i ".idea" -i ".lazybones" \
+  -i "*.class" -i "*.jar" -i ".vscode" -i ".bevel" -i "docs" \
+  -i "test" -i "resources" -i "logs" -i "specs" -i "e2e" -i "todos" \
+  -i "bin" -i "dtcw" -i "*.bat" -i ".github" -i ".pi" -i ".specify" \
+  -i ".gitignore" -i ".treerc" \
+  -o project.tree
+```
+
+## Format Code
+
 ```bash
 ./gradlew spotlessApply
 ```
 
-## Run Tests
-You can run tests with:
-```bash
-./gradlew check
-```
-Gradle HTML report is located in app/build/reports/tests.
+## Run the Application
 
-Run the sample application with Gradle:
+### CLI Frontend
+```bash
+./gradlew :alice-facade-cmd:run
+```
+
+### TUI Frontend (default)
 ```bash
 ./gradlew :alice-bootstrap:run
 ```
 
-## Building the Application
+## Build Distribution
+
 ### Packaged Distribution
-To package the application for a distribution to be unpacked later:
 ```bash
 ./gradlew assembleDist
-````
-
-The distribution archives are found in `app/build/distributions`
+```
+Distribution archives are in `alice-bootstrap/build/distributions`.
 
 ### Unpacked Application
-You can assemble an "installed" unpacked application with:
 ```bash
 ./gradlew installDist
 ```
-
-The application is found `bootstrap/build/install`
+Application binaries are at `alice-bootstrap/build/install/alice-agent/bin/`.
 
 ### GraalVM Native Image
-Build a native executable (requires GraalVM + `native-image` tool):
-
 ```bash
 ./gradlew :alice-bootstrap:nativeCompile
 ```
-
-Run the native executable directly:
-
-```bash
-./gradlew :alice-bootstrap:nativeRun
-```
-
-The native binary is located in `alice-bootstrap/build/native/nativeCompile/`.
-
-## Running the Application
-Run the application commands from the application root directory that contains `bin` and `lib` :
-
-```bash
-./bin/alice-agent 
-```
+Native binary is located in `alice-bootstrap/build/native/nativeCompile/`.
 
 ## Additional Information
 
-- [Skeletal Project](https://github.com/cbmarcum/skeletal)
+- [AGENTS.md](./AGENTS.md) — Contributor quickstart guide
+- [project.tree](./project.tree) — Full project structure
 - [Spock Framework](https://spockframework.org/)
 - [Gradle Build Tool](https://gradle.org/)
