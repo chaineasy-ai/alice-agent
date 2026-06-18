@@ -1,341 +1,714 @@
-.
 ├── AGENTS.md
 ├── alice-agent-command
-│   ├── build.gradle
-│   └── src
-│       └── main
-│           └── java
-│               ├── module-info.java
-│               └── org
-│                   └── cland
-│                       └── alice
-│                           └── agent
-│                               └── command
-│                                   ├── AgentCommand.java
-│                                   ├── AlignmentCmd.java
-│                                   ├── CancelSubAgentCmd.java
-│                                   ├── CapabilityCmd.java
-│                                   ├── ConnectSubAgentCmd.java
-│                                   ├── ControlCmd.java
-│                                   ├── ExecutionCmd.java
-│                                   ├── GetSubAgentResultsCmd.java
-│                                   ├── ListSubAgentsCmd.java
-│                                   ├── PromptSubAgentCmd.java
-│                                   ├── RoutineTimeCmd.java
-│                                   ├── SendToSubAgentCmd.java
-│                                   ├── SpawnSubAgentCmd.java
-│                                   └── SubAgentCmd.java
+│  ├── build.gradle
+│  └── src
+│    ├── main
+│    │  └── java
+│    │    ├── module-info.java
+│    │    └── org
+│    │      └── cland
+│    │        └── alice
+│    │          └── agent
+│    │            └── command
+│    │              ├── AgentCommand.java
+│    │              ├── AlignmentCmd.java
+│    │              ├── CancelSubAgentCmd.java
+│    │              ├── CapabilityCmd.java
+│    │              ├── ConnectSubAgentCmd.java
+│    │              ├── ControlCmd.java
+│    │              ├── ExecutionCmd.java
+│    │              ├── GetSubAgentResultsCmd.java
+│    │              ├── ListSubAgentsCmd.java
+│    │              ├── PromptSubAgentCmd.java
+│    │              ├── RoutineTimeCmd.java
+│    │              ├── SendToSubAgentCmd.java
+│    │              ├── SpawnSubAgentCmd.java
+│    │              └── SubAgentCmd.java
+│    └── test
+│      └── groovy
+│        └── org
+│          └── cland
+│            └── alice
+│              └── agent
+│                └── command
+│                  ├── AgentCommandParseSpec.groovy
+│                  ├── AgentCommandSealedHierarchySpec.groovy
+│                  ├── AlignmentCmdSpec.groovy
+│                  ├── CapabilityCmdSpec.groovy
+│                  ├── ControlCmdSpec.groovy
+│                  ├── ExecutionCmdSpec.groovy
+│                  ├── RoutineTimeCmdParseSpec.groovy
+│                  ├── RoutineTimeCmdSpec.groovy
+│                  ├── SubAgentCmdParseSpec.groovy
+│                  └── SubAgentCmdSealedHierarchySpec.groovy
 ├── alice-bootstrap
-│   ├── build.gradle
-│   └── src
-│       └── main
-│           └── java
-│               ├── module-info.java
-│               └── org
-│                   └── cland
-│                       └── alice
-│                           └── agent
-│                               ├── AliceApp.java
-│                               └── FacadeSelector.java
+│  ├── build.gradle
+│  └── src
+│    ├── main
+│    │  ├── java
+│    │  │  ├── module-info.java
+│    │  │  └── org
+│    │  │    └── cland
+│    │  │      └── alice
+│    │  │        └── agent
+│    │  │          ├── AliceApp.java
+│    │  │          ├── FacadeSelector.java
+│    │  │          └── spi
+│    │  │            └── AliceFacade.java
+│    │  └── resources
+│    │    ├── logback.xml
+│    │    └── META-INF
+│    │      └── native-image
+│    └── test
+│      ├── groovy
+│      │  └── org
+│      │    └── cland
+│      │      └── alice
+│      │        └── agent
+│      │          ├── AliceAgentSpec.groovy
+│      │          └── CommandDispatchLoopSpec.groovy
+│      └── resources
 ├── alice-core-agent
-│   ├── build.gradle
-│   └── src
-│       └── main
-│           └── java
-│               ├── module-info.java
-│               └── org
-│                   └── cland
-│                       └── alice
-│                           ├── agent
-│                           │   ├── internal
-│                           │   │   └── acp
-│                           │   │       ├── AcpClientException.java
-│                           │   │       ├── AcpClientWrapper.java
-│                           │   │       └── AcpConnection.java
-│                           │   └── subagent
-│                           │       ├── SubAgentManager.java
-│                           │       ├── SubAgentRecord.java
-│                           │       ├── SubAgentRegistry.java
-│                           │       ├── SubAgentResult.java
-│                           │       ├── SubAgentStatus.java
-│                           │       └── SubAgentType.java
-│                           └── core
-│                               └── agent
-│                                   ├── AgentConfig.java
-│                                   ├── AgentContext.java
-│                                   ├── Agent.java
-│                                   ├── executor
-│                                   │   └── AgentExecutor.java
-│                                   ├── lifecycle
-│                                   │   ├── Action.java
-│                                   │   ├── Lifecycle.java
-│                                   │   ├── Observation.java
-│                                   │   ├── ReActContext.java
-│                                   │   └── ReAct.java
-│                                   └── result
-│                                       └── StepResult.java
+│  ├── build.gradle
+│  └── src
+│    ├── main
+│    │  ├── java
+│    │  │  ├── module-info.java
+│    │  │  └── org
+│    │  │    └── cland
+│    │  │      └── alice
+│    │  │        ├── agent
+│    │  │        │  ├── internal
+│    │  │        │  │  └── acp
+│    │  │        │  │    ├── AcpClientException.java
+│    │  │        │  │    ├── AcpClientWrapper.java
+│    │  │        │  │    └── AcpConnection.java
+│    │  │        │  └── subagent
+│    │  │        │    ├── SubAgentManager.java
+│    │  │        │    ├── SubAgentRecord.java
+│    │  │        │    ├── SubAgentRegistry.java
+│    │  │        │    ├── SubAgentResult.java
+│    │  │        │    ├── SubAgentStatus.java
+│    │  │        │    └── SubAgentType.java
+│    │  │        └── core
+│    │  │          └── agent
+│    │  │            ├── Agent.java
+│    │  │            ├── AgentConfig.java
+│    │  │            ├── AgentContext.java
+│    │  │            ├── executor
+│    │  │            │  └── AgentExecutor.java
+│    │  │            ├── lifecycle
+│    │  │            │  ├── Action.java
+│    │  │            │  ├── Lifecycle.java
+│    │  │            │  ├── Observation.java
+│    │  │            │  ├── ReAct.java
+│    │  │            │  └── ReActContext.java
+│    │  │            └── result
+│    │  │              └── StepResult.java
+│    │  └── resources
+│    └── test
+│      ├── groovy
+│      │  └── org
+│      │    └── cland
+│      │      └── alice
+│      │        ├── agent
+│      │        │  └── subagent
+│      │        │    ├── SubAgentManagerSpec.groovy
+│      │        │    └── SubAgentRegistrySpec.groovy
+│      │        └── core
+│      │          └── agent
+│      │            ├── ActionSpec.groovy
+│      │            ├── AgentConfigSpec.groovy
+│      │            ├── AgentContextSpec.groovy
+│      │            ├── AgentFacadeSpec.groovy
+│      │            ├── AgentPpaoLoopSpec.groovy
+│      │            ├── ObservationSpec.groovy
+│      │            └── StepResultSpec.groovy
+│      └── resources
+│        └── logback-test.xml
 ├── alice-core-planner
-│   ├── build.gradle
-│   └── src
-│       └── main
-│           └── java
-│               ├── module-info.java
-│               └── org
-│                   └── cland
-│                       └── alice
-│                           └── core
-│                               └── planner
-│                                   ├── budget
-│                                   │   └── TokenBudget.java
-│                                   ├── model
-│                                   │   ├── ModelCapabilities.java
-│                                   │   ├── ModelSession.java
-│                                   │   └── ModelSupplier.java
-│                                   ├── package-info.java
-│                                   ├── Plan.java
-│                                   ├── PlannerService.java
-│                                   ├── sop
-│                                   │   ├── SopRegistry.java
-│                                   │   └── StaticPlanner.java
-│                                   ├── strategy
-│                                   │   ├── DecisionStrategy.java
-│                                   │   ├── FastPathStrategy.java
-│                                   │   ├── SlowPathStrategy.java
-│                                   │   └── StrategySelector.java
-│                                   └── tree
-│                                       ├── ThinkingNode.java
-│                                       └── ThinkingTree.java
+│  ├── build.gradle
+│  └── src
+│    ├── main
+│    │  ├── java
+│    │  │  ├── module-info.java
+│    │  │  └── org
+│    │  │    └── cland
+│    │  │      └── alice
+│    │  │        └── core
+│    │  │          └── planner
+│    │  │            ├── budget
+│    │  │            │  └── TokenBudget.java
+│    │  │            ├── model
+│    │  │            │  ├── ModelCapabilities.java
+│    │  │            │  ├── ModelSession.java
+│    │  │            │  └── ModelSupplier.java
+│    │  │            ├── package-info.java
+│    │  │            ├── Plan.java
+│    │  │            ├── PlannerService.java
+│    │  │            ├── sop
+│    │  │            │  ├── SopRegistry.java
+│    │  │            │  └── StaticPlanner.java
+│    │  │            ├── strategy
+│    │  │            │  ├── DecisionStrategy.java
+│    │  │            │  ├── FastPathStrategy.java
+│    │  │            │  ├── SlowPathStrategy.java
+│    │  │            │  └── StrategySelector.java
+│    │  │            └── tree
+│    │  │              ├── ThinkingNode.java
+│    │  │              └── ThinkingTree.java
+│    │  └── resources
+│    └── test
+│      ├── groovy
+│      │  └── org
+│      │    └── cland
+│      │      └── alice
+│      │        └── core
+│      │          └── planner
+│      │            └── PlannerServiceSpec.groovy
+│      └── resources
 ├── alice-env-adapter
-│   ├── build.gradle
-│   └── src
-│       └── main
-│           └── java
-│               ├── module-info.java
-│               └── org
-│                   └── cland
-│                       └── alice
-│                           └── env
-│                               └── adapter
-│                                   ├── EnvEvent.java
-│                                   ├── EnvManager.java
-│                                   ├── McpClient.java
-│                                   ├── package-info.java
-│                                   ├── snapshot
-│                                   │   ├── EnvSnapshot.java
-│                                   │   └── SnapshotManager.java
-│                                   ├── state
-│                                   │   └── EnvState.java
-│                                   └── transport
-│                                       ├── McpTransport.java
-│                                       ├── SseMcpTransport.java
-│                                       └── StdioMcpTransport.java
+│  ├── build.gradle
+│  └── src
+│    ├── main
+│    │  ├── java
+│    │  │  ├── module-info.java
+│    │  │  └── org
+│    │  │    └── cland
+│    │  │      └── alice
+│    │  │        └── env
+│    │  │          └── adapter
+│    │  │            ├── EnvEvent.java
+│    │  │            ├── EnvManager.java
+│    │  │            ├── McpClient.java
+│    │  │            ├── package-info.java
+│    │  │            ├── snapshot
+│    │  │            │  ├── EnvSnapshot.java
+│    │  │            │  └── SnapshotManager.java
+│    │  │            ├── state
+│    │  │            │  └── EnvState.java
+│    │  │            └── transport
+│    │  │              ├── McpTransport.java
+│    │  │              ├── SseMcpTransport.java
+│    │  │              └── StdioMcpTransport.java
+│    │  └── resources
+│    └── test
+│      ├── groovy
+│      │  └── org
+│      │    └── cland
+│      │      └── alice
+│      │        ├── adapter
+│      │        └── env
+│      │          └── adapter
+│      │            ├── EnvEventSpec.groovy
+│      │            ├── EnvManagerSpec.groovy
+│      │            ├── FakeMcpTransport.groovy
+│      │            ├── McpClientSpec.groovy
+│      │            ├── snapshot
+│      │            │  ├── EnvSnapshotSpec.groovy
+│      │            │  └── SnapshotManagerSpec.groovy
+│      │            ├── state
+│      │            │  └── EnvStateSpec.groovy
+│      │            └── transport
+│      │              └── FakeTransportSpec.groovy
+│      ├── java
+│      │  └── org
+│      │    └── cland
+│      │      └── alice
+│      │        └── env
+│      │          └── adapter
+│      └── resources
 ├── alice-facade-cmd
-│   ├── build.gradle
-│   └── src
-│       └── main
-│           └── java
-│               ├── module-info.java
-│               └── org
-│                   └── cland
-│                       └── alice
-│                           └── facade
-│                               └── cmd
-│                                   ├── AliceCliLauncher.java
-│                                   ├── chat
-│                                   │   └── JLineChatSession.java
-│                                   ├── config
-│                                   │   ├── AliceConfigStore.java
-│                                   │   ├── CommandParser.java
-│                                   │   └── RunConfig.java
-│                                   ├── ExecutionCoordinator.java
-│                                   └── render
-│                                       ├── JsonOutputRenderer.java
-│                                       ├── OutputRenderer.java
-│                                       └── TextOutputRenderer.java
+│  ├── ~
+│  │  └── .alice
+│  ├── build.gradle
+│  └── src
+│    ├── main
+│    │  ├── java
+│    │  │  ├── module-info.java
+│    │  │  └── org
+│    │  │    └── cland
+│    │  │      └── alice
+│    │  │        └── facade
+│    │  │          └── cmd
+│    │  │            ├── AliceCliFacade.java
+│    │  │            ├── AliceCliLauncher.java
+│    │  │            ├── chat
+│    │  │            │  └── JLineChatSession.java
+│    │  │            ├── config
+│    │  │            │  ├── AliceConfigStore.java
+│    │  │            │  ├── CommandParser.java
+│    │  │            │  └── RunConfig.java
+│    │  │            ├── ExecutionCoordinator.java
+│    │  │            └── render
+│    │  │              ├── JsonOutputRenderer.java
+│    │  │              ├── OutputRenderer.java
+│    │  │              └── TextOutputRenderer.java
+│    │  └── resources
+│    │    └── META-INF
+│    │      └── services
+│    │        └── org.cland.alice.agent.spi.AliceFacade
+│    └── test
+│      ├── groovy
+│      │  └── org
+│      │    └── cland
+│      │      └── alice
+│      │        └── facade
+│      │          └── cmd
+│      │            ├── AliceCliLauncherSpec.groovy
+│      │            ├── chat
+│      │            │  └── JLineChatSessionSpec.groovy
+│      │            ├── config
+│      │            │  ├── AliceConfigStoreSpec.groovy
+│      │            │  ├── CommandParserSpec.groovy
+│      │            │  └── RunConfigSpec.groovy
+│      │            └── render
+│      │              ├── JsonOutputRendererSpec.groovy
+│      │              └── TextOutputRendererSpec.groovy
+│      └── resources
 ├── alice-facade-tui
-│   ├── build.gradle
-│   └── src
-│       └── main
-│           └── java
-│               ├── module-info.java
-│               └── org
-│                   └── cland
-│                       └── alice
-│                           └── facade
-│                               └── tui
-│                                   ├── AliceTuiLauncher.java
-│                                   ├── bridge
-│                                   │   ├── EventBridge.java
-│                                   │   └── TuiEvent.java
-│                                   ├── command
-│                                   │   ├── CommandHandler.java
-│                                   │   └── SlashCommand.java
-│                                   ├── component
-│                                   │   ├── Component.java
-│                                   │   ├── FooterComponent.java
-│                                   │   ├── HeaderComponent.java
-│                                   │   ├── InputComponent.java
-│                                   │   └── ThoughtComponent.java
-│                                   ├── layout
-│                                   │   └── TuiLayout.java
-│                                   ├── ScreenManager.java
-│                                   └── state
-│                                       └── TuiState.java
+│  ├── build.gradle
+│  └── src
+│    ├── main
+│    │  ├── java
+│    │  │  ├── module-info.java
+│    │  │  └── org
+│    │  │    └── cland
+│    │  │      └── alice
+│    │  │        └── facade
+│    │  │          └── tui
+│    │  │            ├── AliceTuiFacade.java
+│    │  │            ├── AliceTuiLauncher.java
+│    │  │            ├── bridge
+│    │  │            │  ├── EventBridge.java
+│    │  │            │  └── TuiEvent.java
+│    │  │            ├── command
+│    │  │            │  ├── CommandHandler.java
+│    │  │            │  └── SlashCommand.java
+│    │  │            ├── component
+│    │  │            │  ├── Component.java
+│    │  │            │  ├── FooterComponent.java
+│    │  │            │  ├── HeaderComponent.java
+│    │  │            │  ├── InputComponent.java
+│    │  │            │  └── ThoughtComponent.java
+│    │  │            ├── layout
+│    │  │            │  └── TuiLayout.java
+│    │  │            ├── ScreenManager.java
+│    │  │            └── state
+│    │  │              └── TuiState.java
+│    │  └── resources
+│    │    └── META-INF
+│    │      └── services
+│    │        └── org.cland.alice.agent.spi.AliceFacade
+│    └── test
+│      ├── groovy
+│      │  └── org
+│      │    └── cland
+│      │      └── alice
+│      │        └── facade
+│      │          └── tui
+│      │            └── TuiSpec.groovy
+│      └── resources
+├── alice-facade-web
+│  ├── build.gradle
+│  └── src
+│    └── main
+│      └── java
+│        ├── module-info.java
+│        └── org
+│          └── cland
+│            └── alice
+│              └── facade
+│                └── web
+│                  └── HealthController.java
 ├── alice-guardrail
-│   ├── build.gradle
-│   └── src
-│       └── main
-│           └── java
-│               ├── module-info.java
-│               └── org
-│                   └── cland
-│                       └── alice
-│                           └── guardrail
-│                               ├── AuditResult.java
-│                               ├── CorrectionSuggestion.java
-│                               ├── GuardrailService.java
-│                               ├── PolicyEngine.java
-│                               ├── PostValidator.java
-│                               ├── PreValidator.java
-│                               ├── RiskLevel.java
-│                               ├── validators
-│                               │   ├── HallucinationDetector.java
-│                               │   ├── LogicSanityValidator.java
-│                               │   └── PermissionSandboxValidator.java
-│                               └── Verificator.java
+│  ├── build.gradle
+│  └── src
+│    ├── main
+│    │  ├── java
+│    │  │  ├── module-info.java
+│    │  │  └── org
+│    │  │    └── cland
+│    │  │      └── alice
+│    │  │        └── guardrail
+│    │  │          ├── AuditResult.java
+│    │  │          ├── CorrectionSuggestion.java
+│    │  │          ├── GuardrailService.java
+│    │  │          ├── PolicyEngine.java
+│    │  │          ├── PostValidator.java
+│    │  │          ├── PreValidator.java
+│    │  │          ├── RiskLevel.java
+│    │  │          ├── validators
+│    │  │          │  ├── HallucinationDetector.java
+│    │  │          │  ├── LogicSanityValidator.java
+│    │  │          │  └── PermissionSandboxValidator.java
+│    │  │          └── Verificator.java
+│    │  └── resources
+│    └── test
+│      ├── groovy
+│      │  └── org
+│      │    └── cland
+│      │      └── alice
+│      │        └── guardrail
+│      └── resources
 ├── alice-memory-vault
-│   ├── build.gradle
-│   └── src
-│       └── main
-│           └── java
-│               ├── module-info.java
-│               └── org
-│                   └── cland
-│                       └── alice
-│                           └── memory
-│                               ├── agent
-│                               │   ├── AgentSession.java
-│                               │   └── Context.java
-│                               ├── controller
-│                               │   └── VaultController.java
-│                               ├── core
-│                               │   ├── Experience.java
-│                               │   ├── Knowledge.java
-│                               │   ├── MemorySet.java
-│                               │   ├── SOP.java
-│                               │   ├── Step.java
-│                               │   └── Summary.java
-│                               ├── dreaming
-│                               │   ├── ConflictResolver.java
-│                               │   ├── CrystallizedPattern.java
-│                               │   ├── Crystallizer.java
-│                               │   ├── DreamingEngine.java
-│                               │   ├── DreamingFact.java
-│                               │   ├── DreamingSession.java
-│                               │   ├── DreamingTriggerConfig.java
-│                               │   ├── PromptMelter.java
-│                               │   ├── SessionState.java
-│                               │   ├── SessionStateManager.java
-│                               │   ├── StateTransitionException.java
-│                               │   └── WalSessionReadGuard.java
-│                               ├── router
-│                               │   ├── DefaultMemorySummarizer.java
-│                               │   ├── MemoryRouter.java
-│                               │   └── MemorySummarizer.java
-│                               ├── storage
-│                               │   ├── InMemoryStorageBackend.java
-│                               │   └── StorageBackend.java
-│                               ├── vault
-│                               │   ├── EpisodicVault.java
-│                               │   ├── InMemoryEpisodicVault.java
-│                               │   ├── InMemoryProceduralVault.java
-│                               │   ├── InMemorySemanticVault.java
-│                               │   ├── JVectorSemanticVault.java
-│                               │   ├── ProceduralVault.java
-│                               │   ├── SemanticVault.java
-│                               │   └── WalEpisodicVault.java
-│                               └── wal
-│                                   ├── Checkpoint.java
-│                                   ├── CheckpointManager.java
-│                                   ├── FileWalStore.java
-│                                   ├── InMemoryWalStore.java
-│                                   ├── PromptMelter.java
-│                                   ├── RawMessage.java
-│                                   ├── RecoveryEngine.java
-│                                   ├── ToolCall.java
-│                                   ├── WalAppender.java
-│                                   ├── WalCompactor.java
-│                                   ├── WalSession.java
-│                                   └── WalStore.java
+│  ├── build.gradle
+│  └── src
+│    ├── main
+│    │  ├── java
+│    │  │  ├── module-info.java
+│    │  │  └── org
+│    │  │    └── cland
+│    │  │      └── alice
+│    │  │        └── memory
+│    │  │          ├── agent
+│    │  │          │  ├── AgentSession.java
+│    │  │          │  └── Context.java
+│    │  │          ├── controller
+│    │  │          │  └── VaultController.java
+│    │  │          ├── core
+│    │  │          │  ├── Experience.java
+│    │  │          │  ├── Knowledge.java
+│    │  │          │  ├── MemorySet.java
+│    │  │          │  ├── SOP.java
+│    │  │          │  ├── Step.java
+│    │  │          │  └── Summary.java
+│    │  │          ├── dreaming
+│    │  │          │  ├── ConflictResolver.java
+│    │  │          │  ├── CrystallizedPattern.java
+│    │  │          │  ├── Crystallizer.java
+│    │  │          │  ├── DreamingEngine.java
+│    │  │          │  ├── DreamingFact.java
+│    │  │          │  ├── DreamingSession.java
+│    │  │          │  ├── DreamingTriggerConfig.java
+│    │  │          │  ├── PromptMelter.java
+│    │  │          │  ├── SessionState.java
+│    │  │          │  ├── SessionStateManager.java
+│    │  │          │  ├── StateTransitionException.java
+│    │  │          │  └── WalSessionReadGuard.java
+│    │  │          ├── router
+│    │  │          │  ├── DefaultMemorySummarizer.java
+│    │  │          │  ├── MemoryRouter.java
+│    │  │          │  └── MemorySummarizer.java
+│    │  │          ├── storage
+│    │  │          │  ├── InMemoryStorageBackend.java
+│    │  │          │  └── StorageBackend.java
+│    │  │          ├── vault
+│    │  │          │  ├── EpisodicVault.java
+│    │  │          │  ├── InMemoryEpisodicVault.java
+│    │  │          │  ├── InMemoryProceduralVault.java
+│    │  │          │  ├── InMemorySemanticVault.java
+│    │  │          │  ├── JVectorSemanticVault.java
+│    │  │          │  ├── ProceduralVault.java
+│    │  │          │  ├── SemanticVault.java
+│    │  │          │  └── WalEpisodicVault.java
+│    │  │          └── wal
+│    │  │            ├── Checkpoint.java
+│    │  │            ├── CheckpointManager.java
+│    │  │            ├── FileWalStore.java
+│    │  │            ├── InMemoryWalStore.java
+│    │  │            ├── PromptMelter.java
+│    │  │            ├── RawMessage.java
+│    │  │            ├── RecoveryEngine.java
+│    │  │            ├── ToolCall.java
+│    │  │            ├── WalAppender.java
+│    │  │            ├── WalCompactor.java
+│    │  │            ├── WalSession.java
+│    │  │            └── WalStore.java
+│    │  └── resources
+│    └── test
+│      ├── groovy
+│      │  └── org
+│      │    └── cland
+│      │      └── alice
+│      │        └── memory
+│      │          ├── dreaming
+│      │          │  ├── ConflictResolverSpec.groovy
+│      │          │  ├── DreamingEngineConcurrencySpec.groovy
+│      │          │  ├── DreamingEngineIntegrationSpec.groovy
+│      │          │  ├── DreamingEngineSpec.groovy
+│      │          │  ├── DreamingEngineTriggerSpec.groovy
+│      │          │  ├── DreamingSessionSpec.groovy
+│      │          │  ├── DreamingTriggerConfigSpec.groovy
+│      │          │  ├── SessionStateManagerSpec.groovy
+│      │          │  └── WalSessionReadGuardSpec.groovy
+│      │          ├── MemoryVaultEdgeCaseSpec.groovy
+│      │          ├── MemoryVaultSpec.groovy
+│      │          ├── vault
+│      │          │  ├── JVectorSemanticVaultSpec.groovy
+│      │          │  └── WalEpisodicVaultSpec.groovy
+│      │          └── wal
+│      │            ├── CrashRecoveryE2ESpec.groovy
+│      │            ├── FileWalStoreSpec.groovy
+│      │            ├── PromptMelterSpec.groovy
+│      │            ├── RecoveryEngineSpec.groovy
+│      │            ├── WalAppenderCheckpointSpec.groovy
+│      │            ├── WalCompactorSpec.groovy
+│      │            ├── WalEntitySpec.groovy
+│      │            ├── WalSessionSpec.groovy
+│      │            ├── WalStorePerformanceSpec.groovy
+│      │            └── WalStoreSpec.groovy
+│      └── resources
 ├── alice-model
-│   ├── build.gradle
-│   └── src
-│       └── main
-│           └── java
-│               ├── module-info.java
-│               └── org
-│                   └── cland
-│                       └── alice
-│                           └── model
-│                               ├── Call.java
-│                               ├── CallStatus.java
-│                               ├── common
-│                               │   └── ModelEnum.java
-│                               ├── Model.java
-│                               ├── ModelProvider.java
-│                               ├── ModelSupplier.java
-│                               └── supplier
-│                                   ├── ClaudeSupplier.java
-│                                   ├── Gemma4Supplier.java
-│                                   └── OpenAiSupplier.java
+│  ├── build.gradle
+│  └── src
+│    ├── main
+│    │  ├── java
+│    │  │  ├── module-info.java
+│    │  │  └── org
+│    │  │    └── cland
+│    │  │      └── alice
+│    │  │        └── model
+│    │  │          ├── Call.java
+│    │  │          ├── CallStatus.java
+│    │  │          ├── common
+│    │  │          │  └── ModelEnum.java
+│    │  │          ├── Model.java
+│    │  │          ├── ModelConfigLoader.java
+│    │  │          ├── ModelProvider.java
+│    │  │          ├── ModelSupplier.java
+│    │  │          └── supplier
+│    │  │            ├── ClaudeSupplier.java
+│    │  │            ├── Gemma4Supplier.java
+│    │  │            └── OpenAiSupplier.java
+│    │  └── resources
+│    └── test
+│      ├── groovy
+│      │  └── org
+│      │    └── cland
+│      │      └── alice
+│      │        └── model
+│      │          ├── CallSpec.groovy
+│      │          ├── CallStatusSpec.groovy
+│      │          ├── common
+│      │          │  └── ModelEnumSpec.groovy
+│      │          ├── ModelConfigLoaderSpec.groovy
+│      │          ├── ModelProviderSpec.groovy
+│      │          ├── ModelSpec.groovy
+│      │          └── supplier
+│      │            └── ClaudeSupplierSpec.groovy
+│      └── resources
 ├── alice-tool-gateway
-│   ├── build.gradle
-│   └── src
-│       └── main
-│           └── java
-│               ├── module-info.java
-│               └── org
-│                   └── cland
-│                       └── alice
-│                           └── tool
-│                               └── gateway
-│                                   ├── annotation
-│                                   │   ├── AgentTool.java
-│                                   │   ├── RiskLevel.java
-│                                   │   └── ToolParam.java
-│                                   ├── Constants.java
-│                                   ├── engine
-│                                   │   ├── ExecutionEngine.java
-│                                   │   ├── ToolDiscovery.java
-│                                   │   └── ToolResult.java
-│                                   ├── metadata
-│                                   │   └── ToolMetadata.java
-│                                   ├── model
-│                                   │   ├── Resource.java
-│                                   │   ├── ResourceResult.java
-│                                   │   ├── Tool.java
-│                                   │   └── ToolResult.java
-│                                   ├── sandbox
-│                                   │   ├── DirectSandboxProvider.java
-│                                   │   ├── PolicySandboxProvider.java
-│                                   │   └── SandboxProvider.java
-│                                   ├── schema
-│                                   │   └── SchemaGenerator.java
-│                                   ├── ToolRegistryHolder.java
-│                                   └── ToolRegistry.java
+│  ├── build.gradle
+│  └── src
+│    ├── main
+│    │  ├── java
+│    │  │  ├── module-info.java
+│    │  │  └── org
+│    │  │    └── cland
+│    │  │      └── alice
+│    │  │        └── tool
+│    │  │          └── gateway
+│    │  │            ├── annotation
+│    │  │            │  ├── AgentTool.java
+│    │  │            │  ├── RiskLevel.java
+│    │  │            │  └── ToolParam.java
+│    │  │            ├── Constants.java
+│    │  │            ├── engine
+│    │  │            │  ├── ExecutionEngine.java
+│    │  │            │  ├── ToolDiscovery.java
+│    │  │            │  └── ToolResult.java
+│    │  │            ├── metadata
+│    │  │            │  └── ToolMetadata.java
+│    │  │            ├── model
+│    │  │            │  ├── Resource.java
+│    │  │            │  ├── ResourceResult.java
+│    │  │            │  ├── Tool.java
+│    │  │            │  └── ToolResult.java
+│    │  │            ├── sandbox
+│    │  │            │  ├── DirectSandboxProvider.java
+│    │  │            │  ├── PolicySandboxProvider.java
+│    │  │            │  └── SandboxProvider.java
+│    │  │            ├── schema
+│    │  │            │  └── SchemaGenerator.java
+│    │  │            ├── ToolRegistry.java
+│    │  │            └── ToolRegistryHolder.java
+│    │  └── resources
+│    └── test
+│      ├── groovy
+│      │  └── org
+│      │    └── cland
+│      │      └── alice
+│      │        └── tool
+│      │          └── gateway
+│      │            ├── annotation
+│      │            │  └── AnnotationSpec.groovy
+│      │            ├── engine
+│      │            │  ├── ExecutionEngineSpec.groovy
+│      │            │  ├── ToolDiscoverySpec.groovy
+│      │            │  └── ToolResultSpec.groovy
+│      │            ├── metadata
+│      │            │  └── ToolMetadataSpec.groovy
+│      │            ├── sandbox
+│      │            │  └── SandboxProviderSpec.groovy
+│      │            ├── schema
+│      │            │  └── SchemaGeneratorSpec.groovy
+│      │            └── ToolRegistrySpec.groovy
+│      ├── java
+│      │  └── org
+│      │    └── cland
+│      │      └── alice
+│      │        └── tool
+│      │          └── gateway
+│      │            ├── annotation
+│      │            │  └── AnnotationTestBeans.java
+│      │            └── engine
+│      │              ├── ExecutionEngineTestBeans.java
+│      │              └── ToolDiscoveryTestBeans.java
+│      └── resources
 ├── build.gradle
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
+├── docs
+│  ├── acp
+│  │  └── README.md
+│  ├── alice-agent-command
+│  │  └── DESIGN.md
+│  ├── alice-bootstrap
+│  │  ├── BUILD.md
+│  │  └── DESIGN.md
+│  ├── alice-core-agent
+│  │  └── DESIGN.md
+│  ├── alice-core-planner
+│  │  ├── DESIGN.md
+│  │  └── WorldModel.md
+│  ├── alice-env-adapter
+│  │  └── DESIGN.md
+│  ├── alice-facade-cmd
+│  │  ├── BUILD.md
+│  │  ├── cmd.md
+│  │  ├── DESIGN.md
+│  │  └── e2e
+│  │    ├── case.md
+│  │    ├── README.md
+│  │    └── TestPlan-AliceFacadeCmd.md
+│  ├── alice-facade-tui
+│  │  ├── BUILD.md
+│  │  ├── DESIGN.md
+│  │  ├── Layout.md
+│  │  └── tui.md
+│  ├── alice-facade-web
+│  │  ├── BUILD.md
+│  │  └── DESIGN.md
+│  ├── alice-guardrail
+│  │  └── DESIGN.md
+│  ├── alice-memory-vault
+│  │  ├── AWL&CheckPoint.md
+│  │  ├── DESIGN.md
+│  │  ├── dreaming
+│  │  │  ├── FunctionArch.md
+│  │  │  └── SystemArch.md
+│  │  ├── Dreaming.md
+│  │  ├── Forgetting.md
+│  │  └── module-tree.md
+│  ├── alice-model
+│  │  ├── CONFIG.md
+│  │  ├── DESIGN.md
+│  │  ├── models
+│  │  │  └── gemma4
+│  │  │    ├── example_tool.py
+│  │  │    └── gemma4.http
+│  │  └── README.md
+│  ├── alice-tool-gateway
+│  │  ├── capability.md
+│  │  └── DESIGN.md
+│  ├── audit
+│  │  └── README.md
+│  ├── case
+│  │  └── infinite-loop-ppao.md
+│  ├── CHANGELOG规范.md
+│  ├── cli
+│  ├── config
+│  │  ├── config.json
+│  │  ├── example.yaml
+│  │  ├── model.json
+│  │  └── README.md
+│  ├── memory
+│  │  └── README.md
+│  ├── mock
+│  │  ├── aimock.json
+│  │  ├── fixtures
+│  │  │  ├── agent-flow.json
+│  │  │  ├── chat.json
+│  │  │  ├── local-model.json
+│  │  │  ├── streaming.json
+│  │  │  └── tool-calls.json
+│  │  └── README.md
+│  ├── module-info
+│  │  └── README.md
+│  ├── OpenAI Chat Completions 消息对象规范.md
+│  ├── README.md
+│  ├── tui
+│  └── wal
 ├── dtcw
+├── e2e
+│  ├── __pycache__
+│  │  └── alice_agent_e2e.cpython-312.pyc
+│  ├── aimock
+│  ├── alice_agent_e2e.py
+│  ├── gemma4
+│  │  ├── __pycache__
+│  │  │  ├── gemma_4_client.cpython-312.pyc
+│  │  │  └── gemma4_e2e_test.cpython-312.pyc
+│  │  ├── gemma_4_client.py
+│  │  ├── gemma4_e2e_test.py
+│  │  ├── pyproject.toml
+│  │  ├── requirements.txt
+│  │  ├── run_e2e.py
+│  │  └── run_e2e.sh
+│  ├── run_alice_e2e.py
+│  └── run_alice_e2e.sh
 ├── gradle
-│   └── wrapper
-│       └── gradle-wrapper.properties
+│  └── wrapper
+│    └── gradle-wrapper.properties
 ├── gradlew
-├── gradlew.bat
 ├── LICENSE
 ├── project.tree
 ├── README.md
 ├── settings.gradle
-└── TECH_STACK.md
-
-138 directories, 201 files
+├── specs
+│  ├── 001-dreaming-engine
+│  │  ├── checklists
+│  │  │  └── requirements.md
+│  │  ├── contracts
+│  │  │  ├── ConflictResolver-contract.md
+│  │  │  ├── Crystallizer-contract.md
+│  │  │  ├── DreamingEngine-contract.md
+│  │  │  └── SessionStateManager-contract.md
+│  │  ├── data-model.md
+│  │  ├── plan.md
+│  │  ├── quickstart.md
+│  │  ├── research.md
+│  │  ├── spec.md
+│  │  └── tasks.md
+│  ├── 002-routine-time-update
+│  │  ├── checklists
+│  │  │  └── requirements.md
+│  │  ├── contracts
+│  │  │  ├── CommandParser-contract.md
+│  │  │  ├── RoutineTimeCmd-contract.md
+│  │  │  └── SlashCommand-contract.md
+│  │  ├── data-model.md
+│  │  ├── plan.md
+│  │  ├── quickstart.md
+│  │  ├── research.md
+│  │  ├── spec.md
+│  │  └── tasks.md
+│  ├── 003-sub-agent-acp
+│  │  ├── checklists
+│  │  │  └── requirements.md
+│  │  ├── contracts
+│  │  │  ├── AcpClient-contract.md
+│  │  │  ├── SubAgentCmd-contract.md
+│  │  │  └── SubAgentRegistry-contract.md
+│  │  ├── data-model.md
+│  │  ├── plan.md
+│  │  ├── quickstart.md
+│  │  ├── research.md
+│  │  ├── spec.md
+│  │  └── tasks.md
+│  └── 004-bootstrap-pure-bootstrapper
+│    └── checklists
+├── TECH_STACK.md
+└── todos
+  └── TODO-spec.md
