@@ -15,6 +15,10 @@ See
 
 ## Proj Structure
 Generate Proj Structure
+```base
+tree -I ".git|.gradle|build|.idea|.lazybones|*.class|*.jar|.vscode|.bevel|docs|test|resources|logs|specs|e2e|todos" --prune > project.tree
+```
+or
 ```bash
 struct -i ".git" -i ".gradle" -i "build" -i ".idea" -i ".lazybones" -i "*.class" -i "*.jar" -i ".vscode" -i ".bevel" -i "docs/*" -i "test" -i "resources" -i "logs" -s -o project.tree 
 ```

@@ -145,6 +145,9 @@ sequenceDiagram
                                      +------------+
 ```
 
+## 6. 配置
+[CONFIG.MD](CONFIG.md)
+
 ### 状态说明：
 * **CREATED**: 对象的初始化，参数已校验。
 * **PENDING**: 进入调度队列，等待供应商槽位。
