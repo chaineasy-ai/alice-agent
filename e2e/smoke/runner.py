@@ -69,16 +69,9 @@ def run_alice_agent(
 ) -> str:
     """Invoke Alice Agent on a target repo with a problem description.
 
-    Runs Gradle from the project root (where gradlew lives), passing
-    the workspace path as the agent's target directory.
-
     Returns stdout+stderr from the agent run.
     """
     model = model or PROJECT_MODEL
-    # The agent operates on the project root (no --target-dir flag).
-    # Fixture repos live under e2e/smoke/fixtures/ within the project,
-    # so the agent can access them via file tools.
-    # Flatten prompt to single line (remove \n) to avoid shell quoting issues
     prompt_flat = prompt.replace("\n", " ").replace("\r", " ").strip()
     cmd = [
         str(GRADLEW),
@@ -88,7 +81,7 @@ def run_alice_agent(
         f'run "{prompt_flat}" --model {model} --verbose',
     ]
     print(f"\n  🚀 Agent invocation: {target_dir.name}")
-    print(f"     model={model}  prompt={prompt[:60]}...")
+    print(f"     model={model}  prompt={prompt_flat[:80]}...")
 
     env = os.environ.copy()
     if DEEPSEEK_API_KEY:
@@ -107,38 +100,9 @@ def run_alice_agent(
     if result.returncode == 0:
         print(f"  ✅ Agent completed (exit={result.returncode})")
     else:
-        print(f"  ⚠️  Agent exit={result.returncode} (stderr: {result.stderr[-200:]})")
+        print(f"  ⚠️  Agent exit={result.returncode}")
 
     return output
-
-
-# ── Case Verification ──────────────────────────────────────────────────────
-
-
-def verify_case(case: SmokeCase, output: str) -> list[str]:
-    """Verify a smoke case output against its assertions.
-
-    Matches Alice Agent output format:
-      - PPAO loop logs: "starting PPAO loop" or "PPAO loop finished"
-      - Final Answer block: "Final Answer" or "? Final Answer"
-      - Action results: "Action{...}", "Observation{...}"
-      - No crash / exit code 0
-
-    Returns a list of failed assertion descriptions (empty = all pass).
-    """
-    failed = []
-    for assertion in case.assertions:
-        if "PPAO" in assertion or "Plan" in assertion:
-            if "PPAO loop" not in output:
-                failed.append(f"❌ {assertion} (no PPAO loop in output)")
-                continue
-        if "Final Answer" in assertion:
-            if "Final Answer" not in output:
-                failed.append(f"❌ {assertion} (no Final Answer in output)")
-                continue
-        # Default fallback: check exit code and basic output
-        print(f"  ✅ {assertion}")
-    return failed
 
 
 # ── CLI Driver ─────────────────────────────────────────────────────────────
@@ -163,17 +127,14 @@ def main():
             print(f"  {case.instance_id}: {case.problem_description[:60]}...")
         sys.exit(0)
 
-    # Optionally build
     if args.build:
         print("🔨 Building Alice Agent distribution...")
         run_gradle(":alice-bootstrap:installDist", timeout=300)
 
-    # Run via unittest discovery (each case = one file = one TestCase)
     test_dir = Path(__file__).parent
     pattern = "test_smoke_case_*.py"
 
     if args.case_id:
-        # Map case_id → file name
         file_map = {
             "smoke__case-1": "test_smoke_case_1.py",
             "smoke__case-2": "test_smoke_case_2.py",

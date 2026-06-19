@@ -1,8 +1,9 @@
 """
 PMTEV Smoke Test Cases — definition dataclasses.
 
-Each case is a SmokeCase dataclass with instance_id, problem_description
-(from 冒烟测试规范文档), and verification assertions.
+Each case is a SmokeCase dataclass with instance_id and problem_description
+(from 冒烟测试规范文档). Real verification is done directly in the test files
+(import target module, run assertions on modified code).
 
 See also:
     e2e/smoke/test_smoke_case_*.py — actual unittest implementations
@@ -22,10 +23,6 @@ CASE_1 = SmokeCase(
         "divide 函数。当除数为 0 时，目前程序会直接崩溃，"
         "请修改为抛出 ValueError('Division by zero is not allowed')。"
     ),
-    assertions=[
-        "Agent 执行了 PPAO 循环（Plan → Process → Act → Observe）",
-        "Agent 输出了 Final Answer 或 Action 结果",
-    ],
     timeout_seconds=120,
 )
 
@@ -42,10 +39,6 @@ CASE_2 = SmokeCase(
         "该超时配置的代码；\n"
         "3. 正确完成单位换算：1秒 = 1000毫秒。"
     ),
-    assertions=[
-        "Agent 执行了 PPAO 循环",
-        "Agent 输出了 Final Answer",
-    ],
     timeout_seconds=300,
 )
 
@@ -60,10 +53,6 @@ CASE_3 = SmokeCase(
         "读取报错堆栈信息，定位 parser.py 业务代码缺陷并修复，"
         "保证本地执行 pytest 全部用例通过。"
     ),
-    assertions=[
-        "Agent 执行了 PPAO 循环",
-        "Agent 输出了 Final Answer",
-    ],
     timeout_seconds=600,
 )
 
