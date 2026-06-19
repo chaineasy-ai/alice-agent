@@ -2,38 +2,33 @@ package org.cland.alice.core.agent.executor
 
 import org.cland.alice.core.agent.Agent
 import org.cland.alice.core.agent.AgentConfig
-import org.cland.alice.core.agent.AgentContext
 import org.cland.alice.model.Call
 import org.cland.alice.model.Model
 import org.cland.alice.model.ModelProvider
 import org.cland.alice.model.ModelSupplier
 import org.cland.alice.tool.gateway.ToolRegistry
-import org.cland.alice.tool.gateway.engine.ExecutionEngine
-import org.cland.alice.tool.gateway.builtin.BuiltinTools
+import org.cland.alice.tool.gateway.metadata.ToolMetadata
 import spock.lang.Specification
 import spock.lang.Timeout
+
+import java.lang.invoke.MethodHandles
+import java.lang.invoke.MethodType
 
 /**
  * Test that AgentExecutor correctly handles multiple structured tool calls
  * from a single Function Calling response.
  *
- * Flow tested:
- * 1. LLM returns Response with 2+ ToolCalls
- * 2. dispatchLlmInference stores them in ctx["__tool_calls"]
- * 3. Reason phase pops them one by one via __tool_call_index
- * 4. After each tool execution, hasMoreMarkers check returns true
- * 5. dispatchTool returns Continue(null, obs) — no new LLM call
- * 6. Continue.action() is null → Reason continues to next tool_call
- * 7. After all consumed, ___tool_calls removed and Continue(null) triggers LLM re-call
+ * Uses a MockToolBean with real Java methods on a Spock stub to register
+ * mock tools in ToolRegistry, avoiding real file I/O.
  */
 @Timeout(15)
 class AgentExecutorMultiToolCallSpec extends Specification {
 
     def mockSupplier
     def mockToolRegistry
+    def mockToolBean
 
     def setup() {
-        // Reset ModelProvider singleton
         ModelProvider.reset()
     }
 
@@ -42,25 +37,21 @@ class AgentExecutorMultiToolCallSpec extends Specification {
     }
 
     /**
-     * 测试 LLM 返回 2 个 tool_calls（write_file x 2），
-     * AgentExecutor 依次执行两个写操作后，最后 LLM 才收到新一轮调用。
+     * 测试 LLM 返回 2 个 tool_calls（mock tool x 2），
+     * AgentExecutor 依次执行两个操作后，最后 LLM 才收到新一轮调用。
      */
     def "should dispatch all structured tool calls from one LLM response before next LLM call"() {
         given:
-        // 准备两个 write_file 参数
-        def args1 = '{"path": "a.py", "content": "print(1)"}'
-        def args2 = '{"path": "b.py", "content": "print(2)"}'
         def toolCalls = [
-            new Call.ToolCall("write_file", args1),
-            new Call.ToolCall("write_file", args2)
+            new Call.ToolCall("mock_op", '{"msg": "first"}'),
+            new Call.ToolCall("mock_op", '{"msg": "second"}')
         ]
         def response1 = new Call.Response(
-            "I will write both files.",
+            "I will do both operations.",
             new Call.TokenUsage(100, 50, 150),
-            ["raw": toRawMetadata(2, args1, args2)],
+            ["raw": toRawMetadata("mock_op", '{"msg": "first"}', "mock_op", '{"msg": "second"}')],
             toolCalls
         )
-        // 第二轮 LLM 调用：直接返回 FINISH
         def response2 = Call.Response.textOnly(
             "[FINISH]",
             new Call.TokenUsage(200, 10, 210),
@@ -71,7 +62,6 @@ class AgentExecutorMultiToolCallSpec extends Specification {
             request(_) >>> [response1, response2]
         }
 
-        // 注册 mock supplier + model
         ModelProvider.getInstance()
             .registerSupplier(mockSupplier)
             .registerModel(Model.builder()
@@ -81,10 +71,12 @@ class AgentExecutorMultiToolCallSpec extends Specification {
                 .pricing(new Model.Pricing(0, 0))
                 .build())
 
-        // 准备 Agent（需要 ToolRegistry，ExecutionEngine 会延迟初始化）
-        mockToolRegistry = new ToolRegistry()
-        def discovery = new org.cland.alice.tool.gateway.engine.ToolDiscovery(mockToolRegistry)
-        discovery.scanAndRegister([new BuiltinTools()])
+        // 注册 mock tool — 使用 MockToolBean 的 closure 字段
+        mockToolBean = new MockToolBean()
+        def calls = []
+        mockToolBean.mockOpImpl = { String msg -> calls << msg; "done: $msg" }
+
+        mockToolRegistry = createMockToolRegistry("mock_op", mockToolBean, ["msg"] as String[])
 
         def agent = new Agent("test-multi-call", AgentConfig.builder()
             .defaultModelId("test-model")
@@ -94,30 +86,30 @@ class AgentExecutorMultiToolCallSpec extends Specification {
         agent.withToolRegistry(mockToolRegistry)
 
         when:
-        def result = agent.ask("Write two files: a.py and b.py")
+        def result = agent.ask("Do two operations")
 
         then:
         result == "[FINISH]"
+        // 验证两个工具调用都被执行了（至少一次），证明 multi-call dispatch 工作
+        calls.size() >= 2
+        calls.subList(0, 2) == ["first", "second"]
     }
 
     /**
-     * 测试 LLM 返回 3 个 tool_calls（read_file x 2, write_file x 1），
-     * 确保 read_file 的结果不会导致 premature FINISH。
+     * 测试 LLM 返回 3 个 tool_calls，包括读和写两种不同类型，
+     * AgentExecutor 正确分发全部。
      */
     def "should handle read-write-read pattern in single LLM response"() {
         given:
         def toolCalls = [
-            new Call.ToolCall("read_file", '{"path": "x.py"}'),
-            new Call.ToolCall("read_file", '{"path": "y.py"}'),
-            new Call.ToolCall("write_file", '{"path": "z.py", "content": "# combined"}')
+            new Call.ToolCall("mock_read", '{"path": "x.txt"}'),
+            new Call.ToolCall("mock_write", '{"path": "z.txt", "content": "data"}'),
+            new Call.ToolCall("mock_read", '{"path": "y.txt"}')
         ]
         def response1 = new Call.Response(
-            "Let me read both files first.",
+            "Let me process these files.",
             new Call.TokenUsage(100, 60, 160),
-            ["raw": toRawMetadata(3,
-                '{"path": "x.py"}',
-                '{"path": "y.py"}',
-                '{"path": "z.py", "content": "# combined"}')],
+            ["raw": toRawMetadata("mock_read", '{"path": "x.txt"}', "mock_write", '{"path": "z.txt", "content": "data"}', "mock_read", '{"path": "y.txt"}')],
             toolCalls
         )
         def response2 = Call.Response.textOnly(
@@ -139,9 +131,38 @@ class AgentExecutorMultiToolCallSpec extends Specification {
                 .pricing(new Model.Pricing(0, 0))
                 .build())
 
+        // 注册两个不同类型的 mock tool
         mockToolRegistry = new ToolRegistry()
-        def discovery = new org.cland.alice.tool.gateway.engine.ToolDiscovery(mockToolRegistry)
-        discovery.scanAndRegister([new BuiltinTools()])
+        def readBean = new MockToolBean()
+        def readCalls = []
+        readBean.mockOpImpl = { String path -> readCalls << "read:$path"; "content of $path" }
+
+        // 注册 write tool: 双参数提取
+        def writeBean2 = new MockToolBean()
+        def writeCalls = []
+        writeBean2.mockOpImpl2 = { String p, String c -> writeCalls << "write:$p=$c"; "ok" }
+
+        def lookup = MethodHandles.lookup()
+        // 注册 read tool: 单参数
+        mockToolRegistry.register(ToolMetadata.builder()
+            .name("mock_read")
+            .description("Mock read tool")
+            .inputSchema(createJsonSchema(["path"] as String[]))
+            .targetMethod(lookup.findVirtual(MockToolBean, "mockOp",
+                MethodType.methodType(String, String)))
+            .targetBean(readBean)
+            .paramNames(["path"] as String[])
+            .build())
+        // 注册 write tool: 双参数
+        mockToolRegistry.register(ToolMetadata.builder()
+            .name("mock_write")
+            .description("Mock write tool")
+            .inputSchema(createJsonSchema(["path", "content"] as String[]))
+            .targetMethod(lookup.findVirtual(MockToolBean, "mockOp2",
+                MethodType.methodType(String, String, String)))
+            .targetBean(writeBean2)
+            .paramNames(["path", "content"] as String[])
+            .build())
 
         def agent = new Agent("test-read-write", AgentConfig.builder()
             .defaultModelId("test-model-2")
@@ -151,29 +172,32 @@ class AgentExecutorMultiToolCallSpec extends Specification {
         agent.withToolRegistry(mockToolRegistry)
 
         when:
-        def result = agent.ask("Read x.py and y.py, then write combined content to z.py")
+        def result = agent.ask("Read x.txt and y.txt, write z.txt")
 
         then:
         result == "[FINISH]"
+        // 验证 read tool 调用 2 次，write tool 调用 1 次
+        readCalls.size() >= 2
+        readCalls[0] == "read:x.txt"
+        readCalls[1] == "read:y.txt"
+        writeCalls.size() >= 1
+        writeCalls[0] == "write:z.txt=data"
     }
 
     /**
-     * 测试 LLM 返回 1 个 tool_call，执行完成后下一轮 LLM 调用收到
-     * 累积的 __action_log。
+     * 测试 __action_log 在 micro loop 中被正确累积。
      */
     def "should accumulate action log across micro loop iterations"() {
         given:
         def toolCalls1 = [
-            new Call.ToolCall("read_file", '{"path": "test.txt"}')
+            new Call.ToolCall("mock_read", '{"path": "test.txt"}')
         ]
         def response1 = new Call.Response(
             "Read the file first.",
             new Call.TokenUsage(100, 20, 120),
-            ["raw": toRawMetadata(1, '{"path": "test.txt"}')],
+            ["raw": toRawMetadata("mock_read", '{"path": "test.txt"}')],
             toolCalls1
         )
-        // 第二轮 LLM 调用 — 携带 action_log 上下文
-        // 但 mock supplier 仍然返回 FINISH
         def response2 = Call.Response.textOnly(
             "[FINISH]",
             new Call.TokenUsage(200, 10, 210),
@@ -193,9 +217,7 @@ class AgentExecutorMultiToolCallSpec extends Specification {
                 .pricing(new Model.Pricing(0, 0))
                 .build())
 
-        mockToolRegistry = new ToolRegistry()
-        def discovery = new org.cland.alice.tool.gateway.engine.ToolDiscovery(mockToolRegistry)
-        discovery.scanAndRegister([new BuiltinTools()])
+        mockToolRegistry = createMockToolRegistry("mock_read", new MockToolBean(), ["path"] as String[])
 
         def agent = new Agent("test-action-log", AgentConfig.builder()
             .defaultModelId("test-model-3")
@@ -212,22 +234,64 @@ class AgentExecutorMultiToolCallSpec extends Specification {
     }
 
     // ========================================================================
-    // Helper
+    // Helpers
     // ========================================================================
 
     /**
-     * 构造 OpenAI 风格的 raw metadata 字符串，包含多个 tool_calls。
+     * 创建一个 ToolRegistry 并注册一个 mock tool。
+     * mockOp 方法接收单个 String 参数（参数名来自第一个 property）。
      */
-    private static String toRawMetadata(int count, String... argsList) {
+    private ToolRegistry createMockToolRegistry(String toolName, MockToolBean bean, String[] paramNames) {
+        def tr = new ToolRegistry()
+        def lookup = MethodHandles.lookup()
+        // 注册单个 String 参数的方法：mockOp(String)
+        tr.register(ToolMetadata.builder()
+            .name(toolName)
+            .description("Mock tool: $toolName")
+            .inputSchema(createJsonSchema(paramNames))
+            .targetMethod(lookup.findVirtual(MockToolBean, "mockOp",
+                MethodType.methodType(String, String)))
+            .targetBean(bean)
+            .paramNames(paramNames)
+            .build())
+        return tr
+    }
+
+    /**
+     * 创建简单的 JSON schema。
+     */
+    private static com.fasterxml.jackson.databind.JsonNode createJsonSchema(String[] properties) {
+        def mapper = new com.fasterxml.jackson.databind.ObjectMapper()
+        def root = mapper.createObjectNode()
+        root.put("type", "object")
+        def props = root.putObject("properties")
+        for (p in properties) {
+            def pn = props.putObject(p)
+            pn.put("type", "string")
+        }
+        def arr = root.putArray("required")
+        for (p in properties) {
+            arr.add(p)
+        }
+        return root
+    }
+
+    /**
+     * 构造 OpenAI 风格的 raw metadata 字符串，包含多个 tool_calls。
+     * @param toolNamesAndArgs 交替传入工具名和参数JSON：name1, args1, name2, args2, ...
+     */
+    private static String toRawMetadata(Object... toolNamesAndArgs) {
         def sb = new StringBuilder()
         sb.append('{"id":"test","object":"chat.completion","created":1000000,"model":"test",')
         sb.append('"choices":[{"index":0,"message":{"role":"assistant","content":"ok","tool_calls":[')
-        for (int i = 0; i < count; i++) {
+        for (int i = 0; i < toolNamesAndArgs.length; i += 2) {
             if (i > 0) sb.append(',')
-            sb.append('{"index":').append(i)
-            sb.append(',"id":"call_00_').append(i).append('",')
+            def name = toolNamesAndArgs[i] as String
+            def args = toolNamesAndArgs[i + 1] as String
+            sb.append('{"index":').append(i / 2)
+            sb.append(',"id":"call_00_').append(i / 2).append('",')
             sb.append('"type":"function",')
-            sb.append('"function":{"name":"test_tool","arguments":').append(argsList[i]).append('}}')
+            sb.append('"function":{"name":"').append(name).append('","arguments":').append(args).append('}}')
         }
         sb.append(']}}')
         sb.append(',"logprobs":null,"finish_reason":"tool_calls"}],')
@@ -235,3 +299,42 @@ class AgentExecutorMultiToolCallSpec extends Specification {
         return sb.toString()
     }
 }
+
+/**
+ * 模拟工具 Bean：通过 MethodHandle 反射调用的真实 Java 方法。
+ * 子测试类可以通过设置 mockOpImpl 来注入模拟行为。
+ */
+class MockToolBean {
+    /**
+     * 可替换的 Closure（单参版本）。
+     * 签名：{ String msg -> "result" }
+     */
+    Closure mockOpImpl = { String msg -> "ok" }
+
+    /**
+     * 可替换的 Closure（双参版本）。
+     * 签名：{ String path, String content -> "result" }
+     */
+    Closure mockOpImpl2 = { String path, String content -> "ok" }
+
+    /**
+     * 单字符串参数方法（ToolMetadata 按参数名提取后调用）。
+     * @param msg 参数值
+     * @return 结果字符串
+     */
+    String mockOp(String msg) {
+        return mockOpImpl.call(msg)
+    }
+
+    /**
+     * 双字符串参数方法（ToolMetadata 按参数名提取后调用）。
+     */
+    String mockOp2(String path, String content) {
+        return mockOpImpl2.call(path, content)
+    }
+}
+
+/**
+ * 第二个模拟工具 Bean：接受 Map 参数（适合多参数场景）。
+ */
+
