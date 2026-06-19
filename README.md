@@ -1,5 +1,12 @@
 # Alice Agent
 
+![GitHub Stars](https://img.shields.io/github/stars/chaineasy-ai/alice-agent.svg?style=flat-square)
+![GitHub Forks](https://img.shields.io/github/forks/chaineasy-ai/alice-agent.svg?style=flat-square)
+![License](https://img.shields.io/github/license/chaineasy-ai/alice-agent.svg)
+![Last Commit](https://img.shields.io/github/last-commit/chaineasy-ai/alice-agent.svg)
+
+[![Star History Chart](https://api.star-history.com/svg?repos=chaineasy-ai/alice-agent&type=Date)](https://star-history.com/#chaineasy-ai/alice-agent&Date)
+
 A modular Java agent framework built with Gradle and Spock.
 
 ## Project Structure
