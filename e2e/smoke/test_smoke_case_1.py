@@ -54,7 +54,7 @@ class TestSmokeCase1(unittest.TestCase):
         cmd = [
             str(GRADLEW),
             ":alice-bootstrap:run",
-            "--no-build-cache",
+            "--rerun-tasks",
             "--args",
             f'run "{prompt_flat}" --model {PROJECT_MODEL} --verbose',
         ]
@@ -69,7 +69,18 @@ class TestSmokeCase1(unittest.TestCase):
 
     def setUp(self):
         self.case = CASE_1
-        self.target = self.WORKSPACE / "math_utils.py"
+        # Agent 的工作目录是项目根目录，path 解析相对于项目根
+        # 所以 Agent 会修改原始 fixture 文件（而非 temp 副本）
+        self.original_fixture = Path(__file__).resolve().parent / "fixtures" / "math_utils" / "math_utils.py"
+        self.target = self.original_fixture
+
+    @classmethod
+    def tearDownClass(cls):
+        # 恢复原始 fixture
+        import subprocess
+        subprocess.run(
+            ["git", "checkout", "--", str(cls.FIXTURE_FILE)],
+            cwd=PROJECT_ROOT, capture_output=True)
 
     def test_divide_zero_raises_value_error(self):
         """Agent 执行后，divide(1, 0) 必须抛出 ValueError 而不是崩溃"""

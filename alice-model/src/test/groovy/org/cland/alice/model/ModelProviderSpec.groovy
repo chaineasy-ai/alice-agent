@@ -26,7 +26,7 @@ class ModelProviderSpec extends Specification {
             String name() { return "test-vendor" }
             @Override
             Call.Response request(Call call) {
-                return new Call.Response("test", null, [:])
+                return Call.Response.textOnly("test", null, [:])
             }
         }
 
@@ -73,7 +73,7 @@ class ModelProviderSpec extends Specification {
         def supplier = new ModelSupplier() {
             @Override String name() { return "openai" }
             @Override Call.Response request(Call call) {
-                return new Call.Response("test", null, [:])
+                return Call.Response.textOnly("test", null, [:])
             }
         }
         provider.registerBuiltinModels()
@@ -89,7 +89,7 @@ class ModelProviderSpec extends Specification {
         def supplier = new ModelSupplier() {
             @Override String name() { return "openai" }
             @Override Call.Response request(Call call) {
-                return new Call.Response("Mock response", null, [:])
+                return Call.Response.textOnly("Mock response", null, [:])
             }
         }
         provider.registerSupplier(supplier)
@@ -149,13 +149,13 @@ class ModelProviderSpec extends Specification {
         def supplier1 = new ModelSupplier() {
             @Override String name() { return "vendor-a" }
             @Override Call.Response request(Call call) {
-                return new Call.Response("a", null, [:])
+                return Call.Response.textOnly("a", null, [:])
             }
         }
         def supplier2 = new ModelSupplier() {
             @Override String name() { return "vendor-b" }
             @Override Call.Response request(Call call) {
-                return new Call.Response("b", null, [:])
+                return Call.Response.textOnly("b", null, [:])
             }
         }
         provider.registerSupplier(supplier1)

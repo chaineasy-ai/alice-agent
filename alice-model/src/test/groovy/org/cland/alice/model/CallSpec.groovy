@@ -87,7 +87,7 @@ class CallSpec extends Specification {
         def payload = new Call.Payload("gpt-4o", "hello", [:])
         def call = Call.builder().payload(payload).build()
         def usage = new Call.TokenUsage(10, 20, 30)
-        def response = new Call.Response("Hello world!", usage, [:])
+        def response = Call.Response.textOnly("Hello world!", usage, [:])
 
         when:
         call.updateResult(response)

@@ -99,10 +99,29 @@ public final class Call {
     }
   }
 
+  /** 工具调用（Function Calling 结果） */
+  public record ToolCall(String name, String arguments) {
+    public ToolCall {
+      Objects.requireNonNull(name, "name must not be null");
+      arguments = arguments == null ? "{}" : arguments;
+    }
+  }
+
   /** 响应结果 */
-  public record Response(String content, TokenUsage tokenUsage, Map<String, Object> metadata) {
+  public record Response(
+      String content,
+      TokenUsage tokenUsage,
+      Map<String, Object> metadata,
+      java.util.List<ToolCall> toolCalls) {
     public Response {
       metadata = metadata == null ? Map.of() : Map.copyOf(metadata);
+      toolCalls = toolCalls == null ? java.util.List.of() : java.util.List.copyOf(toolCalls);
+    }
+
+    /** 创建不含 toolCalls 的响应（向后兼容）。 */
+    public static Response textOnly(
+        String content, TokenUsage tokenUsage, Map<String, Object> metadata) {
+      return new Response(content, tokenUsage, metadata, java.util.List.of());
     }
   }
 

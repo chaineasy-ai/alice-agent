@@ -5,6 +5,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import org.cland.alice.model.Call;
 import org.cland.alice.model.ModelSupplier;
@@ -14,6 +16,9 @@ import org.slf4j.LoggerFactory;
 /**
  * Gemma4 模型适配器 (OpenAI-compatible), 对应本地部署的 Gemma-4 API 服务。 API 地址:
  * http://192.168.1.14:10303/v1/chat/completions 使用 OpenAI Chat Completion 协议，支持 Function Calling。
+ *
+ * <p>当 {@code payload.parameters()} 中包含 {@code "tools"} 键时， 自动将其作为 {@code tools} 参数传给 API，并在响应中解析
+ * {@code tool_calls}。
  */
 public class Gemma4Supplier implements ModelSupplier {
 
@@ -69,6 +74,7 @@ public class Gemma4Supplier implements ModelSupplier {
 
   // ========== 请求构建 ==========
 
+  @SuppressWarnings("unchecked")
   private String buildRequestBody(Call.Payload payload) {
     StringBuilder sb = new StringBuilder();
     sb.append("{");
@@ -82,9 +88,43 @@ public class Gemma4Supplier implements ModelSupplier {
     Map<String, Object> params = payload.parameters();
     if (params != null && !params.isEmpty()) {
       for (var entry : params.entrySet()) {
-        sb.append(",\"").append(escapeJson(entry.getKey())).append("\":");
-        sb.append(formatJsonValue(entry.getValue()));
+        String key = entry.getKey();
+        Object value = entry.getValue();
+        if ("tools".equals(key) && value instanceof List) {
+          sb.append(",\"tools\":");
+          sb.append(formatToolsArray((List<Map<String, Object>>) value));
+        } else {
+          sb.append(",\"").append(escapeJson(key)).append("\":");
+          sb.append(formatJsonValue(value));
+        }
       }
+    }
+    sb.append("}");
+    return sb.toString();
+  }
+
+  /** 将 tools schema 列表格式化为 JSON array。 */
+  private static String formatToolsArray(List<Map<String, Object>> tools) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("[");
+    for (int i = 0; i < tools.size(); i++) {
+      if (i > 0) sb.append(",");
+      sb.append(formatToolObject(tools.get(i)));
+    }
+    sb.append("]");
+    return sb.toString();
+  }
+
+  @SuppressWarnings("unchecked")
+  private static String formatToolObject(Map<String, Object> tool) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("{");
+    boolean first = true;
+    for (var entry : tool.entrySet()) {
+      if (!first) sb.append(",");
+      first = false;
+      sb.append("\"").append(escapeJson(entry.getKey())).append("\":");
+      sb.append(formatJsonValue(entry.getValue()));
     }
     sb.append("}");
     return sb.toString();
@@ -110,21 +150,106 @@ public class Gemma4Supplier implements ModelSupplier {
               ? new Call.TokenUsage(promptTokens, completionTokens, promptTokens + completionTokens)
               : null;
 
-      // 记录 tool_calls 信息到 metadata
-      Map<String, Object> metadata;
-      String finishReason = extractJsonField(responseBody, "finish_reason");
-      if ("tool_calls".equals(finishReason)) {
-        metadata =
-            Map.of("raw", responseBody, "finish_reason", "tool_calls", "supports_tools", true);
-      } else {
-        metadata = Map.of("raw", responseBody);
-      }
+      // 解析 tool_calls（如果存在）
+      List<Call.ToolCall> toolCalls = parseToolCalls(responseBody);
 
-      return new Call.Response(content, usage, metadata);
+      return new Call.Response(content, usage, Map.of("raw", responseBody), toolCalls);
     } catch (Exception e) {
       logger.warn("Failed to parse response, returning raw body", e);
-      return new Call.Response(responseBody, null, Map.of("parseError", e.getMessage()));
+      return Call.Response.textOnly(responseBody, null, Map.of("parseError", e.getMessage()));
     }
+  }
+
+  /**
+   * 从 OpenAI 兼容响应中解析 tool_calls 数组。
+   * 格式：{"choices":[{"message":{"tool_calls":[{"id":"call_xxx","function":{"name":"xxx","arguments":"{}"}}]}}]}
+   */
+  private static List<Call.ToolCall> parseToolCalls(String json) {
+    List<Call.ToolCall> result = new ArrayList<>();
+    String search = "\"tool_calls\":[";
+    int idx = json.indexOf(search);
+    if (idx < 0) return result;
+    idx += search.length();
+
+    while (idx < json.length()) {
+      while (idx < json.length()
+          && (json.charAt(idx) == ' '
+              || json.charAt(idx) == ','
+              || json.charAt(idx) == '\n'
+              || json.charAt(idx) == '\r')) idx++;
+      if (idx >= json.length() || json.charAt(idx) == ']') break;
+      if (json.charAt(idx) != '{') {
+        idx++;
+        continue;
+      }
+
+      String name = null;
+      String arguments = null;
+
+      int funcIdx = json.indexOf("\"function\":{", idx);
+      if (funcIdx < 0 || funcIdx > idx + 500) {
+        idx++;
+        continue;
+      }
+
+      int nameIdx = json.indexOf("\"name\":\"", funcIdx);
+      if (nameIdx >= 0) {
+        nameIdx += 8;
+        StringBuilder nameSb = new StringBuilder();
+        while (nameIdx < json.length()) {
+          char c = json.charAt(nameIdx);
+          if (c == '"') break;
+          nameSb.append(c);
+          nameIdx++;
+        }
+        name = nameSb.toString();
+      }
+
+      int argsIdx = json.indexOf("\"arguments\":\"", funcIdx);
+      if (argsIdx >= 0) {
+        argsIdx += 13;
+        StringBuilder argsSb = new StringBuilder();
+        while (argsIdx < json.length()) {
+          char c = json.charAt(argsIdx);
+          if (c == '\\') {
+            if (argsIdx + 1 < json.length()) {
+              char next = json.charAt(argsIdx + 1);
+              switch (next) {
+                case 'n' -> argsSb.append('\n');
+                case 'r' -> argsSb.append('\r');
+                case 't' -> argsSb.append('\t');
+                case '"' -> argsSb.append('"');
+                case '\\' -> argsSb.append('\\');
+                default -> {
+                  argsSb.append('\\');
+                  argsSb.append(next);
+                }
+              }
+              argsIdx += 2;
+            } else {
+              argsIdx++;
+            }
+          } else if (c == '"') {
+            break;
+          } else {
+            argsSb.append(c);
+            argsIdx++;
+          }
+        }
+        arguments = argsSb.toString();
+      }
+
+      if (name != null) {
+        result.add(new Call.ToolCall(name, arguments));
+      }
+
+      int closeIdx = json.indexOf('}', funcIdx);
+      if (closeIdx < 0) break;
+      int objCloseIdx = json.indexOf('}', closeIdx + 1);
+      if (objCloseIdx < 0) break;
+      idx = objCloseIdx + 1;
+    }
+    return result;
   }
 
   // ========== 工具方法 ==========
@@ -143,10 +268,22 @@ public class Gemma4Supplier implements ModelSupplier {
     if (value == null) return "null";
     if (value instanceof Number || value instanceof Boolean) return value.toString();
     if (value instanceof String s) return "\"" + escapeJson(s) + "\"";
+    if (value instanceof Map m) return formatToolObject(m);
+    if (value instanceof List l) {
+      StringBuilder sb = new StringBuilder("[");
+      for (int i = 0; i < l.size(); i++) {
+        if (i > 0) sb.append(",");
+        sb.append(formatJsonValue(l.get(i)));
+      }
+      sb.append("]");
+      return sb.toString();
+    }
+    if (value instanceof com.fasterxml.jackson.databind.JsonNode jn) {
+      return jn.toString();
+    }
     return "\"" + escapeJson(value.toString()) + "\"";
   }
 
-  /** 简易 JSON 字段提取（不支持嵌套，仅用于 demo）。 查找 "key": "value" 或 "key": 123 模式。 */
   private static String extractJsonField(String json, String field) {
     if (json == null) return null;
     String search = "\"" + field + "\":";
@@ -154,15 +291,13 @@ public class Gemma4Supplier implements ModelSupplier {
     if (idx < 0) return null;
 
     idx += search.length();
-    // 跳过空白
     while (idx < json.length() && json.charAt(idx) == ' ') idx++;
     if (idx >= json.length()) return null;
 
     char first = json.charAt(idx);
     if (first == '"') {
-      // 字符串值
       StringBuilder sb = new StringBuilder();
-      idx++; // skip opening quote
+      idx++;
       while (idx < json.length()) {
         char c = json.charAt(idx);
         if (c == '\\') {
@@ -178,11 +313,9 @@ public class Gemma4Supplier implements ModelSupplier {
       String val = sb.toString();
       return val.isEmpty() && field.equals("content") ? null : val;
     } else if (first == 'n') {
-      // null 值
       if (idx + 3 < json.length() && json.substring(idx, idx + 4).equals("null")) {
         return null;
       }
-      // 数值或布尔值
       StringBuilder sb = new StringBuilder();
       while (idx < json.length()) {
         char c = json.charAt(idx);
@@ -192,7 +325,6 @@ public class Gemma4Supplier implements ModelSupplier {
       }
       return sb.toString().trim();
     } else {
-      // 数值或布尔值
       StringBuilder sb = new StringBuilder();
       while (idx < json.length()) {
         char c = json.charAt(idx);

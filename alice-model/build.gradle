@@ -27,6 +27,10 @@ dependencies {
     // Guava：升级到兼容 Java 21+ 的最新稳定版（33.6.0-jre 适配高版本 Java）
     implementation 'com.google.guava:guava:33.6.0-jre'
 
+    // Jackson（用于 JSON 序列化 tools schema 中的 JsonNode）
+    implementation 'com.fasterxml.jackson.core:jackson-core:2.18.3'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.3'
+
     // Groovy：升级到适配 Java 25 的最新稳定版（4.0.30 修复高版本 Java 兼容问题）
     testImplementation 'org.apache.groovy:groovy:4.0.30'
 

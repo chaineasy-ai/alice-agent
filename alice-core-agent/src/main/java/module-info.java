@@ -3,6 +3,7 @@ module alice.agent.alice.core.agent.main {
   exports org.cland.alice.core.agent.lifecycle;
   exports org.cland.alice.core.agent.result;
   exports org.cland.alice.core.agent.executor;
+  exports org.cland.alice.core.agent.prompt;
   exports org.cland.alice.agent.subagent;
 
   requires alice.agent.alice.model.main;
@@ -13,6 +14,8 @@ module alice.agent.alice.core.agent.main {
   requires alice.agent.alice.env.adapter.main;
   requires io.vertx.core;
   requires com.google.common;
+  requires freemarker;
+  requires com.fasterxml.jackson.databind;
   requires org.slf4j;
   requires ch.qos.logback.classic;
 }

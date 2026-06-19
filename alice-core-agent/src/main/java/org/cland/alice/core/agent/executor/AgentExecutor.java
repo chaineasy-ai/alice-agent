@@ -11,6 +11,7 @@ import org.cland.alice.core.agent.AgentConfig;
 import org.cland.alice.core.agent.AgentContext;
 import org.cland.alice.core.agent.lifecycle.Action;
 import org.cland.alice.core.agent.lifecycle.Observation;
+import org.cland.alice.core.agent.prompt.PromptManager;
 import org.cland.alice.core.agent.result.StepResult;
 import org.cland.alice.core.planner.Plan;
 import org.cland.alice.memory.wal.WalSession;
@@ -245,17 +246,13 @@ public class AgentExecutor {
       String rawPrompt =
           context.containsKey("prompt") ? context.get("prompt").toString() : "Hello!";
       String modelId = config.defaultModelId();
-      // 注入系统提示词，引导 LLM 输出结构化工具调用
-      String enhancedPrompt = buildSystemPrompt() + "\n\n用户需求: " + rawPrompt;
-
-      // 注入上一轮的观察结果（如果有），避免 LLM 重复同样操作
-      if (context.containsKey("lastObservation")) {
-        enhancedPrompt +=
-            "\n\n上一轮执行结果:\n" + context.get("lastObservation").toString() + "\n请基于此结果继续。不要重复已完成的步骤。";
-      }
-      if (context.containsKey("lastFeedback")) {
-        enhancedPrompt += "\n\n修正反馈:\n" + context.get("lastFeedback").toString() + "\n";
-      }
+      // 通过 PromptManager 构建 Core Loop Prompt
+      String lastObservation =
+          context.containsKey("lastObservation") ? context.get("lastObservation").toString() : null;
+      String lastFeedback =
+          context.containsKey("lastFeedback") ? context.get("lastFeedback").toString() : null;
+      String enhancedPrompt =
+          PromptManager.buildCoreLoopPrompt(rawPrompt, lastObservation, lastFeedback);
 
       nextAction = Action.llmInference(modelId, enhancedPrompt);
     }
@@ -453,7 +450,48 @@ public class AgentExecutor {
                   updatedCtx, continueAction, originalPrompt, depth + 1, maxDepth);
             }
 
-            // Parse tool call markers from LLM output
+            // 1. Check structured tool_calls from Function Calling API first
+            Object rawToolCalls = updatedCtx.get("__tool_calls");
+            if (rawToolCalls instanceof java.util.List<?> tcList && !tcList.isEmpty()) {
+              @SuppressWarnings("unchecked")
+              java.util.List<Call.ToolCall> toolCalls = (java.util.List<Call.ToolCall>) tcList;
+              int idx =
+                  updatedCtx.containsKey("__tool_call_index")
+                      ? Integer.parseInt(updatedCtx.get("__tool_call_index").toString())
+                      : 0;
+
+              if (idx < toolCalls.size()) {
+                Call.ToolCall tc = toolCalls.get(idx);
+                updatedCtx.put("__tool_call_index", String.valueOf(idx + 1));
+                logger.info(
+                    "[Micro-ReAct/Reason] Dispatching structured tool_call #{}/{}: {}",
+                    idx + 1,
+                    toolCalls.size(),
+                    tc.name());
+
+                // Parse arguments JSON -> Map (simple JSON parser, no Jackson dependency)
+                java.util.Map<String, Object> params = new java.util.LinkedHashMap<>();
+                if (tc.arguments() != null && !tc.arguments().isBlank()) {
+                  params.putAll(parseToolArgsJson(tc.arguments()));
+                }
+                logger.debug(
+                    "[Micro-ReAct/Reason] Parsed tool call args: name={} params={}",
+                    tc.name(),
+                    params);
+
+                Action toolAction = Action.toolCall(tc.name(), params);
+                return microReActStep(updatedCtx, toolAction, originalPrompt, depth + 1, maxDepth);
+              } else {
+                // All structured tool calls consumed
+                updatedCtx.remove("__tool_calls");
+                updatedCtx.remove("__tool_call_index");
+                logger.info("[Micro-ReAct/Reason] All structured tool calls consumed, finishing");
+                return Future.succeededFuture(
+                    new StepWithContext(updatedCtx, new StepResult.Continue(Action.finish())));
+              }
+            }
+
+            // 2. Fallback: parse text-based tool call markers from LLM output
             Action toolAction = parseToolCallFromOutput(updatedCtx);
             if (toolAction != null) {
               logger.warn(
@@ -558,27 +596,65 @@ public class AgentExecutor {
                 ModelProvider provider = ModelProvider.getInstance();
                 logger.info(
                     "[Micro-ReAct/LLM] Calling model={} promptLength={}", modelId, prompt.length());
-                Call call = provider.dispatch(modelId, prompt);
+
+                // 如果 ToolRegistry 可用，附加 tools 参数以实现 Function Calling
+                java.util.Map<String, Object> callParams = new java.util.LinkedHashMap<>();
+                if (agent.toolRegistry() != null) {
+                  try {
+                    var tools = agent.toolRegistry().toFunctionCallingSchema();
+                    if (!tools.isEmpty()) {
+                      callParams.put("tools", tools);
+                      logger.info("[Micro-ReAct/LLM] Attached {} tools to LLM call", tools.size());
+                      logger.debug("[Micro-ReAct/LLM] Tools schema: {}", tools);
+                    }
+                  } catch (Exception e) {
+                    logger.warn(
+                        "[Micro-ReAct/LLM] Failed to generate tools schema, falling back to text-only",
+                        e);
+                  }
+                }
+
+                Call call = provider.dispatch(modelId, prompt, callParams);
 
                 if (call.status() == org.cland.alice.model.CallStatus.FINISHED
                     && call.result() != null) {
-                  String content = call.result().content();
+                  Call.Response response = call.result();
+                  String content = response.content() != null ? response.content() : "";
+                  java.util.List<Call.ToolCall> toolCalls = response.toolCalls();
+
                   logger.info(
-                      "[Micro-ReAct/LLM] Response model={} responseLength={}",
+                      "[Micro-ReAct/LLM] Response model={} responseLength={} toolCalls={} rawMetadata={}",
                       modelId,
-                      content.length());
+                      content.length(),
+                      toolCalls.size(),
+                      response.metadata().containsKey("raw")
+                          ? response
+                              .metadata()
+                              .get("raw")
+                              .toString()
+                              .substring(
+                                  0,
+                                  Math.min(
+                                      3000, response.metadata().get("raw").toString().length()))
+                          : "no-raw");
                   ctx.put("result", content);
                   ctx.put("__llm_response", content);
                   ctx.remove("__tool_call_index");
-                  logger.debug("[Micro-ReAct/LLM] response length={}", content.length());
+
+                  // 如果 LLM 返回了结构化 tool_calls，存入上下文
+                  if (toolCalls != null && !toolCalls.isEmpty()) {
+                    ctx.put("__tool_calls", toolCalls);
+                    logger.info(
+                        "[Micro-ReAct/LLM] Received {} structured tool call(s) via Function Calling",
+                        toolCalls.size());
+                  }
 
                   // WAL: 记录 assistant 回复
                   if (wal != null) {
                     wal.assistant(ctx.sessionId(), content);
                   }
 
-                  // 将 LLM 输出包装为 Observation，Continue 的 nextAction 设为 null
-                  // 让 Reason 阶段解析工具调用标记或退出。
+                  // 将 LLM 输出包装为 Observation，让 Reason 阶段处理 tool_calls 或文本标记
                   return new StepResult.Continue(null, Observation.success(content));
                 } else {
                   // WAL: 记录失败的 LLM 回复
@@ -590,7 +666,6 @@ public class AgentExecutor {
                 }
               } catch (Exception e) {
                 logger.error("[Micro-ReAct/LLM] error", e);
-                // 不可恢复的错误（如 supplier 未注册），直接熔断退出循环，避免无限重试
                 return new StepResult.Failure("LLM call error: " + e.getMessage());
               }
             })
@@ -661,6 +736,14 @@ public class AgentExecutor {
                     result.status()
                         == org.cland.alice.tool.gateway.engine.ToolResult.Status.SUCCESS;
 
+                logger.info(
+                    "[Dispatch/TOOL_CALL] {} result status={} summary={}",
+                    action.target(),
+                    result.status(),
+                    result.summary() != null
+                        ? result.summary().substring(0, Math.min(200, result.summary().length()))
+                        : "null");
+
                 // WAL: 记录工具执行结果
                 if (wal != null) {
                   String resultContent =
@@ -672,13 +755,42 @@ public class AgentExecutor {
                 }
 
                 if (success) {
+                  // 检查原始 LLM 回复中是否还有未消耗的标记
+                  // 如果有，返回 Continue(null, obs) 让 Reason 继续解析
+                  boolean hasMoreMarkers = false;
+                  String llmResponse =
+                      ctx.containsKey("__llm_response")
+                          ? ctx.get("__llm_response").toString()
+                          : null;
+                  if (llmResponse != null) {
+                    int currentIdx =
+                        ctx.containsKey("__tool_call_index")
+                            ? Integer.parseInt(ctx.get("__tool_call_index").toString())
+                            : 1; // 当前刚处理完一个，下一个索引是当前值
+                    hasMoreMarkers = countToolCallMarkers(llmResponse) > currentIdx;
+                  }
+
+                  if (hasMoreMarkers) {
+                    // 仍有未消耗的标记，不调用 LLM，直接让 Reason 解析原始回复
+                    return new StepResult.Continue(
+                        null,
+                        Observation.success(
+                            "Tool "
+                                + action.target()
+                                + " executed successfully: "
+                                + result.summary()));
+                  }
+
                   String toolResultContent =
                       result.rawData() != null && !result.rawData().isBlank()
                           ? result.rawData()
                           : result.summary();
-                  // 将工具实际执行结果作为 LLM prompt，使 LLM 能感知文件内容并继续推理
+                  // 通过 PromptManager 构建 Micro Loop Prompt
+                  String rawPrompt = ctx.containsKey("prompt") ? ctx.get("prompt").toString() : "";
+                  String fullPrompt =
+                      PromptManager.buildMicroLoopPrompt(toolResultContent, rawPrompt);
                   return new StepResult.Continue(
-                      Action.llmInference(config.defaultModelId(), toolResultContent),
+                      Action.llmInference(config.defaultModelId(), fullPrompt),
                       Observation.success(
                           "Tool "
                               + action.target()
@@ -909,42 +1021,9 @@ public class AgentExecutor {
   // 辅助工具
   // ========================================================================
 
-  /**
-   * 构建系统提示词，引导 LLM 输出结构化工具调用。
-   *
-   * <p>LLM 在回答中可以包含以下标记让 Agent 执行工具：
-   *
-   * <ul>
-   *   <li>{@code [TOOL_CALL: read_file(path="xxx")]} — 读取文件
-   *   <li>{@code [TOOL_CALL: write_file(path="xxx", content="yyy")]} — 写入文件
-   *   <li>{@code [TOOL_CALL: grep(pattern="xxx", path="yyy")]} — 全文搜索
-   *   <li>{@code [TOOL_CALL: run(cmd="xxx")]} — 执行命令
-   *   <li>{@code [FINISH]} — 完成任务
-   * </ul>
-   */
-  private static String buildSystemPrompt() {
-    return
-"""
-You are an AI coding assistant with file read/write tools.
-
-Available tool call format:
-[TOOL_CALL: read_file(path="file path")]
-[TOOL_CALL: write_file(path="file path", content="file content")]
-[FINISH]
-
-Execution rules:
-1. First, call read_file to examine the file.
-2. After reading, call write_file to write the fixed code in ONE complete call.
-3. After writing, call [FINISH] to complete the task.
-4. NEVER repeat read_file — read once, then write.
-5. The write_file content must contain the COMPLETE fixed file.
-
-Example:
-[TOOL_CALL: read_file(path="src/main.py")]
-[TOOL_CALL: write_file(path="src/main.py", content="the entire fixed file content")]
-[FINISH]
-""";
-  }
+  // ========================================================================
+  // 辅助工具
+  // ========================================================================
 
   /**
    * 从 LLM 输出（Observation）中解析结构化工具调用标记。
@@ -983,7 +1062,9 @@ Example:
         "[ToolCallParser] output first300={}", output.substring(0, Math.min(300, output.length())));
 
     // Debug: check if TOOL_CALL or FINISH markers are in the output
-    if (output.contains("[TOOL_CALL:") || output.contains("[FINISH]")) {
+    if (output.contains("[TOOL_CALL:")
+        || output.contains("<tool>")
+        || output.contains("[FINISH]")) {
       logger.info("[ToolCallParser] FOUND markers in output, length={}", output.length());
     } else {
       logger.info(
@@ -992,11 +1073,11 @@ Example:
           output.substring(0, Math.min(200, output.length())));
     }
 
-    // 解析 [TOOL_CALL: toolName(key="value", ...)]
-    // Try regex first, fallback to manual indexOf for content with special chars
+    // 解析 [TOOL_CALL: toolName(key="value", ...)] 或 <tool>toolName(key="value", ...)</tool>
     boolean matched = false;
     String toolName = null;
     String paramsRaw = null;
+    // Try [TOOL_CALL:] format
     try {
       java.util.regex.Matcher m =
           java.util.regex.Pattern.compile(
@@ -1010,15 +1091,49 @@ Example:
     } catch (Exception e) {
       System.err.println("[ToolCallParser] regex compile failed: " + e.getMessage());
     }
+    // Try <tool> format as fallback
+    if (!matched) {
+      try {
+        java.util.regex.Matcher m =
+            java.util.regex.Pattern.compile(
+                    "<tool>(\\w+)\\(([^)]*)\\)</tool>", java.util.regex.Pattern.DOTALL)
+                .matcher(output);
+        if (m.find()) {
+          matched = true;
+          toolName = m.group(1);
+          paramsRaw = m.group(2).trim();
+        }
+      } catch (Exception e) {
+        System.err.println("[ToolCallParser] regex compile failed: " + e.getMessage());
+      }
+    }
     if (!matched) {
       int tcIdx = output.indexOf("[TOOL_CALL:");
       if (tcIdx >= 0) {
         int parenIdx = output.indexOf('(', tcIdx);
         if (parenIdx >= 0) {
-          // Use lastIndexOf(")]") to find the actual end (content may contain ")")
           int endIdx = output.lastIndexOf(")]");
           if (endIdx > parenIdx) {
-            String prefix = output.substring(tcIdx + 10, parenIdx).trim();
+            String prefix = output.substring(tcIdx + 11, parenIdx).trim();
+            String[] parts = prefix.split("\\s+", 2);
+            if (parts.length >= 1) {
+              toolName = parts[0];
+              paramsRaw = output.substring(parenIdx + 1, endIdx).trim();
+              matched = true;
+            }
+          }
+        }
+      }
+    }
+    // Try manual <tool> format as fallback
+    if (!matched) {
+      int tgIdx = output.indexOf("<tool>");
+      if (tgIdx >= 0) {
+        int parenIdx = output.indexOf('(', tgIdx);
+        if (parenIdx >= 0) {
+          int endIdx = output.indexOf("</tool>", parenIdx);
+          if (endIdx > parenIdx) {
+            String prefix = output.substring(tgIdx + 6, parenIdx).trim();
             String[] parts = prefix.split("\\s+", 2);
             if (parts.length >= 1) {
               toolName = parts[0];
@@ -1038,35 +1153,150 @@ Example:
             : 0;
 
     if (!matched) {
-      // Try regex approach for simple tool calls
-      java.util.regex.Matcher m = null;
-      try {
-        java.util.regex.Pattern p =
-            java.util.regex.Pattern.compile(
-                "\\[TOOL_CALL:\\s*(\\w+)\\(([^)]*)\\)\\]", java.util.regex.Pattern.DOTALL);
-        m = p.matcher(output);
-      } catch (Exception e) {
-        System.err.println("[ToolCallParser] regex compile failed: " + e.getMessage());
+      // Try manual fallback with skip-count: find the (idx+1)-th [TOOL_CALL: marker
+      int tcIdx = -1;
+      for (int skip = 0; skip <= idx; skip++) {
+        tcIdx = output.indexOf("[TOOL_CALL:", tcIdx + 1);
+        if (tcIdx < 0) break;
       }
-      if (m != null) {
-        int found = 0;
-        while (m.find()) {
-          if (found >= idx) {
-            matched = true;
-            toolName = m.group(1);
-            paramsRaw = m.group(2).trim();
-            break;
+      if (tcIdx >= 0) {
+        int parenIdx = output.indexOf('(', tcIdx);
+        if (parenIdx >= 0) {
+          int endIdx = output.lastIndexOf(")]");
+          if (endIdx > parenIdx) {
+            String prefix = output.substring(tcIdx + 11, parenIdx).trim();
+            String[] parts = prefix.split("\\s+", 2);
+            if (parts.length >= 1) {
+              toolName = parts[0];
+              paramsRaw = output.substring(parenIdx + 1, endIdx).trim();
+              matched = true;
+            }
           }
-          found++;
+        }
+      }
+      // Fallback: try <tool> format with skip-count
+      if (!matched) {
+        int tgIdx = -1;
+        for (int skip = 0; skip <= idx; skip++) {
+          tgIdx = output.indexOf("<tool>", tgIdx + 1);
+          if (tgIdx < 0) break;
+        }
+        if (tgIdx >= 0) {
+          int parenIdx = output.indexOf('(', tgIdx);
+          if (parenIdx >= 0) {
+            int endIdx = output.indexOf("</tool>", parenIdx);
+            if (endIdx > parenIdx) {
+              String prefix = output.substring(tgIdx + 6, parenIdx).trim();
+              String[] parts = prefix.split("\\s+", 2);
+              if (parts.length >= 1) {
+                toolName = parts[0];
+                paramsRaw = output.substring(parenIdx + 1, endIdx).trim();
+                matched = true;
+              }
+            }
+          }
+        }
+      }
+      // Fallback: try regex approach for simple tool calls (no ) in content)
+      if (!matched) {
+        java.util.regex.Matcher m = null;
+        try {
+          java.util.regex.Pattern p =
+              java.util.regex.Pattern.compile(
+                  "\\[TOOL_CALL:\\s*(\\w+)\\(([^)]*)\\)\\]", java.util.regex.Pattern.DOTALL);
+          m = p.matcher(output);
+        } catch (Exception e) {
+          System.err.println("[ToolCallParser] regex compile failed: " + e.getMessage());
+        }
+        if (m != null) {
+          int found = 0;
+          while (m.find()) {
+            if (found >= idx) {
+              matched = true;
+              toolName = m.group(1);
+              paramsRaw = m.group(2).trim();
+              break;
+            }
+            found++;
+          }
+        }
+      }
+      // Fallback: try <tool> regex with skip-count
+      if (!matched) {
+        java.util.regex.Matcher m = null;
+        try {
+          java.util.regex.Pattern p =
+              java.util.regex.Pattern.compile(
+                  "<tool>(\\w+)\\(([^)]*)\\)</tool>", java.util.regex.Pattern.DOTALL);
+          m = p.matcher(output);
+        } catch (Exception e) {
+          System.err.println("[ToolCallParser] regex compile failed: " + e.getMessage());
+        }
+        if (m != null) {
+          int found = 0;
+          while (m.find()) {
+            if (found >= idx) {
+              matched = true;
+              toolName = m.group(1);
+              paramsRaw = m.group(2).trim();
+              break;
+            }
+            found++;
+          }
         }
       }
     } else {
-      // Manual parse succeeded; apply skipCount tracking
-      // Only consume if idx == 0 (first call hasn't been consumed yet via skip)
+      // Manual parse succeeded for idx==0; apply skipCount tracking
+      // If idx > 0, the first manual parse already found the correct marker
+      // (first occurrence which is idx==0 case), so for idx > 0 we need to skip
       if (idx > 0) {
         matched = false;
         toolName = null;
         paramsRaw = null;
+        // Retry with skip-count manual lookup
+        int tcIdx = -1;
+        for (int skip = 0; skip <= idx; skip++) {
+          tcIdx = output.indexOf("[TOOL_CALL:", tcIdx + 1);
+          if (tcIdx < 0) break;
+        }
+        if (tcIdx >= 0) {
+          int parenIdx = output.indexOf('(', tcIdx);
+          if (parenIdx >= 0) {
+            int endIdx = output.lastIndexOf(")]");
+            if (endIdx > parenIdx) {
+              String prefix = output.substring(tcIdx + 11, parenIdx).trim();
+              String[] parts = prefix.split("\\s+", 2);
+              if (parts.length >= 1) {
+                toolName = parts[0];
+                paramsRaw = output.substring(parenIdx + 1, endIdx).trim();
+                matched = true;
+              }
+            }
+          }
+        }
+        // Fallback: retry with <tool> skip-count
+        if (!matched) {
+          int tgIdx = -1;
+          for (int skip = 0; skip <= idx; skip++) {
+            tgIdx = output.indexOf("<tool>", tgIdx + 1);
+            if (tgIdx < 0) break;
+          }
+          if (tgIdx >= 0) {
+            int parenIdx = output.indexOf('(', tgIdx);
+            if (parenIdx >= 0) {
+              int endIdx = output.indexOf("</tool>", parenIdx);
+              if (endIdx > parenIdx) {
+                String prefix = output.substring(tgIdx + 6, parenIdx).trim();
+                String[] parts = prefix.split("\\s+", 2);
+                if (parts.length >= 1) {
+                  toolName = parts[0];
+                  paramsRaw = output.substring(parenIdx + 1, endIdx).trim();
+                  matched = true;
+                }
+              }
+            }
+          }
+        }
       }
     }
 
@@ -1114,6 +1344,25 @@ Example:
     }
 
     return null;
+  }
+
+  /** 统计输出中 [TOOL_CALL:] 标记的数量。 */
+  private static int countToolCallMarkers(String output) {
+    if (output == null || output.isBlank()) return 0;
+    int count = 0;
+    int idx = 0;
+    // Count [TOOL_CALL: markers
+    while ((idx = output.indexOf("[TOOL_CALL:", idx)) >= 0) {
+      count++;
+      idx += 10;
+    }
+    // Count <tool> markers
+    idx = 0;
+    while ((idx = output.indexOf("<tool>", idx)) >= 0) {
+      count++;
+      idx += 6;
+    }
+    return count;
   }
 
   /** 将 Planner 返回的 Map 意图描述转换为 {@link Action}。 */
@@ -1186,5 +1435,40 @@ Example:
         yield Map.copyOf(m);
       }
     };
+  }
+
+  /** 使用 Jackson 解析 LLM Function Calling 返回的 JSON arguments。 支持嵌套对象、字符串转义（\n, \t, \" 等）。 */
+  private static java.util.Map<String, Object> parseToolArgsJson(String json) {
+    java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+    if (json == null || json.isBlank()) return result;
+    try {
+      com.fasterxml.jackson.databind.ObjectMapper mapper =
+          new com.fasterxml.jackson.databind.ObjectMapper();
+      com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(json);
+      if (root.isObject()) {
+        var it = root.fieldNames();
+        while (it.hasNext()) {
+          String key = it.next();
+          com.fasterxml.jackson.databind.JsonNode val = root.get(key);
+          if (val.isTextual()) {
+            result.put(key, val.asText());
+          } else if (val.isNumber()) {
+            result.put(key, val.asText());
+          } else if (val.isBoolean()) {
+            result.put(key, val.asText());
+          } else if (val.isNull()) {
+            result.put(key, null);
+          } else {
+            result.put(key, val.toString());
+          }
+        }
+      }
+    } catch (Exception e) {
+      logger.warn(
+          "[ToolArgsParser] Failed to parse JSON arguments: {} - {}",
+          e.getMessage(),
+          json.substring(0, Math.min(200, json.length())));
+    }
+    return result;
   }
 }

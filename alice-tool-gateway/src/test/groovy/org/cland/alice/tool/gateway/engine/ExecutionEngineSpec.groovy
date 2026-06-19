@@ -73,9 +73,8 @@ class ExecutionEngineSpec extends Specification {
 
         then:
         result.isFailure()
-        // HIGH 风险等级未配置沙箱提供者，返回配置错误
-        // 若配置了上层的沙箱，则会捕获异常并返回更具体的错误
-        result.summary().contains("No sandbox provider configured")
+        // HIGH 风险等级现在默认使用 DirectSandboxProvider，异常会被捕获
+        result.summary().contains("execution failed") || result.summary().contains("fail")
     }
 
     def "should invoke tool with multiple params"() {

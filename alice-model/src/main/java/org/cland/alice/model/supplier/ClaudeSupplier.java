@@ -175,10 +175,10 @@ public class ClaudeSupplier implements ModelSupplier {
         metadata = Map.of("raw", responseBody);
       }
 
-      return new Call.Response(content, usage, metadata);
+      return Call.Response.textOnly(content, usage, metadata);
     } catch (Exception e) {
       logger.warn("Failed to parse Anthropic response, returning raw body", e);
-      return new Call.Response(responseBody, null, Map.of("parseError", e.getMessage()));
+      return Call.Response.textOnly(responseBody, null, Map.of("parseError", e.getMessage()));
     }
   }
 

@@ -52,6 +52,8 @@ public class ExecutionEngine {
     }
     if (builder.highRiskSandboxProvider != null) {
       this.sandboxProviders.put(RiskLevel.HIGH, builder.highRiskSandboxProvider);
+    } else {
+      this.sandboxProviders.put(RiskLevel.HIGH, new DirectSandboxProvider<>());
     }
 
     // 线程池

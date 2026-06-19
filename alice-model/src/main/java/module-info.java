@@ -6,4 +6,5 @@ module alice.agent.alice.model.main {
   requires java.net.http;
   requires org.slf4j;
   requires ch.qos.logback.classic;
+  requires com.fasterxml.jackson.databind;
 }
