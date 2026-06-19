@@ -44,6 +44,8 @@ class TestSmokeCase2(unittest.TestCase):
         dst.mkdir(parents=True, exist_ok=True)
         import shutil
         for f in cls.FIXTURE_DIR.iterdir():
+            if f.is_dir():
+                continue
             shutil.copy2(f, dst / f.name)
 
     def _run_agent(self):

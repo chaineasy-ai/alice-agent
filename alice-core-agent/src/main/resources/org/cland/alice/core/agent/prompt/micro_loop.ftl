@@ -4,9 +4,9 @@
   <rule>You have already read the files below. DO NOT re-read them.</rule>
   <rule>Your goal is to WRITE changes, not to keep reading.</rule>
   <rule>Based on the tool result and the user task, determine the next action.</rule>
-  <rule>If you have all file contents, proceed directly to write_file.</rule>
+  <rule>If the task requires code changes: read the relevant files ONCE, then write the fix.</rule>
   <rule>Output at most one [TOOL_CALL:] or [FINISH] per response.</rule>
-  <rule>When the task is complete, output [FINISH]. Do not add extra commentary.</rule>
+  <rule>When the task is complete, output [FINISH].</rule>
 </rules>
 
 <user_task>
@@ -17,5 +17,5 @@ ${userTask}
 ${toolResult}
 </tool_result>
 
-Continue working on the user task above. If the task is complete, output [FINISH].
+Continue working on the user task above.
 </micro_loop>

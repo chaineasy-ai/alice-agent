@@ -46,6 +46,8 @@ class TestSmokeCase1(unittest.TestCase):
         dst.mkdir(parents=True, exist_ok=True)
         import shutil
         for f in src.iterdir():
+            if f.is_dir():
+                continue
             shutil.copy2(f, dst / f.name)
 
     def _run_agent(self):
@@ -102,7 +104,7 @@ class TestSmokeCase1(unittest.TestCase):
         import subprocess
         check = subprocess.run(
             [sys.executable, "-c",
-             f"""import sys; sys.path.insert(0, r'{self.WORKSPACE}')
+             f"""import sys; sys.path.insert(0, r'{self.target.parent}')
 from math_utils import divide
 try:
     divide(1, 0)

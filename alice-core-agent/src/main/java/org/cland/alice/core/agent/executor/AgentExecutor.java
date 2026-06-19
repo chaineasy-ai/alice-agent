@@ -756,19 +756,29 @@ public class AgentExecutor {
                 }
 
                 if (success) {
-                  // 检查原始 LLM 回复中是否还有未消耗的标记
-                  // 如果有，返回 Continue(null, obs) 让 Reason 继续解析
+                  // 检查是否还有未消耗的 structured tool_calls
                   boolean hasMoreMarkers = false;
-                  String llmResponse =
-                      ctx.containsKey("__llm_response")
-                          ? ctx.get("__llm_response").toString()
-                          : null;
-                  if (llmResponse != null) {
+                  Object rawTc = ctx.get("__tool_calls");
+                  if (rawTc instanceof java.util.List<?> tcList && !tcList.isEmpty()) {
                     int currentIdx =
                         ctx.containsKey("__tool_call_index")
                             ? Integer.parseInt(ctx.get("__tool_call_index").toString())
-                            : 1; // 当前刚处理完一个，下一个索引是当前值
-                    hasMoreMarkers = countToolCallMarkers(llmResponse) > currentIdx;
+                            : 0;
+                    hasMoreMarkers = currentIdx < tcList.size();
+                  }
+                  // Fallback: 检查文本标记
+                  if (!hasMoreMarkers) {
+                    String llmResponse =
+                        ctx.containsKey("__llm_response")
+                            ? ctx.get("__llm_response").toString()
+                            : null;
+                    if (llmResponse != null) {
+                      int currentIdx =
+                          ctx.containsKey("__tool_call_index")
+                              ? Integer.parseInt(ctx.get("__tool_call_index").toString())
+                              : 1;
+                      hasMoreMarkers = countToolCallMarkers(llmResponse) > currentIdx;
+                    }
                   }
 
                   if (hasMoreMarkers) {
@@ -787,18 +797,30 @@ public class AgentExecutor {
                           ? result.rawData()
                           : result.summary();
 
-                  // 将本次工具执行结果累积到上下文中
-                  String actionLog = "";
+                  // 将本次工具执行结果累积到上下文中（仅保留最近2条，避免日志过长）
+                  StringBuilder actionLogBuilder = new StringBuilder();
                   if (ctx.containsKey("__action_log")) {
-                    actionLog = ctx.get("__action_log").toString();
+                    actionLogBuilder.append(ctx.get("__action_log").toString());
+                    // 如果已经有太多内容，截断保留尾部
+                    String existing = actionLogBuilder.toString();
+                    int idx = existing.lastIndexOf("\n\n", existing.length() - 3);
+                    if (idx > 0 && existing.length() > 2000) {
+                      actionLogBuilder = new StringBuilder(existing.substring(idx + 2));
+                    }
                   }
-                  actionLog +=
-                      "Tool " + action.target() + " returned:\n" + toolResultContent + "\n\n";
-                  ctx.put("__action_log", actionLog);
+                  // 跳过 write_file 结果（只报告成功，不传递文件内容）
+                  if ("write_file".equals(action.target())) {
+                    actionLogBuilder.append("Tool " + action.target() + " succeeded.\n\n");
+                  } else {
+                    actionLogBuilder.append(
+                        "Tool " + action.target() + " returned:\n" + toolResultContent + "\n\n");
+                  }
+                  ctx.put("__action_log", actionLogBuilder.toString());
 
                   // 通过 PromptManager 构建 Micro Loop Prompt，传入累积的日志
                   String rawPrompt = ctx.containsKey("prompt") ? ctx.get("prompt").toString() : "";
-                  String fullPrompt = PromptManager.buildMicroLoopPrompt(actionLog, rawPrompt);
+                  String fullPrompt =
+                      PromptManager.buildMicroLoopPrompt(actionLogBuilder.toString(), rawPrompt);
                   return new StepResult.Continue(
                       Action.llmInference(config.defaultModelId(), fullPrompt),
                       Observation.success(
