@@ -8,6 +8,7 @@ import org.cland.alice.agent.command.ControlCmd;
 import org.cland.alice.agent.subagent.SubAgentManager;
 import org.cland.alice.agent.subagent.SubAgentRecord;
 import org.cland.alice.core.agent.AgentConfig;
+import org.cland.alice.facade.cmd.chat.JLineChatSession;
 import org.cland.alice.facade.cmd.config.AliceConfigStore;
 import org.cland.alice.facade.cmd.config.CommandParser;
 import org.cland.alice.facade.cmd.config.CommandParser.ParseException;
