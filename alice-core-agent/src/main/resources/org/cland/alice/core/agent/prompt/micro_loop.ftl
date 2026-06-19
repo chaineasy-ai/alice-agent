@@ -5,7 +5,7 @@
   <rule>Your goal is to WRITE changes, not to keep reading.</rule>
   <rule>Based on the tool result and the user task, determine the next action.</rule>
   <rule>If the task requires code changes: read the relevant files ONCE, then write the fix.</rule>
-  <rule>Output at most one [TOOL_CALL:] or [FINISH] per response.</rule>
+  <rule>You can output multiple tool calls in a single response when they are independent (e.g., read multiple files, or write multiple files).</rule>
   <rule>When the task is complete, output [FINISH].</rule>
 </rules>
 
