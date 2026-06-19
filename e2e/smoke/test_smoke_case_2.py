@@ -52,7 +52,7 @@ class TestSmokeCase2(unittest.TestCase):
         cmd = [
             str(GRADLEW),
             ":alice-bootstrap:run",
-            "--no-build-cache",
+            "--rerun-tasks",
             "--args",
             f'run "{prompt_flat}" --model {PROJECT_MODEL} --verbose',
         ]
@@ -67,6 +67,20 @@ class TestSmokeCase2(unittest.TestCase):
 
     def setUp(self):
         self.case = CASE_2
+        # Agent 的工作目录是项目根目录，path 解析相对于项目根
+        # 所以 Agent 会修改原始 fixture 文件（而非 temp 副本）
+        self.config_file = Path(__file__).resolve().parent / "fixtures" / "cross_file_config" / "config.py"
+        self.client_file = Path(__file__).resolve().parent / "fixtures" / "cross_file_config" / "client.py"
+
+    @classmethod
+    def tearDownClass(cls):
+        # 恢复原始 fixture
+        import subprocess
+        for f in ["config.py", "client.py"]:
+            fixture = cls.FIXTURE_DIR / f
+            subprocess.run(
+                ["git", "checkout", "--", str(fixture)],
+                cwd=PROJECT_ROOT, capture_output=True)
 
     def test_timeout_renamed_across_files(self):
         """config.py 和 client.py 都必须将 TIMEOUT_MS 替换为 TIMEOUT_SEC"""
@@ -74,9 +88,7 @@ class TestSmokeCase2(unittest.TestCase):
         self.assertEqual(code, 0, f"Agent 退出码非0\n---\n{output[-500:]}")
 
         # 验证 config.py
-        config_file = self.WORKSPACE / "config.py"
-        self.assertTrue(config_file.exists(), "config.py 不存在")
-        config_content = config_file.read_text(encoding="utf-8")
+        config_content = self.config_file.read_text(encoding="utf-8")
         self.assertIn(
             "TIMEOUT_SEC",
             config_content,
@@ -89,9 +101,7 @@ class TestSmokeCase2(unittest.TestCase):
         )
 
         # 验证 client.py
-        client_file = self.WORKSPACE / "client.py"
-        self.assertTrue(client_file.exists(), "client.py 不存在")
-        client_content = client_file.read_text(encoding="utf-8")
+        client_content = self.client_file.read_text(encoding="utf-8")
         self.assertIn(
             "TIMEOUT_SEC",
             client_content,
@@ -108,7 +118,7 @@ class TestSmokeCase2(unittest.TestCase):
         code, output = self._run_agent()
         self.assertEqual(code, 0, f"Agent 退出码非0\n---\n{output[-500:]}")
 
-        config_content = (self.WORKSPACE / "config.py").read_text(encoding="utf-8")
+        config_content = self.config_file.read_text(encoding="utf-8")
 
         # 原 TIMEOUT_MS = 5000 → 换算后 TIMEOUT_SEC = 5
         self.assertIn(

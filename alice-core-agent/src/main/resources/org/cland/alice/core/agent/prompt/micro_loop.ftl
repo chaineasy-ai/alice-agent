@@ -1,8 +1,10 @@
 <#-- Micro Loop Prompt (Micro-ReAct 微观循环) -->
 <micro_loop>
 <rules>
-  <rule>Base your next action on the most recent tool result below.</rule>
-  <rule>If the tool returned content you need, proceed to the next step. Do not re-read the same file.</rule>
+  <rule>You have already read the files below. DO NOT re-read them.</rule>
+  <rule>Your goal is to WRITE changes, not to keep reading.</rule>
+  <rule>Based on the tool result and the user task, determine the next action.</rule>
+  <rule>If you have all file contents, proceed directly to write_file.</rule>
   <rule>Output at most one [TOOL_CALL:] or [FINISH] per response.</rule>
   <rule>When the task is complete, output [FINISH]. Do not add extra commentary.</rule>
 </rules>

@@ -482,12 +482,13 @@ public class AgentExecutor {
                 Action toolAction = Action.toolCall(tc.name(), params);
                 return microReActStep(updatedCtx, toolAction, originalPrompt, depth + 1, maxDepth);
               } else {
-                // All structured tool calls consumed
+                // All structured tool calls consumed — don't finish, get more from LLM
                 updatedCtx.remove("__tool_calls");
                 updatedCtx.remove("__tool_call_index");
-                logger.info("[Micro-ReAct/Reason] All structured tool calls consumed, finishing");
+                logger.info(
+                    "[Micro-ReAct/Reason] All structured tool calls consumed, continuing micro loop");
                 return Future.succeededFuture(
-                    new StepWithContext(updatedCtx, new StepResult.Continue(Action.finish())));
+                    new StepWithContext(updatedCtx, new StepResult.Continue(null)));
               }
             }
 
@@ -785,10 +786,19 @@ public class AgentExecutor {
                       result.rawData() != null && !result.rawData().isBlank()
                           ? result.rawData()
                           : result.summary();
-                  // 通过 PromptManager 构建 Micro Loop Prompt
+
+                  // 将本次工具执行结果累积到上下文中
+                  String actionLog = "";
+                  if (ctx.containsKey("__action_log")) {
+                    actionLog = ctx.get("__action_log").toString();
+                  }
+                  actionLog +=
+                      "Tool " + action.target() + " returned:\n" + toolResultContent + "\n\n";
+                  ctx.put("__action_log", actionLog);
+
+                  // 通过 PromptManager 构建 Micro Loop Prompt，传入累积的日志
                   String rawPrompt = ctx.containsKey("prompt") ? ctx.get("prompt").toString() : "";
-                  String fullPrompt =
-                      PromptManager.buildMicroLoopPrompt(toolResultContent, rawPrompt);
+                  String fullPrompt = PromptManager.buildMicroLoopPrompt(actionLog, rawPrompt);
                   return new StepResult.Continue(
                       Action.llmInference(config.defaultModelId(), fullPrompt),
                       Observation.success(
