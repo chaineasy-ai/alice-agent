@@ -11,6 +11,7 @@ module alice.agent.alice.tool.gateway.main {
   exports org.cland.alice.tool.gateway.sandbox;
   exports org.cland.alice.tool.gateway.schema;
   exports org.cland.alice.tool.gateway.engine;
+  exports org.cland.alice.tool.gateway.builtin;
 
   // 打开包以便测试代码通过反射访问注解和方法
   opens org.cland.alice.tool.gateway;

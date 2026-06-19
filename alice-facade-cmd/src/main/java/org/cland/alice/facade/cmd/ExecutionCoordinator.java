@@ -82,6 +82,16 @@ public final class ExecutionCoordinator {
       Agent agent = new Agent(agentConfig);
       logger.debug("Agent created: {}", agent.agentId());
 
+      // 4. 注册内置工具（read_file, write_file, grep, run）到 ToolRegistry
+      org.cland.alice.tool.gateway.ToolRegistry tr =
+          org.cland.alice.tool.gateway.ToolRegistryHolder.INSTANCE.registry();
+      var discovery = new org.cland.alice.tool.gateway.engine.ToolDiscovery(tr);
+      int toolCount =
+          discovery.scanAndRegister(
+              java.util.List.of(new org.cland.alice.tool.gateway.builtin.BuiltinTools()));
+      agent.withToolRegistry(tr);
+      logger.info("Registered {} builtin tool(s) from BuiltinTools", toolCount);
+
       // 5. 构建上下文
       AgentContext context = new AgentContext();
       context.put("prompt", config.task());

@@ -45,7 +45,7 @@ class ToolRegistrySpec extends Specification {
         registry.size() == 1
     }
 
-    def "should throw on duplicate registration"() {
+    def "should silently skip duplicate registration"() {
         given:
         def schema = mapper.createObjectNode() as ObjectNode
         def handle = MethodHandles.lookup().unreflect(
@@ -67,7 +67,8 @@ class ToolRegistrySpec extends Specification {
         registry.register(meta2)
 
         then:
-        thrown(IllegalArgumentException)
+        noExceptionThrown()
+        registry.lookup("dup") == meta1 // 保持第一个注册
     }
 
     def "should throw on lookup of unknown tool"() {

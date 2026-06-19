@@ -23,23 +23,15 @@ public class ToolRegistry {
   private final Map<String, ToolMetadata> toolMap = new ConcurrentHashMap<>();
 
   /**
-   * 注册一个工具。
+   * 注册一个工具。如果名称重复则跳过（幂等注册）。
    *
    * @param metadata 工具的完整元数据
-   * @throws IllegalArgumentException 如果名称重复
    */
   public void register(ToolMetadata metadata) {
     Objects.requireNonNull(metadata, "metadata must not be null");
     ToolMetadata previous = toolMap.putIfAbsent(metadata.name(), metadata);
     if (previous != null) {
-      throw new IllegalArgumentException(
-          "Tool already registered: "
-              + metadata.name()
-              + " (existing: "
-              + previous.description()
-              + ", new: "
-              + metadata.description()
-              + ")");
+      // 幂等：重复注册时跳过，方便测试和重启式注册
     }
   }
 

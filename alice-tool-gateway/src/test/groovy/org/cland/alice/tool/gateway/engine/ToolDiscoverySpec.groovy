@@ -87,7 +87,7 @@ class ToolDiscoverySpec extends Specification {
         count == 0
     }
 
-    def "should throw on duplicate tools across beans"() {
+    def "should silently skip duplicate tools across beans"() {
         given:
         discovery.scanAndRegister([new ToolDiscoveryTestBeans.DiscoveredBean()])
 
@@ -95,14 +95,10 @@ class ToolDiscoverySpec extends Specification {
         discovery.scanAndRegister([new ToolDiscoveryTestBeans.DuplicateBean()])
 
         then:
-        def e = thrown(RuntimeException)
-        // 异常消息包含注册失败的概括信息
-        e.message.contains("error(s)")
-        // 被抑制的异常或其 cause 包含具体的冲突信息
-        e.suppressed.any { sup ->
-            sup.message.contains("already registered")
-                || (sup.cause?.message ?: "").contains("already registered")
-        }
+        noExceptionThrown()
+        // 仍然保留第一个 bean 注册的工具（先注册先得）
+        registry.hasTool("hello")
+        registry.hasTool("square")
     }
 
     def "should register tools from multiple beans"() {

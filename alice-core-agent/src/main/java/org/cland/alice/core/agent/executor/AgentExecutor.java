@@ -135,8 +135,7 @@ public class AgentExecutor {
    * <p>1. Perceive 输入，初始化上下文 2. 进入 loopBody 递归 3. 任何 fatal error 被 handleFatalError 捕获
    */
   private Future<AgentContext> executeLoop(String input, AgentContext context) {
-    logger.info(
-        "Agent {} starting PPAO loop (maxIterations={})", agent.agentId(), config.maxIterations());
+    logger.info("[PPAO] START Agent {} maxIterations={}", agent.agentId(), config.maxIterations());
 
     return perceive(input, context)
         .compose(this::loopBody)
@@ -153,7 +152,10 @@ public class AgentExecutor {
     // 检查是否应提前终止
     if (agent.shouldFinish(context, null)) {
       logger.info(
-          "Agent {} PPAO loop finished early (iter={})", agent.agentId(), context.iteration());
+          "[PPAO] Agent {} early finish at iteration {}/{}",
+          agent.agentId(),
+          context.iteration(),
+          config.maxIterations());
       return Future.succeededFuture(context);
     }
 
@@ -169,7 +171,10 @@ public class AgentExecutor {
               // 递归：如果不应终止则继续下一轮 Macro 迭代
               if (agent.shouldFinish(ctx, null)) {
                 logger.info(
-                    "Agent {} PPAO loop finished (iter={})", agent.agentId(), ctx.iteration());
+                    "[PPAO] Agent {} normal finish at iteration {}/{}",
+                    agent.agentId(),
+                    ctx.iteration(),
+                    config.maxIterations());
                 return Future.succeededFuture(ctx);
               }
               // 每轮 Macro 迭代递增计数器，确保 isMaxIterationsReached 兜底生效
@@ -207,6 +212,8 @@ public class AgentExecutor {
 
   /** 1. Perceive: 感知输入，构建上下文 */
   private Future<AgentContext> perceive(String input, AgentContext context) {
+    logger.info(
+        "[PPAO] Perceive: input={}", input.length() > 80 ? input.substring(0, 80) + "..." : input);
     logger.debug("[Perceive] input={}", input);
     context.transitionTo(AgentContext.Phase.PERCEIVING);
 
@@ -226,6 +233,7 @@ public class AgentExecutor {
 
   /** 2. Plan: 基于上下文制定阶段性目标（Macro 规划） */
   private Future<StepWithContext> plan(AgentContext context) {
+    logger.info("[PPAO] Plan: iteration={}", context.iteration());
     logger.debug("[Plan] iteration={}", context.iteration());
     context.transitionTo(AgentContext.Phase.PLANNING);
 
@@ -241,6 +249,16 @@ public class AgentExecutor {
       String modelId = config.defaultModelId();
       // 注入系统提示词，引导 LLM 输出结构化工具调用
       String enhancedPrompt = buildSystemPrompt() + "\n\n用户需求: " + rawPrompt;
+
+      // 注入上一轮的观察结果（如果有），避免 LLM 重复同样操作
+      if (context.containsKey("lastObservation")) {
+        enhancedPrompt +=
+            "\n\n上一轮执行结果:\n" + context.get("lastObservation").toString() + "\n请基于此结果继续。不要重复已完成的步骤。";
+      }
+      if (context.containsKey("lastFeedback")) {
+        enhancedPrompt += "\n\n修正反馈:\n" + context.get("lastFeedback").toString() + "\n";
+      }
+
       nextAction = Action.llmInference(modelId, enhancedPrompt);
     }
 
@@ -252,6 +270,7 @@ public class AgentExecutor {
 
   /** 3. Verify (Pre): 在 Act 前拦截检查战略目标的安全性/策略合规性 */
   private Future<StepWithContext> verifyPre(StepWithContext stepWithCtx) {
+    logger.info("[PPAO] Verify(Pre): checking action");
     Action action = stepWithCtx.nextAction();
     AgentContext ctx = stepWithCtx.context();
 
@@ -300,7 +319,7 @@ public class AgentExecutor {
       return Future.succeededFuture(stepWithCtx);
     }
 
-    logger.info("[Act] entering Micro-ReAct loop, initial action={}", action);
+    logger.info("[PPAO] Act: entering Micro-ReAct loop, initial action={}", action);
     ctx.transitionTo(AgentContext.Phase.ACTING);
 
     // 根据初始 Action 类型进入不同的执行路径
@@ -417,6 +436,13 @@ public class AgentExecutor {
 
             Action continueAction = result instanceof StepResult.Continue c ? c.nextAction() : null;
 
+            logger.warn(
+                "[Micro-ReAct/Reason] exit: stepResult type={} continueAction={}",
+                result.getClass().getSimpleName(),
+                continueAction != null
+                    ? continueAction.type() + "/" + continueAction.target()
+                    : "null");
+
             if (continueAction != null
                 && continueAction.type() != Action.Type.FINISH
                 && continueAction.type() != Action.Type.REVISION) {
@@ -453,6 +479,14 @@ public class AgentExecutor {
             }
 
             logger.warn("[Micro-ReAct/Reason] no next action, finishing micro loop");
+            // Save LLM raw output as observation so next macro plan can inject it
+            String llmOutput =
+                updatedCtx.containsKey("result") ? updatedCtx.get("result").toString() : "";
+            if (!llmOutput.isEmpty()) {
+              Observation noToolObs = Observation.success(llmOutput);
+              updatedCtx.put("lastObservation", noToolObs);
+              updatedCtx.put("lastActionResult", llmOutput);
+            }
             return Future.succeededFuture(
                 new StepWithContext(updatedCtx, new StepResult.Continue(Action.finish())));
           }
@@ -524,11 +558,17 @@ public class AgentExecutor {
             () -> {
               try {
                 ModelProvider provider = ModelProvider.getInstance();
+                logger.info(
+                    "[Micro-ReAct/LLM] Calling model={} promptLength={}", modelId, prompt.length());
                 Call call = provider.dispatch(modelId, prompt);
 
                 if (call.status() == org.cland.alice.model.CallStatus.FINISHED
                     && call.result() != null) {
                   String content = call.result().content();
+                  logger.info(
+                      "[Micro-ReAct/LLM] Response model={} responseLength={}",
+                      modelId,
+                      content.length());
                   ctx.put("result", content);
                   ctx.put("__llm_response", content);
                   ctx.remove("__tool_call_index");
@@ -569,206 +609,14 @@ public class AgentExecutor {
   }
 
   // ========================================================================
-  // 内置工具（read_file, write_file, grep, run）
+  // Dispatch TOOL_CALL（统一走 ExecutionEngine）
   // ========================================================================
 
-  /**
-   * 尝试执行内置工具（不依赖 ToolRegistry）。
-   *
-   * <p>支持以下工具：
-   *
-   * <ul>
-   *   <li>{@code read_file} — 读取文件内容
-   *   <li>{@code write_file} — 写入文件内容
-   *   <li>{@code grep} — 全文搜索
-   *   <li>{@code run} — 执行 shell 命令
-   * </ul>
-   *
-   * @return 如果命中内置工具则返回 Future，否则返回 null
-   */
-  private Future<StepWithContext> dispatchBuiltinTool(AgentContext ctx, Action action) {
-    String toolName = action.target();
-    java.util.Map<String, Object> params = action.parameters();
-    // Capture original model ID for LLM calls after tool execution
-    String llmModelId =
-        action.parameters().getOrDefault("modelId", config.defaultModelId()).toString();
-    // Try to get model from the Action that triggered this tool call
-    if ("gpt-4o-mini".equals(llmModelId) && action.actionId() != null) {
-      // Fall back to the original prompt's model if available
-      String ctxModel =
-          ctx.containsKey("model") ? ctx.get("model").toString() : config.defaultModelId();
-      llmModelId = "gpt-4o-mini".equals(ctxModel) ? config.defaultModelId() : ctxModel;
-    }
-
-    try {
-      switch (toolName) {
-        case "read_file" -> {
-          logger.warn("[BuiltinTool] read_file called with params={}", params);
-          String path = (String) params.getOrDefault("path", params.getOrDefault("filePath", ""));
-          if (path.isBlank()) {
-            return Future.succeededFuture(
-                new StepWithContext(
-                    ctx,
-                    new StepResult.Continue(
-                        Action.revision("read_file: path is required"),
-                        Observation.failure("read_file: path is required"))));
-          }
-          java.nio.file.Path filePath = java.nio.file.Paths.get(path);
-          if (!filePath.isAbsolute()) {
-            filePath = java.nio.file.Paths.get(System.getProperty("user.dir")).resolve(filePath);
-          }
-          if (!filePath.toFile().exists()) {
-            return Future.succeededFuture(
-                new StepWithContext(
-                    ctx,
-                    new StepResult.Continue(
-                        Action.revision("read_file: file not found: " + path),
-                        Observation.failure("read_file: file not found: " + path))));
-          }
-          String content = java.nio.file.Files.readString(filePath);
-          logger.debug("[BuiltinTool] read_file {} ({} chars)", path, content.length());
-          ctx.remove("result");
-          // 读取完成后，通知 LLM 分析文件内容并决定下一步操作
-          String analysisPrompt =
-              "You have read file "
-                  + path
-                  + ". Content:\n"
-                  + content
-                  + "\n\nNow fix the divide function to raise ValueError on zero division. "
-                  + "Output [TOOL_CALL: write_file(path=\""
-                  + path
-                  + "\", content=\"<complete fixed file>\")] with the ENTIRE fixed file. "
-                  + "Do NOT read again. After writing, task complete.";
-          return Future.succeededFuture(
-              new StepWithContext(
-                  ctx,
-                  new StepResult.Continue(
-                      Action.llmInference(llmModelId, analysisPrompt),
-                      Observation.success(
-                          "Read file " + path + " (" + content.length() + " chars)"))));
-        }
-        case "write_file" -> {
-          String path = (String) params.getOrDefault("path", "");
-          String content = (String) params.getOrDefault("content", "");
-          if (path.isBlank()) {
-            return Future.succeededFuture(
-                new StepWithContext(
-                    ctx,
-                    new StepResult.Continue(
-                        Action.revision("write_file: path is required"),
-                        Observation.failure("write_file: path is required"))));
-          }
-          java.nio.file.Path filePath = java.nio.file.Paths.get(path);
-          if (!filePath.isAbsolute()) {
-            filePath = java.nio.file.Paths.get(System.getProperty("user.dir")).resolve(filePath);
-          }
-          filePath.getParent().toFile().mkdirs();
-          java.nio.file.Files.writeString(filePath, content);
-          logger.debug("[BuiltinTool] write_file {} ({} chars)", path, content.length());
-          return Future.succeededFuture(
-              new StepWithContext(
-                  ctx,
-                  new StepResult.Continue(
-                      Action.llmInference(llmModelId, "已写入文件 " + path + "，继续分析是否需要更多修改"),
-                      Observation.success("已写入文件 " + path))));
-        }
-        case "grep" -> {
-          String pattern = (String) params.getOrDefault("pattern", "");
-          String grepPath = (String) params.getOrDefault("path", ".");
-          if (pattern.isBlank()) {
-            return Future.succeededFuture(
-                new StepWithContext(
-                    ctx,
-                    new StepResult.Continue(
-                        Action.revision("grep: pattern is required"),
-                        Observation.failure("grep: pattern is required"))));
-          }
-          java.nio.file.Path searchPath = java.nio.file.Paths.get(grepPath);
-          if (!searchPath.isAbsolute()) {
-            searchPath =
-                java.nio.file.Paths.get(System.getProperty("user.dir")).resolve(searchPath);
-          }
-          StringBuilder results = new StringBuilder();
-          try (var stream = java.nio.file.Files.walk(searchPath)) {
-            stream
-                .filter(
-                    p ->
-                        p.toString().endsWith(".py")
-                            || p.toString().endsWith(".java")
-                            || p.toString().endsWith(".txt")
-                            || p.toString().endsWith(".md"))
-                .forEach(
-                    p -> {
-                      try {
-                        String text = java.nio.file.Files.readString(p);
-                        if (text.contains(pattern)) {
-                          results.append(p.getFileName()).append(": matches\n");
-                        }
-                      } catch (Exception ignored) {
-                      }
-                    });
-          }
-          logger.debug("[BuiltinTool] grep '{}' found {} files", pattern, results.length());
-          return Future.succeededFuture(
-              new StepWithContext(
-                  ctx,
-                  new StepResult.Continue(
-                      Action.llmInference(llmModelId, "grep '" + pattern + "' 结果:\n" + results),
-                      Observation.success("grep '" + pattern + "' 完成"))));
-        }
-        case "run" -> {
-          String cmd = (String) params.getOrDefault("cmd", "");
-          if (cmd.isBlank()) {
-            return Future.succeededFuture(
-                new StepWithContext(
-                    ctx,
-                    new StepResult.Continue(
-                        Action.revision("run: cmd is required"),
-                        Observation.failure("run: cmd is required"))));
-          }
-          ProcessBuilder pb = new ProcessBuilder("cmd.exe", "/c", cmd);
-          pb.directory(new java.io.File(System.getProperty("user.dir")));
-          Process process = pb.start();
-          String stdOut = new String(process.getInputStream().readAllBytes());
-          String stdErr = new String(process.getErrorStream().readAllBytes());
-          int exitCode = process.waitFor();
-          String resultOutput =
-              exitCode == 0 ? stdOut : "exit=" + exitCode + "\n" + stdOut + "\n" + stdErr;
-          logger.debug("[BuiltinTool] run '{}' exit={}", cmd, exitCode);
-          return Future.succeededFuture(
-              new StepWithContext(
-                  ctx,
-                  new StepResult.Continue(
-                      Action.llmInference(llmModelId, "命令执行结果:\n" + resultOutput),
-                      Observation.success("命令 '" + cmd + "' 执行完成 (exit=" + exitCode + ")"))));
-        }
-        default -> {
-          return null; // 不是内置工具，交给 ToolRegistry
-        }
-      }
-    } catch (Exception e) {
-      logger.error("[BuiltinTool] error executing {}", toolName, e);
-      return Future.succeededFuture(
-          new StepWithContext(
-              ctx,
-              new StepResult.Continue(
-                  Action.revision("Tool error: " + toolName + " - " + e.getMessage()),
-                  Observation.failure("Tool " + toolName + " error: " + e.getMessage()))));
-    }
-  }
-
-  /** Dispatch TOOL_CALL */
   private Future<StepWithContext> dispatchToolCall(AgentContext ctx, Action action) {
-    logger.warn("[Dispatch/TOOL_CALL] target={} params={}", action.target(), action.parameters());
-    // 先尝试内置工具（read_file, write_file, grep, run），不依赖 ToolRegistry
-    Future<StepWithContext> builtinResult = dispatchBuiltinTool(ctx, action);
-    if (builtinResult != null) {
-      return builtinResult;
-    }
-    logger.warn("[Dispatch/TOOL_CALL] not a builtin tool, falling through to ToolRegistry");
+    logger.info("[Dispatch/TOOL_CALL] target={} params={}", action.target(), action.parameters());
 
     if (agent.toolRegistry() == null) {
-      logger.warn("[Micro-ReAct/Tool] no ToolRegistry available");
+      logger.info("[Micro-ReAct/Tool] no ToolRegistry available");
       return Future.succeededFuture(
           new StepWithContext(
               ctx,
@@ -863,6 +711,7 @@ public class AgentExecutor {
     AgentContext ctx = stepWithCtx.context();
     StepResult result = stepWithCtx.result();
 
+    logger.info("[PPAO] Observe: collecting macro observation");
     logger.debug("[Observe] result={}", result);
     ctx.transitionTo(AgentContext.Phase.OBSERVING);
 
@@ -933,6 +782,18 @@ public class AgentExecutor {
     }
 
     ctx.transitionTo(AgentContext.Phase.REFLECTING);
+
+    // 检查是否应该终止（Continue with FINISH action = complete）
+    if (stepWithCtx.result() instanceof StepResult.Continue cont) {
+      Action nextAction = cont.nextAction();
+      if (nextAction != null && nextAction.type() == Action.Type.FINISH) {
+        ctx.transitionTo(AgentContext.Phase.FINISH);
+        if (!ctx.containsKey("result")) {
+          ctx.put("result", "Agent completed without explicit result.");
+        }
+        return Future.succeededFuture(ctx);
+      }
+    }
 
     // 提取 Revision 反馈
     if (stepWithCtx.result() instanceof StepResult.Continue cont) {
@@ -1101,55 +962,108 @@ Example:
       }
     }
     if (output == null || output.isBlank()) {
-      System.out.println("[ToolCallParser] no output to parse (result is null/blank)");
+      logger.info("[ToolCallParser] no output to parse (result is null/blank)");
       return null;
     }
 
-    System.out.println(
-        "[ToolCallParser] output first300=" + output.substring(0, Math.min(300, output.length())));
+    logger.info(
+        "[ToolCallParser] output first300={}", output.substring(0, Math.min(300, output.length())));
 
     // Debug: check if TOOL_CALL or FINISH markers are in the output
     if (output.contains("[TOOL_CALL:") || output.contains("[FINISH]")) {
-      System.out.println("[ToolCallParser] FOUND markers in output, length=" + output.length());
+      logger.info("[ToolCallParser] FOUND markers in output, length={}", output.length());
     } else {
-      System.out.println(
-          "[ToolCallParser] NO markers in output, length="
-              + output.length()
-              + " first200="
-              + output.substring(0, Math.min(200, output.length())));
+      logger.info(
+          "[ToolCallParser] NO markers in output, length={} first200={}",
+          output.length(),
+          output.substring(0, Math.min(200, output.length())));
     }
 
     // 解析 [TOOL_CALL: toolName(key="value", ...)]
-    // 匹配到 )] 结束的格式。注意 group(2) 使用非贪婪 + 明确 end anchor
-    java.util.regex.Pattern pattern =
-        java.util.regex.Pattern.compile(
-            "\\[TOOL_CALL:\\s*(\\w+)\\(([^)]*)\\)\\]", java.util.regex.Pattern.DOTALL);
-    java.util.regex.Matcher matcher = pattern.matcher(output);
+    // Try regex first, fallback to manual indexOf for content with special chars
+    boolean matched = false;
+    String toolName = null;
+    String paramsRaw = null;
+    try {
+      java.util.regex.Matcher m =
+          java.util.regex.Pattern.compile(
+                  "\\[TOOL_CALL:\\s*(\\w+)\\(([^)]*)\\)\\]", java.util.regex.Pattern.DOTALL)
+              .matcher(output);
+      if (m.find()) {
+        matched = true;
+        toolName = m.group(1);
+        paramsRaw = m.group(2).trim();
+      }
+    } catch (Exception e) {
+      System.err.println("[ToolCallParser] regex compile failed: " + e.getMessage());
+    }
+    if (!matched) {
+      int tcIdx = output.indexOf("[TOOL_CALL:");
+      if (tcIdx >= 0) {
+        int parenIdx = output.indexOf('(', tcIdx);
+        if (parenIdx >= 0) {
+          // Use lastIndexOf(")]") to find the actual end (content may contain ")")
+          int endIdx = output.lastIndexOf(")]");
+          if (endIdx > parenIdx) {
+            String prefix = output.substring(tcIdx + 10, parenIdx).trim();
+            String[] parts = prefix.split("\\s+", 2);
+            if (parts.length >= 1) {
+              toolName = parts[0];
+              paramsRaw = output.substring(parenIdx + 1, endIdx).trim();
+              matched = true;
+            }
+          }
+        }
+      }
+    }
 
-    // 跳过已消费的工具调用
+    // Combine manual parse result with skipCount tracking
+    // (the regex approach fails for content containing ) characters)
     int idx =
         ctx.containsKey("__tool_call_index")
             ? Integer.parseInt(ctx.get("__tool_call_index").toString())
             : 0;
-    int found = 0;
-    boolean matched = false;
-    while (matcher.find()) {
-      if (found >= idx) {
-        matched = true;
-        break;
+
+    if (!matched) {
+      // Try regex approach for simple tool calls
+      java.util.regex.Matcher m = null;
+      try {
+        java.util.regex.Pattern p =
+            java.util.regex.Pattern.compile(
+                "\\[TOOL_CALL:\\s*(\\w+)\\(([^)]*)\\)\\]", java.util.regex.Pattern.DOTALL);
+        m = p.matcher(output);
+      } catch (Exception e) {
+        System.err.println("[ToolCallParser] regex compile failed: " + e.getMessage());
       }
-      found++;
+      if (m != null) {
+        int found = 0;
+        while (m.find()) {
+          if (found >= idx) {
+            matched = true;
+            toolName = m.group(1);
+            paramsRaw = m.group(2).trim();
+            break;
+          }
+          found++;
+        }
+      }
+    } else {
+      // Manual parse succeeded; apply skipCount tracking
+      // Only consume if idx == 0 (first call hasn't been consumed yet via skip)
+      if (idx > 0) {
+        matched = false;
+        toolName = null;
+        paramsRaw = null;
+      }
     }
 
     if (matched) {
-      String toolName = matcher.group(1);
-      String paramsRaw = matcher.group(2).trim();
       ctx.put("__tool_call_index", String.valueOf(idx + 1));
-      System.out.println(
-          "[ToolCallParser] regex MATCHED #" + idx + ": tool=" + toolName + " params=" + paramsRaw);
+      logger.info("[ToolCallParser] MATCHED #{} tool={} params={}", idx, toolName, paramsRaw);
 
       // 解析 key="value" 参数
-      java.util.regex.Pattern paramPattern = java.util.regex.Pattern.compile("(\\w+)=\"([^\"]*)\"");
+      java.util.regex.Pattern paramPattern =
+          java.util.regex.Pattern.compile("(\\w+)=\"((?:[^\"\\\\]|\\\\.)*)\"");
       java.util.regex.Matcher paramMatcher = paramPattern.matcher(paramsRaw);
 
       java.util.Map<String, Object> params = new java.util.LinkedHashMap<>();
@@ -1157,15 +1071,15 @@ Example:
         params.put(paramMatcher.group(1), paramMatcher.group(2));
       }
 
-      // 如果是 write_file，检查是否有未闭合的引号（content 可能跨多行）
-      if ("write_file".equals(toolName) && !params.containsKey("content")) {
-        // 尝试从 output 中提取 write_file 的完整 content
-        java.util.regex.Pattern contentPattern =
-            java.util.regex.Pattern.compile(
-                "content=\"([\\s\\S]*?)\"\\s*\\)", java.util.regex.Pattern.DOTALL);
-        java.util.regex.Matcher contentMatcher = contentPattern.matcher(output);
-        if (contentMatcher.find()) {
-          params.put("content", contentMatcher.group(1));
+      // write_file: extract content from raw output using indexOf
+      if ("write_file".equals(toolName) && output != null) {
+        int ci = output.indexOf("content=\"");
+        if (ci >= 0) {
+          // Find the last ")] to handle ) in content
+          int ce = output.lastIndexOf("\")]");
+          if (ce > ci + 9) {
+            params.put("content", output.substring(ci + 9, ce));
+          }
         }
       }
 
@@ -1178,9 +1092,9 @@ Example:
       return Action.toolCall(toolName, params);
     }
 
-    System.out.println(
-        "[ToolCallParser] regex NO MATCH on output first200="
-            + output.substring(0, Math.min(200, output.length())));
+    logger.info(
+        "[ToolCallParser] NO MATCH on output first200={}",
+        output.substring(0, Math.min(200, output.length())));
     // 所有 TOOL_CALL 都已消费，检查 FINISH
     if (output.contains("[FINISH]")) {
       return Action.finish();
