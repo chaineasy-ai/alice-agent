@@ -86,7 +86,9 @@ python docs/{module}/e2e/hole_test_{module}.py
 TEMPLATE_IMPL = """\
 #!/usr/bin/env python3
 """
-Hole Test — {module} module endpoints.
+Hole Test (TDD: RED) — {module} module endpoints.
+
+Follow hole-tdd: start RED (assert False), then make GREEN.
 
 See:
   docs/alice-agent-command/e2e/case-{module}.md
@@ -102,7 +104,7 @@ from helpers import run_gradle_task, PROJECT_ROOT
 
 
 class Test{module_camel}Holes(unittest.TestCase):
-    """Hole tests for {module} — {num_holes} probes."""
+    \"\"\"Hole tests for {module} — {num_holes} probes.\"\"\"
 
     @classmethod
     def setUpClass(cls):
@@ -112,8 +114,9 @@ class Test{module_camel}Holes(unittest.TestCase):
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("  Hole Test: {module}")
+    print("  Hole Test (TDD): {module}")
     print(f"  Module: {{PROJECT_ROOT / '{module}'}}")
+    print("  Status: 🟥 RED (default) — replace assertTrue(False) to make GREEN")
     print("=" * 60)
     unittest.main(verbosity=2)
 """
@@ -169,10 +172,12 @@ def main():
         hole_map_lines.append(f"  {hid}  {h['target']}")
 
         hole_methods.append(f"""\
-    @unittest.skip("TODO: implement {hid}")
     def test_{hid.lower()}(self):
-        \"\"\"{hid}: {h['desc']}\"\"\"
-        pass
+        \"\"\"{hid}: {h['desc']} — 🟥 RED, replace assertTrue(False)\"\"\"
+        if not self.build_ok:
+            self.skipTest("Module not built. Run build first.")
+        # TODO: Replace with real assertion to make GREEN
+        self.assertTrue(False, "{hid}: 🟥 RED — implement assertion")
 """)
 
     HOLE_DESIGN = "\n".join(hole_design_lines)
