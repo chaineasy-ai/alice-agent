@@ -5,7 +5,7 @@
 ![License](https://img.shields.io/github/license/chaineasy-ai/alice-agent.svg)
 ![Last Commit](https://img.shields.io/github/last-commit/chaineasy-ai/alice-agent.svg)
 
-[![Star History Chart](https://api.star-history.com/svg?repos=chaineasy-ai/alice-agent&type=Date)](https://star-history.com/#chaineasy-ai/alice-agent&Date)
+[![Star History Chart](https://api.star-history.com/chart?repos=chaineasy-ai/alice-agent&type=date&legend=top-left)](https://www.star-history.com/?repos=chaineasy-ai%2Falice-agent&type=date&legend=top-left)
 
 A modular Java agent framework built with Gradle and Spock.
 
