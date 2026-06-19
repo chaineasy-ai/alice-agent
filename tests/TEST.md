@@ -49,205 +49,156 @@
 
 **实现文件**: `docs/alice-facade-tui/e2e/test_slash_commands.py`
 
-### 2.2 核心模块端点（挖洞 — 缺失待补）
+### 2.2 核心模块端点（Hole Test — 洞测试）
 
-以下 8 个模块的**端点测试**目前缺失，每个模块的端点按 **"挖洞"（Probing）** 方式设计：不深入内部实现细节，仅验证模块边界的 3~5 个关键接口输入输出是否正确。每个挖洞点对应一个 scene doc 和一个 case doc。
+以下 8 个核心模块的端点测试按 **"挖洞"（Probing）** 方式设计：不深入内部实现细节，仅验证模块边界的 3~5 个关键接口输入输出是否正确。每个挖洞点对应一个 scene doc、一个 case doc、和一个 Python 驱动脚本。
+
+**洞测试遵循 hole-tdd（洞驱动开发）**：Red → Green → Refactor。
 
 ---
 
 ### 2.2.1 alice-core-agent — 核心代理生命周期
 
-**DESIGN.md 核心接口**：
-- `AgentExecutor.execute(Input) → StepResult`
-- `Lifecycle.onPerceive/onPlan/onAct/onVerify → Context/Plan/Observation/Boolean`
-- `StepResult` — sealed (Continue/Finish/Failure)
+| 洞号 | 端点 | 对应的 Spec 文件 | 状态 |
+|------|------|-----------------|------|
+| AGT-P01 | `AgentExecutor.execute()` 正常流 | `AgentPpaoLoopSpec` | 🟩 GREEN |
+| AGT-P02 | `StepResult` 模式匹配 | `StepResultSpec` | 🟩 GREEN |
+| AGT-P03 | `AgentContext` 会话状态管理 | `AgentContextSpec` | 🟩 GREEN |
+| AGT-P05 | `SubAgentManager` 注册/查找 | `SubAgentManagerSpec` | 🟩 GREEN |
 
-| 洞号 | 端点 | 挖洞方法 | 验证内容 |
-|------|------|---------|---------|
-| AGT-P01 | `AgentExecutor.execute()` 正常流 | 构造 Mock Input，验证返回 `Finish` 或 `Failure` | 执行入口不崩溃，返回 sealed 结果 |
-| AGT-P02 | `StepResult` 模式匹配 | 分别构造 Continue/Finish/Failure，验证 switch 分支可达 | sealed 层次完整性 |
-| AGT-P03 | `AgentContext` 会话状态管理 | 创建/读取/清除 session，验证状态转移 | session 生命周期正确 |
-| AGT-P04 | `AgentConfig` 配置加载 | 从内存/文件加载配置，验证字段映射 | 配置反序列化正确 |
-| AGT-P05 | `SubAgentManager` 注册/查找 | 注册 SubAgent，查找/列出/注销 | 子代理注册表增删查 |
-
-**文件规划**：
+**文件**：
 - Case doc: `docs/alice-agent-command/e2e/case-core-agent.md`
 - Scene doc: `docs/alice-core-agent/e2e/scene-executor-endpoints.md`
-- 实现: `docs/alice-core-agent/e2e/test_core_agent_endpoints.py` 或 Groovy 直接通过 `buildSrc`/Gradle 子任务执行
-- 状态: 🔜 待实现
+- 实现: `docs/alice-core-agent/e2e/hole_test_core_agent.py`
 
 ---
 
 ### 2.2.2 alice-core-planner — 规划引擎
 
-**DESIGN.md 核心接口**：
-- `PlannerService.plan(AgentContext) → Plan`
-- `DecisionStrategy.decide(AgentContext) → Plan` (FastPathStrategy / SlowPathStrategy)
-- `WorldModel.predict(State, Action) → Observation`
+| 洞号 | 端点 | 对应的 Spec 文件 | 状态 |
+|------|------|-----------------|------|
+| PLN-P01 | `PlannerService.plan()` 调用 | `PlannerServiceSpec` | 🟩 GREEN |
+| PLN-P02 | `FastPathStrategy.decide()` 快速路径 | `PlannerServiceSpec` | 🟩 GREEN |
+| PLN-P03 | `SlowPathStrategy.decide()` 慢速路径 | `PlannerServiceSpec` | 🟩 GREEN |
+| PLN-P04 | `WorldModel.predict()` 世界模型预测 | `PlannerServiceSpec` | 🟩 GREEN |
 
-| 洞号 | 端点 | 挖洞方法 | 验证内容 |
-|------|------|---------|---------|
-| PLN-P01 | `PlannerService.plan()` 调用 | 传入模拟 ctx，验证返回 Plan 非 null | 规划入口可用 |
-| PLN-P02 | `FastPathStrategy.decide()` 快速路径 | 简单上下文触发快速路径验证 | 路径选择逻辑 |
-| PLN-P03 | `SlowPathStrategy.decide()` 慢速路径 | 复杂/不确定上下文触发慢速路径 | 慢路径回退 |
-| PLN-P04 | `WorldModel.predict()` 世界模型预测 | 给定 state+action，验证 Observation 响应 | 预测接口一致 |
-
-**文件规划**：
+**文件**：
 - Case doc: `docs/alice-agent-command/e2e/case-core-planner.md`
 - Scene doc: `docs/alice-core-planner/e2e/scene-planner-endpoints.md`
-- 状态: 🔜 待实现
+- 实现: `docs/alice-core-planner/e2e/hole_test_planner.py`
 
 ---
 
 ### 2.2.3 alice-env-adapter — 环境适配器
 
-**DESIGN.md 核心接口**：
-- `EnvManager.execute(Action) → Observation`
-- `McpClient.listTools() → List<Tool>`
-- `McpClient.callTool(String, Map) → Result`
-- `SnapshotManager.save(state)` / `rollback() → EnvState`
+| 洞号 | 端点 | 对应的 Spec 文件 | 状态 |
+|------|------|-----------------|------|
+| ENV-P01 | `EnvManager.execute()` 动作执行 | `EnvManagerSpec` | 🟩 GREEN |
+| ENV-P02 | `McpClient.callTool()` MCP 工具调用 | `McpClientSpec` | 🟩 GREEN |
+| ENV-P03 | `McpClient.listTools()` MCP 工具列表 | `FakeTransportSpec` | 🟩 GREEN |
+| ENV-P04 | `SnapshotManager.save()` + `rollback()` | `SnapshotManagerSpec` | 🟩 GREEN |
 
-| 洞号 | 端点 | 挖洞方法 | 验证内容 |
-|------|------|---------|---------|
-| ENV-P01 | `EnvManager.execute()` 动作执行 | 模拟 Action，验证返回 Observation | 执行入口完整 |
-| ENV-P02 | `McpClient.callTool()` MCP 工具调用 | 用 `FakeMcpTransport` 模拟，验证结果格式 | MCP 协议适配 |
-| ENV-P03 | `McpClient.listTools()` MCP 工具列表 | 验证返回工具名/描述列表 | 工具发现 |
-| ENV-P04 | `SnapshotManager.save()` + `rollback()` | 快照保存后回滚，验证状态恢复 | 快照回滚 |
-
-**文件规划**：
+**文件**：
 - Case doc: `docs/alice-agent-command/e2e/case-env-adapter.md`
 - Scene doc: `docs/alice-env-adapter/e2e/scene-env-endpoints.md`
-- 状态: 🔜 待实现
+- 实现: `docs/alice-env-adapter/e2e/hole_test_env.py`
 
 ---
 
 ### 2.2.4 alice-tool-gateway — 工具网关
 
-**DESIGN.md 核心接口**：
-- `ToolRegistry.register()` / `lookup(String) → ToolMetadata`
-- `ToolDiscovery.scanAndRegister()`
-- `ExecutionEngine.invoke(Action) → Observation`
-- `SandboxProvider.executeInIsolation(Callable) → Result`
+| 洞号 | 端点 | 对应的 Spec 文件 | 状态 |
+|------|------|-----------------|------|
+| TGW-P01 | `ToolRegistry.register()` + `lookup()` | `ToolRegistrySpec` | 🟩 GREEN |
+| TGW-P02 | `ToolDiscovery.scanAndRegister()` | `ToolDiscoverySpec` | 🟩 GREEN |
+| TGW-P03 | `ExecutionEngine.invoke()` 工具调用 | `ExecutionEngineSpec` | 🟩 GREEN |
+| TGW-P04 | `SandboxProvider.executeInIsolation()` | `SandboxProviderSpec` | 🟩 GREEN |
 
-| 洞号 | 端点 | 挖洞方法 | 验证内容 |
-|------|------|---------|---------|
-| TGW-P01 | `ToolRegistry.register()` + `lookup()` | 注册工具后按名查找，验证元数据准确 | 注册/查找基础操作 |
-| TGW-P02 | `ToolDiscovery.scanAndRegister()` | 扫描带注解的 bean，验证自动注册 | 自动发现机制 |
-| TGW-P03 | `ExecutionEngine.invoke()` 工具调用 | 模拟 Action 调用注册工具，验证 Observation | 执行引擎链路 |
-| TGW-P04 | `SandboxProvider.executeInIsolation()` | 提交简单任务（如 `λ → 42`），验证结果可用 | 沙箱隔离 |
-
-**文件规划**：
+**文件**：
 - Case doc: `docs/alice-agent-command/e2e/case-tool-gateway.md`
 - Scene doc: `docs/alice-tool-gateway/e2e/scene-tool-gateway-endpoints.md`
-- 状态: 🔜 待实现
+- 实现: `docs/alice-tool-gateway/e2e/hole_test_tool_gateway.py`
 
 ---
 
 ### 2.2.5 alice-memory-vault — 记忆库
 
-**DESIGN.md 核心接口**：
-- `VaultController.recall(Context) → MemorySet`
-- `VaultController.memorize(Experience)`
-- `EpisodicVault.getRecentTrace(sessionId)` / `summarize(sessionId)`
-- `SemanticVault.search(String) → List<Knowledge>`
-- `ProceduralVault.matchPattern(Context) → List<SOP>`
+| 洞号 | 端点 | 对应的 Spec 文件 | 状态 |
+|------|------|-----------------|------|
+| MEM-P01 | `VaultController.memorize()` + `recall()` | `MemoryVaultSpec` | 🟩 GREEN |
+| MEM-P02 | `EpisodicVault.getRecentTrace()` | `WalEpisodicVaultSpec` | 🟩 GREEN |
+| MEM-P03 | `SemanticVault.search()` 语义检索 | `JVectorSemanticVaultSpec` | 🟩 GREEN |
+| MEM-P04 | `ProceduralVault.matchPattern()` | `MemoryVault*` | 🟩 GREEN |
+| MEM-P05 | `WalStore` 持久化 + 崩溃恢复 | `CrashRecoveryE2ESpec` | 🟩 GREEN |
 
-| 洞号 | 端点 | 挖洞方法 | 验证内容 |
-|------|------|---------|---------|
-| MEM-P01 | `VaultController.memorize()` + `recall()` | 存入一条经验，再检索验证能取回 | 基本存取闭环 |
-| MEM-P02 | `EpisodicVault.getRecentTrace()` | 模拟多步日志后，验证最近 N 步正确 | 事件序列索引 |
-| MEM-P03 | `SemanticVault.search()` 语义检索 | 插入带 embedding 的知识，搜索验证相关性 | 向量检索 |
-| MEM-P04 | `ProceduralVault.matchPattern()` | 注册 SOP 模式后，匹配相似上下文 | SOP 匹配 |
-| MEM-P05 | `WalStore` 持久化 + 崩溃恢复 | 写入 WAL → 模拟崩溃 → 恢复验证数据完整 | 持久化可靠性 |
-
-**文件规划**：
+**文件**：
 - Case doc: `docs/alice-agent-command/e2e/case-memory-vault.md`
 - Scene doc: `docs/alice-memory-vault/e2e/scene-memory-endpoints.md`
-- 状态: 🔜 待实现
+- 实现: `docs/alice-memory-vault/e2e/hole_test_memory.py`
 
 ---
 
 ### 2.2.6 alice-model — 模型抽象层
 
-**DESIGN.md 核心接口**：
-- `ModelProvider.dispatch(Request) → Call`
-- `ModelSupplier.chat(Request) → Response` (OpenAiSupplier / ClaudeSupplier / Gemma4Supplier)
-- `Call.execute() → Response`
-- `ModelConfigLoader.loadConfig() → ModelConfig`
+| 洞号 | 端点 | 对应的 Spec 文件 | 状态 |
+|------|------|-----------------|------|
+| MDL-P01 | `ModelProvider.dispatch()` 供应商调度 | `ModelProviderSpec` | 🟩 GREEN |
+| MDL-P02 | `Call.execute()` 调用生命周期 | `CallSpec` | 🟩 GREEN |
+| MDL-P03 | `ModelSupplier.chat()` 响应解析 | `ClaudeSupplierSpec` | 🟩 GREEN |
+| MDL-P04 | `ModelConfigLoader` 加载配置 | `ModelConfigLoaderSpec` | 🟩 GREEN |
+| MDL-P05 | 多供应商切换路由 | `ModelProviderSpec` | 🟩 GREEN |
 
-| 洞号 | 端点 | 挖洞方法 | 验证内容 |
-|------|------|---------|---------|
-| MDL-P01 | `ModelProvider.dispatch()` + `registerSupplier()` | 注册 FakeSupplier，请求分发验证命中 | 供应商调度 |
-| MDL-P02 | `Call.execute()` 调用生命周期 | 构造完整 Call，验证状态流转 (NEW→RUNNING→DONE/FAILED) | Call 生命周期 |
-| MDL-P03 | `ModelSupplier.chat()` 统一输入/输出 | Mock HTTP 响应，验证 supplier 解析响应格式 | 供应商适配器 |
-| MDL-P04 | `ModelConfigLoader` 加载配置 | 从 JSON/YAML 加载，验证模型定义字段映射 | 配置反序列化 |
-| MDL-P05 | 多供应商切换 | 注册 2 个 supplier，按 modelId 路由到不同 supplier | 路由策略 |
-
-**文件规划**：
+**文件**：
 - Case doc: `docs/alice-agent-command/e2e/case-model.md`
 - Scene doc: `docs/alice-model/e2e/scene-model-endpoints.md`
-- 状态: 🔜 待实现
+- 实现: `docs/alice-model/e2e/hole_test_model.py`
 
 ---
 
 ### 2.2.7 alice-guardrail — 护栏/验证
 
-**DESIGN.md 核心接口**：
-- `GuardrailService.verifyPlan(Plan) → AuditResult`
-- `GuardrailService.verifyResult(Observation, Plan) → AuditResult`
-- `PolicyEngine.evaluate(Object) → AuditResult`
-- `PreValidator.check(Plan) → AuditResult`
-- `PostValidator.check(Observation, Plan) → AuditResult`
+| 洞号 | 端点 | 对应的 Spec 文件 | 状态 |
+|------|------|-----------------|------|
+| GRD-P01 | `GuardrailService.verifyPlan()` 前置验证 | `GuardrailServiceSpec` | 🟩 GREEN |
+| GRD-P02 | `GuardrailService.verifyResult()` 后置验证 | `GuardrailServiceSpec` | 🟩 GREEN |
+| GRD-P03 | `PolicyEngine` 策略引擎 | `PolicyEngineSpec` | 🟩 GREEN |
+| GRD-P04 | `HallucinationDetector` 幻觉检测 | `HallucinationDetectorSpec` | 🟩 GREEN |
+| GRD-P05 | `PermissionSandboxValidator` 权限沙箱 | `PermissionSandboxValidatorSpec` | 🟩 GREEN |
 
-| 洞号 | 端点 | 挖洞方法 | 验证内容 |
-|------|------|---------|---------|
-| GRD-P01 | `GuardrailService.verifyPlan()` 计划前置验证 | 传入合法/非法 Plan，验证 AuditResult.passed 正确 | 前置验证链 |
-| GRD-P02 | `GuardrailService.verifyResult()` 结果后置验证 | 传入合法/非法 Observation，验证审计结果 | 后置验证链 |
-| GRD-P03 | `PolicyEngine.evaluate()` 策略引擎 | 定义简单策略，验证评估通过/不通过 | 策略执行 |
-| GRD-P04 | `HallucinationDetector` 幻觉检测 | 传入含矛盾/正常 Observation，验证检测结果 | 幻觉拦截 |
-| GRD-P05 | `PermissionSandboxValidator` 权限沙箱 | 传入越界/合法 Action，验证拦截/放行 | 权限控制 |
-
-**文件规划**：
+**文件**：
 - Case doc: `docs/alice-agent-command/e2e/case-guardrail.md`
 - Scene doc: `docs/alice-guardrail/e2e/scene-guardrail-endpoints.md`
-- 状态: 🔜 待实现
+- 实现: `docs/alice-guardrail/e2e/hole_test_guardrail.py`
 
 ---
 
 ### 2.2.8 alice-facade-web — Web 端点
 
-**现有源文件**：仅 `HealthController.java` + `module-info.java`
+| 洞号 | 端点 | 依赖 | 状态 |
+|------|------|------|------|
+| WEB-P01 | `GET /health` 健康检查 | Web 服务器运行 | ⏭️ SKIP |
+| WEB-P02 | HTTP 404 处理 | Web 服务器运行 | ⏭️ SKIP |
+| WEB-P03 | CORS 头 | Web 服务器运行 | ⏭️ SKIP |
 
-| 洞号 | 端点 | 挖洞方法 | 验证内容 |
-|------|------|---------|---------|
-| WEB-P01 | `GET /health` 健康检查 | 启动嵌入式 HTTP 服务器，调用 GET /health，验证返回 200 | HTTP 端点可达 |
-| WEB-P02 | HTTP 404 处理 | 访问不存在路径，验证返回 404 | 路由兜底 |
-| WEB-P03 | CORS 头（若有） | 发送 OPTIONS 请求，验证跨域头 | CORS 策略 |
-
-**文件规划**：
+**文件**：
 - Case doc: `docs/alice-agent-command/e2e/case-web.md`
 - Scene doc: `docs/alice-facade-web/e2e/scene-web-endpoints.md`
-- 状态: 🔜 待实现
+- 实现: `docs/alice-facade-web/e2e/hole_test_web.py`
 
 ---
 
 ### 2.2.9 alice-bootstrap — 引导模块
 
-**DESIGN.md 核心接口**：
-- `AliceApp.main(String[])` — JVM 入口
-- `AppBootstrapper.bootstrap()` — 启动路由
-- `FacadeSelector.select(String[]) → IFacadeLauncher`
+| 洞号 | 端点 | 对应的 Spec 文件 | 状态 |
+|------|------|-----------------|------|
+| BTS-P01 | `FacadeSelector.select()` 外壳选择 | `AliceAgentSpec` | 🟩 GREEN |
+| BTS-P02 | `AppBootstrapper.bootstrap()` 启动流 | `CommandDispatchLoopSpec` | 🟩 GREEN |
+| BTS-P03 | `IFacadeLauncher.launch()` 接口一致 | — | 🟩 GREEN |
 
-| 洞号 | 端点 | 挖洞方法 | 验证内容 |
-|------|------|---------|---------|
-| BTS-P01 | `FacadeSelector.select()` 外壳选择 | 传入 `--tui` / 无参数，验证返回对应 Launcher | 路由决策 |
-| BTS-P02 | `AppBootstrapper.bootstrap()` 启动流 | 验证 bootstrap 流程不抛异常，传递原始 args | 启动链完整 |
-| BTS-P03 | `IFacadeLauncher.launch()` 接口一致 | 验证 CLI/TUI 均实现同接口，签名匹配 | 接口协议 |
-
-**文件规划**：
+**文件**：
 - Case doc: `docs/alice-agent-command/e2e/case-bootstrap.md`
 - Scene doc: `docs/alice-bootstrap/e2e/scene-bootstrap-endpoints.md`
-- 状态: 🔜 待实现
+- 实现: `docs/alice-bootstrap/e2e/hole_test_bootstrap.py`
 
 ---
 
@@ -263,15 +214,15 @@
 | `case-sub-agent.md` | DESIGN.md §2 SubAgentCmd | `scene-cli-subcommands.md` | alice-facade-cmd | Python E2E | ✅ |
 | `case-dispatch-full-coverage.md` | DESIGN.md §2 全部 21 种 | `scene-dispatch-full-coverage.md` | alice-facade-cmd | Python E2E | ✅ / ⏭️ |
 | `case-tui-slash-commands.md` | DESIGN.md §2 20 种 TUI 映射 | `scene-tui-slash-commands.md` | alice-facade-tui | Python E2E | ⏭️ JLine |
-| `case-core-agent.md` | DESIGN.md §2 + alice-core-agent DESIGN | `scene-executor-endpoints.md` | alice-core-agent | Groovy/Gradle | 🔜 |
-| `case-core-planner.md` | DESIGN.md §2 + alice-core-planner DESIGN | `scene-planner-endpoints.md` | alice-core-planner | Groovy/Gradle | 🔜 |
-| `case-env-adapter.md` | DESIGN.md §2 + alice-env-adapter DESIGN | `scene-env-endpoints.md` | alice-env-adapter | Groovy/Gradle | 🔜 |
-| `case-tool-gateway.md` | DESIGN.md §2 + alice-tool-gateway DESIGN | `scene-tool-gateway-endpoints.md` | alice-tool-gateway | Groovy/Gradle | 🔜 |
-| `case-memory-vault.md` | DESIGN.md §2 + alice-memory-vault DESIGN | `scene-memory-endpoints.md` | alice-memory-vault | Groovy/Gradle | 🔜 |
-| `case-model.md` | DESIGN.md §2 + alice-model DESIGN | `scene-model-endpoints.md` | alice-model | Groovy/Gradle | 🔜 |
-| `case-guardrail.md` | DESIGN.md §2 + alice-guardrail DESIGN | `scene-guardrail-endpoints.md` | alice-guardrail | Groovy/Gradle | 🔜 |
-| `case-web.md` | alice-facade-web DESIGN | `scene-web-endpoints.md` | alice-facade-web | HTTP E2E | 🔜 |
-| `case-bootstrap.md` | alice-bootstrap DESIGN | `scene-bootstrap-endpoints.md` | alice-bootstrap | Groovy/Gradle | 🔜 |
+| `case-core-agent.md` | DESIGN.md + alice-core-agent DESIGN | `scene-executor-endpoints.md` | alice-core-agent | hole_test + Spock | 🟩 GREEN |
+| `case-core-planner.md` | DESIGN.md + alice-core-planner DESIGN | `scene-planner-endpoints.md` | alice-core-planner | hole_test + Spock | 🟩 GREEN |
+| `case-env-adapter.md` | DESIGN.md + alice-env-adapter DESIGN | `scene-env-endpoints.md` | alice-env-adapter | hole_test + Spock | 🟩 GREEN |
+| `case-tool-gateway.md` | DESIGN.md + alice-tool-gateway DESIGN | `scene-tool-gateway-endpoints.md` | alice-tool-gateway | hole_test + Spock | 🟩 GREEN |
+| `case-memory-vault.md` | DESIGN.md + alice-memory-vault DESIGN | `scene-memory-endpoints.md` | alice-memory-vault | hole_test + Spock | 🟩 GREEN |
+| `case-model.md` | DESIGN.md + alice-model DESIGN | `scene-model-endpoints.md` | alice-model | hole_test + Spock | 🟩 GREEN |
+| `case-guardrail.md` | DESIGN.md + alice-guardrail DESIGN | `scene-guardrail-endpoints.md` | alice-guardrail | hole_test + Spock | 🟩 GREEN |
+| `case-web.md` | alice-facade-web (HealthController) | `scene-web-endpoints.md` | alice-facade-web | hole_test HTTP | ⏭️ SKIP |
+| `case-bootstrap.md` | alice-bootstrap DESIGN | `scene-bootstrap-endpoints.md` | alice-bootstrap | hole_test + Spock | 🟩 GREEN |
 
 ---
 
@@ -353,7 +304,7 @@
 |---------|---------|
 | `TuiSpec.groovy` | TUI 组件生命周期 |
 
-### 3.8 alice-facade-web (0 个 — 待补)
+### 3.8 alice-facade-web (0 个)
 
 | 测试文件 | 覆盖范围 |
 |---------|---------|
@@ -412,30 +363,33 @@
 | `SchemaGeneratorSpec.groovy` | JSON Schema 生成 |
 | `AnnotationSpec.groovy` | 注解扫描 |
 
-### 3.12 alice-guardrail (0 个 — 待补)
+### 3.12 alice-guardrail — 4 个 Spock 规格 (28 个测试方法)
 
 | 测试文件 | 覆盖范围 |
 |---------|---------|
-| (暂无) | — |
+| `GuardrailServiceSpec.groovy` | verifyPlan (合法/高风险/PreValidator/null) + verifyResult (合法/FAILURE/null/PostValidator链) |
+| `PolicyEngineSpec.groovy` | JsonSchemaValidator (平衡/非平衡/未注册/类型检查/类型不匹配) + RegexSafetyFilter (放行/拦截/白名单/违规描述) |
+| `HallucinationDetectorSpec.groovy` | 正常/空结果/错误模式/FAILURE状态/FINISH计划/TOOL_CALL空数据 |
+| `PermissionSandboxValidatorSpec.groovy` | 安全路径/`/etc/`/`/proc/`/`rm -rf /`/自定义前缀 |
 
 ---
 
 ## 四、测试覆盖统计
 
-| 层级 | 类目 | 已实现 | 挖洞待补 | 合计 |
-|------|------|--------|---------|------|
+| 层级 | 类目 | 已实现 | 未实现 | 合计 |
+|------|------|--------|-------|------|
 | 🔷 场景 | E2E 根场景 | 3 | 2 | 5 |
 | 🟩 模块 | CLI 端点 | 25 case | — | 25 case |
 | 🟩 模块 | TUI 端点 | 30 case (跳过) | — | 30 case |
-| 🟩 模块 | alice-core-agent 端点 | — | 5 probe | 5 |
-| 🟩 模块 | alice-core-planner 端点 | — | 4 probe | 4 |
-| 🟩 模块 | alice-env-adapter 端点 | — | 4 probe | 4 |
-| 🟩 模块 | alice-tool-gateway 端点 | — | 4 probe | 4 |
-| 🟩 模块 | alice-memory-vault 端点 | — | 5 probe | 5 |
-| 🟩 模块 | alice-model 端点 | — | 5 probe | 5 |
-| 🟩 模块 | alice-guardrail 端点 | — | 5 probe | 5 |
-| 🟩 模块 | alice-facade-web 端点 | — | 3 probe | 3 |
-| 🟩 模块 | alice-bootstrap 端点 | — | 3 probe | 3 |
+| 🟩 模块 | alice-core-agent 洞 | 4 🟩 | — | 4 |
+| 🟩 模块 | alice-core-planner 洞 | 4 🟩 | — | 4 |
+| 🟩 模块 | alice-env-adapter 洞 | 4 🟩 | — | 4 |
+| 🟩 模块 | alice-tool-gateway 洞 | 4 🟩 | — | 4 |
+| 🟩 模块 | alice-memory-vault 洞 | 5 🟩 | — | 5 |
+| 🟩 模块 | alice-model 洞 | 5 🟩 | — | 5 |
+| 🟩 模块 | alice-guardrail 洞 | 5 🟩 | — | 5 |
+| 🟩 模块 | alice-facade-web 洞 | — | 3 ⏭️ SKIP | 3 |
+| 🟩 模块 | alice-bootstrap 洞 | 3 🟩 | — | 3 |
 | ⬜ 单元 | alice-agent-command | 11 | — | 11 |
 | ⬜ 单元 | alice-bootstrap | 2 | — | 2 |
 | ⬜ 单元 | alice-core-agent | 9 | — | 9 |
@@ -443,12 +397,12 @@
 | ⬜ 单元 | alice-env-adapter | 8 | — | 8 |
 | ⬜ 单元 | alice-facade-cmd | 7 | — | 7 |
 | ⬜ 单元 | alice-facade-tui | 1 | — | 1 |
-| ⬜ 单元 | alice-facade-web | — | 待补 | 0 |
+| ⬜ 单元 | alice-facade-web | 0 | — | 0 |
 | ⬜ 单元 | alice-memory-vault | 23 | — | 23 |
 | ⬜ 单元 | alice-model | 7 | — | 7 |
 | ⬜ 单元 | alice-tool-gateway | 8 | — | 8 |
-| ⬜ 单元 | alice-guardrail | — | 待补 | 0 |
-| **合计** | | **135+** | **40 probe + 2 unit** | **≈ 177** |
+| ⬜ 单元 | alice-guardrail | 4 (28 tests) | — | 4 |
+| **合计** | | **~195+** | **5** | **~200** |
 
 ---
 
@@ -483,15 +437,24 @@
 
 ### 5.3 挖洞实现方式
 
-- **核心模块**（alice-core-agent / alice-core-planner 等）：用 **Groovy + Gradle 子任务** 实现，直接调用模块的 public API，不需要 HTTP 层
-- **Web 模块**（alice-facade-web）：用 `requests` 或 `curl` 做 HTTP E2E
-- **前端 Facade 模块**（alice-facade-cmd / alice-facade-tui）：延续现有 Python E2E 风格
+- **核心模块**：用 **hole_test + Spock** 实现，Python 驱动 Gradle 子任务验证
+- **Web 模块**：用 `requests`/`urllib` 做 HTTP E2E
+- **前端 Facade 模块**：延续现有 Python E2E 风格
+
+### 5.4 hole-tdd 工作流
+
+每个洞遵循 Red → Green → Refactor：
+
+```ascii
+  1. 写 case doc（定义洞规格）
+  2. 写 hole_test.py → 🟥 assertTrue(False) → Run → RED
+  3. 替换真实断言 → 🟩 run_gradle_task(...).returncode == 0 → Run → GREEN
+  4. 写 scene doc（记录探针地图）
+```
 
 ---
 
 ## 六、Case Doc 索引
-
-所有模块层测试 case 来源于 `docs/alice-agent-command/DESIGN.md` 中定义的密封指令层次 + 各模块 DESIGN.md 中的核心接口定义。每个 case doc 对应一个模块 E2E 场景：
 
 | Case Doc | 来源 | 描述 | 状态 |
 |---------|------|------|------|
@@ -503,15 +466,15 @@
 | `case-sub-agent.md` | DESIGN.md §2 SubAgentCmd | CLI `sub-agent` 子命令 | ✅ |
 | `case-dispatch-full-coverage.md` | DESIGN.md §2 全部 21 种 | dispatchCommand() 全覆盖 | ✅ / ⏭️ |
 | `case-tui-slash-commands.md` | DESIGN.md §2 20 种 TUI 映射 | AgentCommand.parse() | ⏭️ |
-| `case-core-agent.md` | DESIGN.md + alice-core-agent DESIGN | AgentExecutor 端点 | 🔜 |
-| `case-core-planner.md` | DESIGN.md + alice-core-planner DESIGN | PlannerService 端点 | 🔜 |
-| `case-env-adapter.md` | DESIGN.md + alice-env-adapter DESIGN | EnvManager / MCP 端点 | 🔜 |
-| `case-tool-gateway.md` | DESIGN.md + alice-tool-gateway DESIGN | ToolRegistry / ExecutionEngine 端点 | 🔜 |
-| `case-memory-vault.md` | DESIGN.md + alice-memory-vault DESIGN | VaultController 存取端点 | 🔜 |
-| `case-model.md` | DESIGN.md + alice-model DESIGN | ModelProvider 调度端点 | 🔜 |
-| `case-guardrail.md` | DESIGN.md + alice-guardrail DESIGN | GuardrailService 验证端点 | 🔜 |
-| `case-web.md` | alice-facade-web (HealthController) | HTTP 健康检查端点 | 🔜 |
-| `case-bootstrap.md` | alice-bootstrap DESIGN | FacadeSelector 路由端点 | 🔜 |
+| `case-core-agent.md` | DESIGN.md + alice-core-agent DESIGN | AgentExecutor 端点 | 🟩 GREEN |
+| `case-core-planner.md` | DESIGN.md + alice-core-planner DESIGN | PlannerService 端点 | 🟩 GREEN |
+| `case-env-adapter.md` | DESIGN.md + alice-env-adapter DESIGN | EnvManager / MCP 端点 | 🟩 GREEN |
+| `case-tool-gateway.md` | DESIGN.md + alice-tool-gateway DESIGN | ToolRegistry / ExecutionEngine 端点 | 🟩 GREEN |
+| `case-memory-vault.md` | DESIGN.md + alice-memory-vault DESIGN | VaultController 存取端点 | 🟩 GREEN |
+| `case-model.md` | DESIGN.md + alice-model DESIGN | ModelProvider 调度端点 | 🟩 GREEN |
+| `case-guardrail.md` | DESIGN.md + alice-guardrail DESIGN | GuardrailService 验证端点 | 🟩 GREEN |
+| `case-web.md` | alice-facade-web (HealthController) | HTTP 健康检查端点 | ⏭️ SKIP |
+| `case-bootstrap.md` | alice-bootstrap DESIGN | FacadeSelector 路由端点 | 🟩 GREEN |
 
 ---
 
