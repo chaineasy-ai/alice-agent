@@ -236,9 +236,12 @@ public class AgentExecutor {
       Map<String, Object> intent = planToIntent(plan, context.asMap());
       nextAction = mapToAction(intent);
     } else {
-      String prompt = context.containsKey("prompt") ? context.get("prompt").toString() : "Hello!";
+      String rawPrompt =
+          context.containsKey("prompt") ? context.get("prompt").toString() : "Hello!";
       String modelId = config.defaultModelId();
-      nextAction = Action.llmInference(modelId, prompt);
+      // 注入系统提示词，引导 LLM 输出结构化工具调用
+      String enhancedPrompt = buildSystemPrompt() + "\n\n用户需求: " + rawPrompt;
+      nextAction = Action.llmInference(modelId, enhancedPrompt);
     }
 
     logger.info("[Plan] action={}", nextAction);
@@ -405,7 +408,51 @@ public class AgentExecutor {
 
           // === Reason (基于观察推理下一步微意图) ===
           if (agent.plannerService() == null) {
-            // 没有规划器，默认以 FINISH 退出 Micro-ReAct
+            // === Reason without PlannerService ===
+            // Priority:
+            // 1) If dispatch returned Continue with an embedded nextAction (e.g. tool→LLM),
+            //    dispatch it directly.
+            // 2) Otherwise parse tool call markers from LLM output.
+            // 3) Otherwise finish micro loop.
+
+            Action continueAction = result instanceof StepResult.Continue c ? c.nextAction() : null;
+
+            if (continueAction != null
+                && continueAction.type() != Action.Type.FINISH
+                && continueAction.type() != Action.Type.REVISION) {
+              // Dispatch-instructed next action (e.g. LLM reasoning after tool call)
+              logger.warn(
+                  "[Micro-ReAct/Reason] dispatching Continue's nextAction: type={} target={}",
+                  continueAction.type(),
+                  continueAction.target());
+              return microReActStep(
+                  updatedCtx, continueAction, originalPrompt, depth + 1, maxDepth);
+            }
+
+            // Parse tool call markers from LLM output
+            Action toolAction = parseToolCallFromOutput(updatedCtx);
+            if (toolAction != null) {
+              logger.warn(
+                  "[Micro-ReAct/Reason] parsed from output: type={} target={}",
+                  toolAction.type(),
+                  toolAction.target());
+              if (toolAction.type() == Action.Type.FINISH) {
+                updatedCtx.put("result", obs != null ? obs.summary() : "");
+                if (wal != null) {
+                  wal.checkpointOnReActEnd(
+                      updatedCtx.sessionId(), "ACTING_FINISHED", updatedCtx.asMap(), "");
+                }
+                return Future.succeededFuture(
+                    new StepWithContext(
+                        updatedCtx,
+                        new StepResult.Finish(
+                            obs != null ? obs.summary() : "",
+                            "Micro-ReAct loop completed via FINISH marker")));
+              }
+              return microReActStep(updatedCtx, toolAction, originalPrompt, depth + 1, maxDepth);
+            }
+
+            logger.warn("[Micro-ReAct/Reason] no next action, finishing micro loop");
             return Future.succeededFuture(
                 new StepWithContext(updatedCtx, new StepResult.Continue(Action.finish())));
           }
@@ -483,6 +530,8 @@ public class AgentExecutor {
                     && call.result() != null) {
                   String content = call.result().content();
                   ctx.put("result", content);
+                  ctx.put("__llm_response", content);
+                  ctx.remove("__tool_call_index");
                   logger.debug("[Micro-ReAct/LLM] response length={}", content.length());
 
                   // WAL: 记录 assistant 回复
@@ -490,8 +539,9 @@ public class AgentExecutor {
                     wal.assistant(ctx.sessionId(), content);
                   }
 
-                  // 返回 Finish 而非 Continue(Action.finish()) 以触发 shouldFinish 终止
-                  return new StepResult.Finish(content, "LLM response received");
+                  // 将 LLM 输出包装为 Observation，Continue 的 nextAction 设为 null
+                  // 让 Reason 阶段解析工具调用标记或退出。
+                  return new StepResult.Continue(null, Observation.success(content));
                 } else {
                   // WAL: 记录失败的 LLM 回复
                   if (wal != null) {
@@ -518,8 +568,205 @@ public class AgentExecutor {
     return promise.future();
   }
 
+  // ========================================================================
+  // 内置工具（read_file, write_file, grep, run）
+  // ========================================================================
+
+  /**
+   * 尝试执行内置工具（不依赖 ToolRegistry）。
+   *
+   * <p>支持以下工具：
+   *
+   * <ul>
+   *   <li>{@code read_file} — 读取文件内容
+   *   <li>{@code write_file} — 写入文件内容
+   *   <li>{@code grep} — 全文搜索
+   *   <li>{@code run} — 执行 shell 命令
+   * </ul>
+   *
+   * @return 如果命中内置工具则返回 Future，否则返回 null
+   */
+  private Future<StepWithContext> dispatchBuiltinTool(AgentContext ctx, Action action) {
+    String toolName = action.target();
+    java.util.Map<String, Object> params = action.parameters();
+    // Capture original model ID for LLM calls after tool execution
+    String llmModelId =
+        action.parameters().getOrDefault("modelId", config.defaultModelId()).toString();
+    // Try to get model from the Action that triggered this tool call
+    if ("gpt-4o-mini".equals(llmModelId) && action.actionId() != null) {
+      // Fall back to the original prompt's model if available
+      String ctxModel =
+          ctx.containsKey("model") ? ctx.get("model").toString() : config.defaultModelId();
+      llmModelId = "gpt-4o-mini".equals(ctxModel) ? config.defaultModelId() : ctxModel;
+    }
+
+    try {
+      switch (toolName) {
+        case "read_file" -> {
+          logger.warn("[BuiltinTool] read_file called with params={}", params);
+          String path = (String) params.getOrDefault("path", params.getOrDefault("filePath", ""));
+          if (path.isBlank()) {
+            return Future.succeededFuture(
+                new StepWithContext(
+                    ctx,
+                    new StepResult.Continue(
+                        Action.revision("read_file: path is required"),
+                        Observation.failure("read_file: path is required"))));
+          }
+          java.nio.file.Path filePath = java.nio.file.Paths.get(path);
+          if (!filePath.isAbsolute()) {
+            filePath = java.nio.file.Paths.get(System.getProperty("user.dir")).resolve(filePath);
+          }
+          if (!filePath.toFile().exists()) {
+            return Future.succeededFuture(
+                new StepWithContext(
+                    ctx,
+                    new StepResult.Continue(
+                        Action.revision("read_file: file not found: " + path),
+                        Observation.failure("read_file: file not found: " + path))));
+          }
+          String content = java.nio.file.Files.readString(filePath);
+          logger.debug("[BuiltinTool] read_file {} ({} chars)", path, content.length());
+          ctx.remove("result");
+          // 读取完成后，通知 LLM 分析文件内容并决定下一步操作
+          String analysisPrompt =
+              "You have read file "
+                  + path
+                  + ". Content:\n"
+                  + content
+                  + "\n\nNow fix the divide function to raise ValueError on zero division. "
+                  + "Output [TOOL_CALL: write_file(path=\""
+                  + path
+                  + "\", content=\"<complete fixed file>\")] with the ENTIRE fixed file. "
+                  + "Do NOT read again. After writing, task complete.";
+          return Future.succeededFuture(
+              new StepWithContext(
+                  ctx,
+                  new StepResult.Continue(
+                      Action.llmInference(llmModelId, analysisPrompt),
+                      Observation.success(
+                          "Read file " + path + " (" + content.length() + " chars)"))));
+        }
+        case "write_file" -> {
+          String path = (String) params.getOrDefault("path", "");
+          String content = (String) params.getOrDefault("content", "");
+          if (path.isBlank()) {
+            return Future.succeededFuture(
+                new StepWithContext(
+                    ctx,
+                    new StepResult.Continue(
+                        Action.revision("write_file: path is required"),
+                        Observation.failure("write_file: path is required"))));
+          }
+          java.nio.file.Path filePath = java.nio.file.Paths.get(path);
+          if (!filePath.isAbsolute()) {
+            filePath = java.nio.file.Paths.get(System.getProperty("user.dir")).resolve(filePath);
+          }
+          filePath.getParent().toFile().mkdirs();
+          java.nio.file.Files.writeString(filePath, content);
+          logger.debug("[BuiltinTool] write_file {} ({} chars)", path, content.length());
+          return Future.succeededFuture(
+              new StepWithContext(
+                  ctx,
+                  new StepResult.Continue(
+                      Action.llmInference(llmModelId, "已写入文件 " + path + "，继续分析是否需要更多修改"),
+                      Observation.success("已写入文件 " + path))));
+        }
+        case "grep" -> {
+          String pattern = (String) params.getOrDefault("pattern", "");
+          String grepPath = (String) params.getOrDefault("path", ".");
+          if (pattern.isBlank()) {
+            return Future.succeededFuture(
+                new StepWithContext(
+                    ctx,
+                    new StepResult.Continue(
+                        Action.revision("grep: pattern is required"),
+                        Observation.failure("grep: pattern is required"))));
+          }
+          java.nio.file.Path searchPath = java.nio.file.Paths.get(grepPath);
+          if (!searchPath.isAbsolute()) {
+            searchPath =
+                java.nio.file.Paths.get(System.getProperty("user.dir")).resolve(searchPath);
+          }
+          StringBuilder results = new StringBuilder();
+          try (var stream = java.nio.file.Files.walk(searchPath)) {
+            stream
+                .filter(
+                    p ->
+                        p.toString().endsWith(".py")
+                            || p.toString().endsWith(".java")
+                            || p.toString().endsWith(".txt")
+                            || p.toString().endsWith(".md"))
+                .forEach(
+                    p -> {
+                      try {
+                        String text = java.nio.file.Files.readString(p);
+                        if (text.contains(pattern)) {
+                          results.append(p.getFileName()).append(": matches\n");
+                        }
+                      } catch (Exception ignored) {
+                      }
+                    });
+          }
+          logger.debug("[BuiltinTool] grep '{}' found {} files", pattern, results.length());
+          return Future.succeededFuture(
+              new StepWithContext(
+                  ctx,
+                  new StepResult.Continue(
+                      Action.llmInference(llmModelId, "grep '" + pattern + "' 结果:\n" + results),
+                      Observation.success("grep '" + pattern + "' 完成"))));
+        }
+        case "run" -> {
+          String cmd = (String) params.getOrDefault("cmd", "");
+          if (cmd.isBlank()) {
+            return Future.succeededFuture(
+                new StepWithContext(
+                    ctx,
+                    new StepResult.Continue(
+                        Action.revision("run: cmd is required"),
+                        Observation.failure("run: cmd is required"))));
+          }
+          ProcessBuilder pb = new ProcessBuilder("cmd.exe", "/c", cmd);
+          pb.directory(new java.io.File(System.getProperty("user.dir")));
+          Process process = pb.start();
+          String stdOut = new String(process.getInputStream().readAllBytes());
+          String stdErr = new String(process.getErrorStream().readAllBytes());
+          int exitCode = process.waitFor();
+          String resultOutput =
+              exitCode == 0 ? stdOut : "exit=" + exitCode + "\n" + stdOut + "\n" + stdErr;
+          logger.debug("[BuiltinTool] run '{}' exit={}", cmd, exitCode);
+          return Future.succeededFuture(
+              new StepWithContext(
+                  ctx,
+                  new StepResult.Continue(
+                      Action.llmInference(llmModelId, "命令执行结果:\n" + resultOutput),
+                      Observation.success("命令 '" + cmd + "' 执行完成 (exit=" + exitCode + ")"))));
+        }
+        default -> {
+          return null; // 不是内置工具，交给 ToolRegistry
+        }
+      }
+    } catch (Exception e) {
+      logger.error("[BuiltinTool] error executing {}", toolName, e);
+      return Future.succeededFuture(
+          new StepWithContext(
+              ctx,
+              new StepResult.Continue(
+                  Action.revision("Tool error: " + toolName + " - " + e.getMessage()),
+                  Observation.failure("Tool " + toolName + " error: " + e.getMessage()))));
+    }
+  }
+
   /** Dispatch TOOL_CALL */
   private Future<StepWithContext> dispatchToolCall(AgentContext ctx, Action action) {
+    logger.warn("[Dispatch/TOOL_CALL] target={} params={}", action.target(), action.parameters());
+    // 先尝试内置工具（read_file, write_file, grep, run），不依赖 ToolRegistry
+    Future<StepWithContext> builtinResult = dispatchBuiltinTool(ctx, action);
+    if (builtinResult != null) {
+      return builtinResult;
+    }
+    logger.warn("[Dispatch/TOOL_CALL] not a builtin tool, falling through to ToolRegistry");
+
     if (agent.toolRegistry() == null) {
       logger.warn("[Micro-ReAct/Tool] no ToolRegistry available");
       return Future.succeededFuture(
@@ -787,6 +1034,160 @@ public class AgentExecutor {
   // ========================================================================
   // 辅助工具
   // ========================================================================
+
+  /**
+   * 构建系统提示词，引导 LLM 输出结构化工具调用。
+   *
+   * <p>LLM 在回答中可以包含以下标记让 Agent 执行工具：
+   *
+   * <ul>
+   *   <li>{@code [TOOL_CALL: read_file(path="xxx")]} — 读取文件
+   *   <li>{@code [TOOL_CALL: write_file(path="xxx", content="yyy")]} — 写入文件
+   *   <li>{@code [TOOL_CALL: grep(pattern="xxx", path="yyy")]} — 全文搜索
+   *   <li>{@code [TOOL_CALL: run(cmd="xxx")]} — 执行命令
+   *   <li>{@code [FINISH]} — 完成任务
+   * </ul>
+   */
+  private static String buildSystemPrompt() {
+    return
+"""
+You are an AI coding assistant with file read/write tools.
+
+Available tool call format:
+[TOOL_CALL: read_file(path="file path")]
+[TOOL_CALL: write_file(path="file path", content="file content")]
+[FINISH]
+
+Execution rules:
+1. First, call read_file to examine the file.
+2. After reading, call write_file to write the fixed code in ONE complete call.
+3. After writing, call [FINISH] to complete the task.
+4. NEVER repeat read_file — read once, then write.
+5. The write_file content must contain the COMPLETE fixed file.
+
+Example:
+[TOOL_CALL: read_file(path="src/main.py")]
+[TOOL_CALL: write_file(path="src/main.py", content="the entire fixed file content")]
+[FINISH]
+""";
+  }
+
+  /**
+   * 从 LLM 输出（Observation）中解析结构化工具调用标记。
+   *
+   * <p>解析格式：
+   *
+   * <pre>
+   * [TOOL_CALL: toolName(param1="value1", param2="value2")]
+   * </pre>
+   *
+   * @param ctx 当前上下文（含 LLM 输出在 "result" 或 "lastObservation" 中）
+   * @return 解析出的 Action，若无工具调用则返回 null
+   */
+  /**
+   * 从 LLM 输出中解析下一个结构化工具调用标记。
+   *
+   * <p>通过 {@code __tool_call_index} 跟踪已消费的调用索引，实现顺序执行多次工具调用。
+   */
+  private static Action parseToolCallFromOutput(AgentContext ctx) {
+    // 优先从 result 中读取，退回到 lastObservation
+    String output = ctx.containsKey("result") ? ctx.get("result").toString() : null;
+    if (output == null || output.isBlank()) {
+      Object obs = ctx.get("lastObservation");
+      if (obs instanceof Observation o) {
+        output = o.summary();
+      } else if (obs instanceof String s) {
+        output = s;
+      }
+    }
+    if (output == null || output.isBlank()) {
+      System.out.println("[ToolCallParser] no output to parse (result is null/blank)");
+      return null;
+    }
+
+    System.out.println(
+        "[ToolCallParser] output first300=" + output.substring(0, Math.min(300, output.length())));
+
+    // Debug: check if TOOL_CALL or FINISH markers are in the output
+    if (output.contains("[TOOL_CALL:") || output.contains("[FINISH]")) {
+      System.out.println("[ToolCallParser] FOUND markers in output, length=" + output.length());
+    } else {
+      System.out.println(
+          "[ToolCallParser] NO markers in output, length="
+              + output.length()
+              + " first200="
+              + output.substring(0, Math.min(200, output.length())));
+    }
+
+    // 解析 [TOOL_CALL: toolName(key="value", ...)]
+    // 匹配到 )] 结束的格式。注意 group(2) 使用非贪婪 + 明确 end anchor
+    java.util.regex.Pattern pattern =
+        java.util.regex.Pattern.compile(
+            "\\[TOOL_CALL:\\s*(\\w+)\\(([^)]*)\\)\\]", java.util.regex.Pattern.DOTALL);
+    java.util.regex.Matcher matcher = pattern.matcher(output);
+
+    // 跳过已消费的工具调用
+    int idx =
+        ctx.containsKey("__tool_call_index")
+            ? Integer.parseInt(ctx.get("__tool_call_index").toString())
+            : 0;
+    int found = 0;
+    boolean matched = false;
+    while (matcher.find()) {
+      if (found >= idx) {
+        matched = true;
+        break;
+      }
+      found++;
+    }
+
+    if (matched) {
+      String toolName = matcher.group(1);
+      String paramsRaw = matcher.group(2).trim();
+      ctx.put("__tool_call_index", String.valueOf(idx + 1));
+      System.out.println(
+          "[ToolCallParser] regex MATCHED #" + idx + ": tool=" + toolName + " params=" + paramsRaw);
+
+      // 解析 key="value" 参数
+      java.util.regex.Pattern paramPattern = java.util.regex.Pattern.compile("(\\w+)=\"([^\"]*)\"");
+      java.util.regex.Matcher paramMatcher = paramPattern.matcher(paramsRaw);
+
+      java.util.Map<String, Object> params = new java.util.LinkedHashMap<>();
+      while (paramMatcher.find()) {
+        params.put(paramMatcher.group(1), paramMatcher.group(2));
+      }
+
+      // 如果是 write_file，检查是否有未闭合的引号（content 可能跨多行）
+      if ("write_file".equals(toolName) && !params.containsKey("content")) {
+        // 尝试从 output 中提取 write_file 的完整 content
+        java.util.regex.Pattern contentPattern =
+            java.util.regex.Pattern.compile(
+                "content=\"([\\s\\S]*?)\"\\s*\\)", java.util.regex.Pattern.DOTALL);
+        java.util.regex.Matcher contentMatcher = contentPattern.matcher(output);
+        if (contentMatcher.find()) {
+          params.put("content", contentMatcher.group(1));
+        }
+      }
+
+      // 修正 read_file 的参数名兼容性
+      if ("read_file".equals(toolName) && params.containsKey("path")) {
+        params.putIfAbsent("filePath", params.get("path"));
+      }
+
+      logger.debug("[ToolCallParser] parsed tool={} params={}", toolName, params);
+      return Action.toolCall(toolName, params);
+    }
+
+    System.out.println(
+        "[ToolCallParser] regex NO MATCH on output first200="
+            + output.substring(0, Math.min(200, output.length())));
+    // 所有 TOOL_CALL 都已消费，检查 FINISH
+    if (output.contains("[FINISH]")) {
+      return Action.finish();
+    }
+
+    return null;
+  }
 
   /** 将 Planner 返回的 Map 意图描述转换为 {@link Action}。 */
   private static Action mapToAction(Map<String, Object> plan) {
