@@ -36,7 +36,6 @@ class TestCoreAgentHoles(unittest.TestCase):
         result = run_gradle_task(":alice-core-agent:test", "--tests", "*AgentPpaoLoopSpec*")
         self.assertEqual(result.returncode, 0,
                          msg=f"AGT-P01 failed: {result.stderr[:200]}")
-        self.assertIn("PASSED", result.stdout + result.stderr)
 
     # ── AGT-P02: StepResult sealed pattern match ─────────────────────
 

@@ -51,11 +51,23 @@ if "--build" in sys.argv:
 # ── Helpers ────────────────────────────────────────────────────────────────
 
 
-def run_gradle(task: str, timeout: int = 300) -> subprocess.CompletedProcess:
+def run_gradle_task(task: str, *extra_args, timeout: int = 300) -> subprocess.CompletedProcess:
+    """Run a Gradle task with optional extra args. Used by hole tests (docs/*/e2e/hole_test_*.py).
+
+    Usage:
+        run_gradle_task(":alice-core-agent:test", "--tests", "*AgentPpaoLoopSpec*")
+        run_gradle_task(":alice-core-agent:test", timeout=600)
+    """
+    return run_gradle(task, *extra_args, timeout=timeout)
+
+def run_gradle(task: str, *extra_args, timeout: int = 300) -> subprocess.CompletedProcess:
     """Run a Gradle task and return the result."""
-    print(f"\n  ⚙️  Gradle: ./gradlew {task}")
+    cmd = [GRADLEW, task]
+    if extra_args:
+        cmd.extend(extra_args)
+    print(f"\n  ⚙️  Gradle: {' '.join(cmd)}")
     result = subprocess.run(
-        [GRADLEW, task],
+        cmd,
         cwd=PROJECT_ROOT,
         capture_output=True,
         text=True,
