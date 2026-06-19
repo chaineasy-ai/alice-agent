@@ -41,18 +41,28 @@ public final class PromptManager {
 
   static {
     FREEMARKER = new Configuration(Configuration.VERSION_2_3_34);
-    // Use PromptManager.class (module-aware) for JPMS compatibility
-    // FreeMarker will use class.getResource() which works with module resources
-    FREEMARKER.setClassForTemplateLoading(PromptManager.class, "");
-    FREEMARKER.setDefaultEncoding("UTF-8");
+    // Load templates directly via Class.getResource (JPMS-compatible)
     try {
-      CORE_LOOP = FREEMARKER.getTemplate("core_loop.ftl");
-      MICRO_LOOP = FREEMARKER.getTemplate("micro_loop.ftl");
-      MICRO_LOOP_ERROR = FREEMARKER.getTemplate("micro_loop_error.ftl");
-      PLANNER = FREEMARKER.getTemplate("planner.ftl");
+      CORE_LOOP = loadTemplate("core_loop.ftl");
+      MICRO_LOOP = loadTemplate("micro_loop.ftl");
+      MICRO_LOOP_ERROR = loadTemplate("micro_loop_error.ftl");
+      PLANNER = loadTemplate("planner.ftl");
     } catch (IOException e) {
       log.error("[PromptManager] Failed to load FreeMarker templates", e);
       throw new RuntimeException("Failed to load prompt templates", e);
+    }
+  }
+
+  private static Template loadTemplate(String name) throws IOException {
+    java.net.URL url = PromptManager.class.getResource(name);
+    if (url == null) {
+      throw new IOException("Template not found: " + name);
+    }
+    try {
+      return new Template(
+          name, new java.io.InputStreamReader(url.openStream(), "UTF-8"), FREEMARKER);
+    } catch (IOException e) {
+      throw new IOException("Failed to load template: " + name, e);
     }
   }
 
