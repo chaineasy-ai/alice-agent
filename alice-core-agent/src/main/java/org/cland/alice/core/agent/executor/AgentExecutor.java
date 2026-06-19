@@ -47,7 +47,7 @@ public class AgentExecutor {
   private final Vertx vertx;
   private final Agent agent;
   private final AgentConfig config;
-  private final ExecutionEngine executionEngine;
+  private volatile ExecutionEngine executionEngine;
 
   /** 可选的 WAL 会话，注入后启用双轨制持久化与崩溃恢复 */
   private WalSession wal;
@@ -57,10 +57,8 @@ public class AgentExecutor {
     this.agent = Objects.requireNonNull(agent, "agent must not be null");
     this.config = agent.config();
     // ExecutionEngine 替换已过时的 ToolRegistry.execute()，提供沙箱/超时控制
-    this.executionEngine =
-        agent.toolRegistry() != null
-            ? ExecutionEngine.builder().registry(agent.toolRegistry()).build()
-            : null;
+    // 惰性初始化：允许 toolRegistry 在 Agent 创建后注入
+    this.executionEngine = null;
   }
 
   // ========================================================================
@@ -641,10 +639,21 @@ public class AgentExecutor {
             () -> {
               try {
                 if (executionEngine == null) {
-                  logger.warn("[Micro-ReAct/Tool] no ExecutionEngine available");
-                  return new StepResult.Continue(
-                      Action.revision("No ExecutionEngine for tool: " + action.target()),
-                      Observation.failure("ExecutionEngine not configured"));
+                  // 惰性初始化：toolRegistry 可能在 Agent 创建后通过 withToolRegistry 注入
+                  synchronized (this) {
+                    if (executionEngine == null) {
+                      if (agent.toolRegistry() != null) {
+                        executionEngine =
+                            ExecutionEngine.builder().registry(agent.toolRegistry()).build();
+                        logger.info("[Micro-ReAct/Tool] ExecutionEngine lazily initialized");
+                      } else {
+                        logger.warn("[Micro-ReAct/Tool] no ExecutionEngine available");
+                        return new StepResult.Continue(
+                            Action.revision("No ExecutionEngine for tool: " + action.target()),
+                            Observation.failure("ExecutionEngine not configured"));
+                      }
+                    }
+                  }
                 }
 
                 var result = executionEngine.invoke(action.target(), action.parameters());
@@ -663,9 +672,13 @@ public class AgentExecutor {
                 }
 
                 if (success) {
+                  String toolResultContent =
+                      result.rawData() != null && !result.rawData().isBlank()
+                          ? result.rawData()
+                          : result.summary();
+                  // 将工具实际执行结果作为 LLM prompt，使 LLM 能感知文件内容并继续推理
                   return new StepResult.Continue(
-                      Action.llmInference(
-                          config.defaultModelId(), "Tool executed, continue reasoning"),
+                      Action.llmInference(config.defaultModelId(), toolResultContent),
                       Observation.success(
                           "Tool "
                               + action.target()
