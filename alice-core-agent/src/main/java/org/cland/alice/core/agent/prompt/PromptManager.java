@@ -41,8 +41,9 @@ public final class PromptManager {
 
   static {
     FREEMARKER = new Configuration(Configuration.VERSION_2_3_34);
-    FREEMARKER.setClassLoaderForTemplateLoading(
-        PromptManager.class.getClassLoader(), "org/cland/alice/core/agent/prompt");
+    // Use PromptManager.class (module-aware) for JPMS compatibility
+    // FreeMarker will use class.getResource() which works with module resources
+    FREEMARKER.setClassForTemplateLoading(PromptManager.class, "");
     FREEMARKER.setDefaultEncoding("UTF-8");
     try {
       CORE_LOOP = FREEMARKER.getTemplate("core_loop.ftl");
