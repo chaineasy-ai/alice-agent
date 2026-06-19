@@ -53,7 +53,7 @@ class TestSmokeCase3(unittest.TestCase):
         cmd = [
             str(GRADLEW),
             ":alice-bootstrap:run",
-            "--no-build-cache",
+            "--rerun-tasks",
             "--args",
             f'run "{prompt_flat}" --model {PROJECT_MODEL} --verbose',
         ]
@@ -68,15 +68,30 @@ class TestSmokeCase3(unittest.TestCase):
 
     def setUp(self):
         self.case = CASE_3
+        # Agent 的工作目录是项目根目录，path 解析相对于项目根
+        # 所以 Agent 会修改原始 fixture 文件（而非 temp 副本）
+        self.parser_file = Path(__file__).resolve().parent / "fixtures" / "pytest_tdd" / "parser.py"
+        self.test_file = Path(__file__).resolve().parent / "fixtures" / "pytest_tdd" / "test_parser.py"
+
+    @classmethod
+    def tearDownClass(cls):
+        # 恢复原始 fixture
+        import subprocess
+        for f in ["parser.py", "test_parser.py"]:
+            fixture = cls.FIXTURE_DIR / f
+            if fixture.exists():
+                subprocess.run(
+                    ["git", "checkout", "--", str(fixture)],
+                    cwd=PROJECT_ROOT, capture_output=True)
 
     def test_pytest_all_pass_after_fix(self):
         """Agent 执行后，pytest 全部用例通过"""
         code, output = self._run_agent()
         self.assertEqual(code, 0, f"Agent 退出码非0\n---\n{output[-500:]}")
 
-        # 真实验证：运行 pytest
+        # 真实验证：运行 pytest（在原始 fixture 目录上执行，因为 Agent 修改的是原始文件）
         pytest_result = subprocess.run(
-            [sys.executable, "-m", "pytest", str(self.WORKSPACE), "-v", "--tb=short"],
+            [sys.executable, "-m", "pytest", str(self.FIXTURE_DIR), "-v", "--tb=short"],
             capture_output=True, text=True, timeout=60,
         )
         pytest_out = pytest_result.stdout + pytest_result.stderr
@@ -97,7 +112,7 @@ class TestSmokeCase3(unittest.TestCase):
         self.assertEqual(code, 0, f"Agent 退出码非0\n---\n{output[-500:]}")
 
         # 验证 parser.py 内容包含错误处理
-        parser_content = (self.WORKSPACE / "parser.py").read_text(encoding="utf-8")
+        parser_content = self.parser_file.read_text(encoding="utf-8")
         self.assertIn(
             "try",
             parser_content,
@@ -112,7 +127,7 @@ class TestSmokeCase3(unittest.TestCase):
         # 验证 import 后 parse 非法 JSON 不崩溃
         check = subprocess.run(
             [sys.executable, "-c",
-             f"""import sys; sys.path.insert(0, r'{self.WORKSPACE}')
+             f"""import sys; sys.path.insert(0, r'{self.FIXTURE_DIR}')
 from parser import parse_payload
 try:
     result = parse_payload("not valid json")
