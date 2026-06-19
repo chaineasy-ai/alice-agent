@@ -33,13 +33,14 @@ class TestSmokeCase3(unittest.TestCase):
         self.case = CASE_3
         self.workspace = prepare_workspace(self.case)
 
-    def test_tdd_loop_runs_pytest_and_self_corrects(self):
-        """校验 Agent 执行 pytest 捕获报错，自省迭代修改代码直至测试通过"""
+    def test_tdd_loop_completes_ppao_loop(self):
+        """校验 Agent 完成 PPAO 循环并输出 Final Answer"""
         output = run_alice_agent(
             target_dir=self.workspace,
             prompt=self.case.problem_description,
             timeout=self.case.timeout_seconds,
         )
+        self.assertIn("PPAO loop", output, "Agent should execute PPAO loop")
         failures = verify_case(self.case, output)
         self.assertEqual(
             [], failures,

@@ -53,5 +53,7 @@ class SmokeCase:
 
 # ── Model Configuration ───────────────────────────────────────────────────
 
-PROJECT_MODEL = os.environ.get("ALICE_SMOKE_MODEL", "gemma-4")
-GEMMA4_BASE_URL = os.environ.get("GEMMA4_BASE_URL", "http://192.168.1.14:10303/v1")
+# Default model for smoke tests. Set ALICE_SMOKE_MODEL to override.
+# Requires corresponding DEEPSEEK_API_KEY env var to be set.
+PROJECT_MODEL = os.environ.get("ALICE_SMOKE_MODEL", "deepseek-chat")
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")

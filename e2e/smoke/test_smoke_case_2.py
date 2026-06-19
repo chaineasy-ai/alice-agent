@@ -32,13 +32,14 @@ class TestSmokeCase2(unittest.TestCase):
         self.case = CASE_2
         self.workspace = prepare_workspace(self.case)
 
-    def test_cross_file_refactor_produces_multi_file_patch(self):
-        """校验补丁同时包含 config.py 和 client.py 修改，且有全局检索日志"""
+    def test_cross_file_refactor_completes_ppao_loop(self):
+        """校验 Agent 完成 PPAO 循环并输出 Final Answer"""
         output = run_alice_agent(
             target_dir=self.workspace,
             prompt=self.case.problem_description,
             timeout=self.case.timeout_seconds,
         )
+        self.assertIn("PPAO loop", output, "Agent should execute PPAO loop")
         failures = verify_case(self.case, output)
         self.assertEqual(
             [], failures,

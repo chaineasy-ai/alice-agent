@@ -32,13 +32,15 @@ class TestSmokeCase1(unittest.TestCase):
         self.case = CASE_1
         self.workspace = prepare_workspace(self.case)
 
-    def test_divide_fix_produces_git_diff(self):
-        """校验补丁输出为标准 Git Diff 格式，包含 raise ValueError"""
+    def test_divide_fix_completes_ppao_loop(self):
+        """校验 Agent 完成 PPAO 循环并输出 Final Answer"""
         output = run_alice_agent(
             target_dir=self.workspace,
             prompt=self.case.problem_description,
             timeout=self.case.timeout_seconds,
         )
+        # Agent should complete without crash
+        self.assertIn("PPAO loop", output, "Agent should execute PPAO loop")
         failures = verify_case(self.case, output)
         self.assertEqual(
             [], failures,

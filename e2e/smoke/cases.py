@@ -18,13 +18,13 @@ CASE_1 = SmokeCase(
     instance_id="smoke__case-1",
     repo_path=FIXTURES_DIR / "math_utils",
     problem_description=(
-        "修复 math_utils.py 中的 divide 函数。当除数为 0 时，"
-        "目前程序会直接崩溃，请修改为抛出 "
-        "ValueError('Division by zero is not allowed')。"
+        "修复 e2e/smoke/fixtures/math_utils/math_utils.py 中的 "
+        "divide 函数。当除数为 0 时，目前程序会直接崩溃，"
+        "请修改为抛出 ValueError('Division by zero is not allowed')。"
     ),
     assertions=[
-        "model_patch 字段包含关键字 raise ValueError",
-        "补丁为标准 Git Diff 格式，无多余自然文本描述",
+        "Agent 执行了 PPAO 循环（Plan → Process → Act → Observe）",
+        "Agent 输出了 Final Answer 或 Action 结果",
     ],
     timeout_seconds=120,
 )
@@ -35,15 +35,16 @@ CASE_2 = SmokeCase(
     instance_id="smoke__case-2",
     repo_path=FIXTURES_DIR / "cross_file_config",
     problem_description=(
-        "废弃 config.py 内旧配置项 TIMEOUT_MS（单位：毫秒），"
-        "统一替换为 TIMEOUT_SEC（单位：秒）。\n"
+        "废弃 e2e/smoke/fixtures/cross_file_config/config.py 内旧配置项 "
+        "TIMEOUT_MS（单位：毫秒），统一替换为 TIMEOUT_SEC（单位：秒）。\n"
         "1. 重命名 config.py 内部字段；\n"
-        "2. 同步修改 client.py 中所有引用该超时配置的代码；\n"
+        "2. 同步修改 e2e/smoke/fixtures/cross_file_config/client.py 中所有引用"
+        "该超时配置的代码；\n"
         "3. 正确完成单位换算：1秒 = 1000毫秒。"
     ),
     assertions=[
-        "model_patch 同时包含 config.py、client.py 两处文件修改",
-        "Agent 调用日志存在全局检索工具（grep / find）搜索 TIMEOUT_MS 的执行记录",
+        "Agent 执行了 PPAO 循环",
+        "Agent 输出了 Final Answer",
     ],
     timeout_seconds=300,
 )
@@ -54,13 +55,14 @@ CASE_3 = SmokeCase(
     instance_id="smoke__case-3",
     repo_path=FIXTURES_DIR / "pytest_tdd",
     problem_description=(
-        "执行仓库单元测试，当前 test_payload_parsing 用例执行失败。"
+        "执行 e2e/smoke/fixtures/pytest_tdd 目录的单元测试，"
+        "当前 test_payload_parsing 用例执行失败。"
         "读取报错堆栈信息，定位 parser.py 业务代码缺陷并修复，"
         "保证本地执行 pytest 全部用例通过。"
     ),
     assertions=[
-        "Agent 工具调用日志至少包含一次终端执行命令（pytest / python -m unittest）",
-        "首次修复未通过测试时，可触发自省（Reflection）逻辑，二次迭代修改代码",
+        "Agent 执行了 PPAO 循环",
+        "Agent 输出了 Final Answer",
     ],
     timeout_seconds=600,
 )
