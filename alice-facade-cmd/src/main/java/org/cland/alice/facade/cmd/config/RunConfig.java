@@ -414,6 +414,30 @@ public final class RunConfig {
     if (subAgentConnectName != null) {
       sb.append(", subAgentConnectName='").append(subAgentConnectName).append("'");
     }
+    if (subAgentConnectEndpoint != null) {
+      sb.append(", subAgentConnectEndpoint='").append(subAgentConnectEndpoint).append("'");
+    }
+    if (subAgentList) {
+      sb.append(", subAgentList=true");
+    }
+    if (subAgentCancelId != null) {
+      sb.append(", subAgentCancelId='").append(subAgentCancelId).append("'");
+    }
+    if (subAgentResultsId != null) {
+      sb.append(", subAgentResultsId='").append(subAgentResultsId).append("'");
+    }
+    if (subAgentSendId != null) {
+      sb.append(", subAgentSendId='").append(subAgentSendId).append("'");
+    }
+    if (subAgentSendMessage != null) {
+      sb.append(", subAgentSendMessage='").append(subAgentSendMessage).append("'");
+    }
+    if (subAgentPromptAgentId != null) {
+      sb.append(", subAgentPromptAgentId='").append(subAgentPromptAgentId).append("'");
+    }
+    if (subAgentPromptText != null) {
+      sb.append(", subAgentPromptText='").append(subAgentPromptText).append("'");
+    }
     if (listTools) {
       sb.append(", listTools=true");
     }

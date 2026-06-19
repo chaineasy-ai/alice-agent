@@ -3,7 +3,12 @@
 **summary**: 为 alice-facade-cmd 模块编写基于 Spock 的测试用例，覆盖每个 CLI 子命令的解析、分发、渲染逻辑
 **read_when**: 编写或维护 alice-facade-cmd 测试用例时参考
 
-基于 docs/alice-agent-command/DESIGN.md 的 5 大类指令 + SubAgent 第 6 类，alice-facade-cmd 中每个 CLI 子命令都需要对应的测试用例。
+基于 docs/alice-agent-command/DESIGN.md 的 6 大类指令（Execution / Capability / Alignment / Control / RoutineTime / SubAgent），共 21 个子类型，alice-facade-cmd 中每个 CLI 子命令都需要对应的测试用例。
+
+> **E2E 场景设计文档**（按场景拆分，每个独立文档）：
+> - [场景一：CLI 子命令](./scene-cli-subcommands.md) — 25 个 E2E 测试，覆盖 6 个 CLI 子命令的 picocli 参数解析
+> - [场景二：TUI 斜杠命令](../alice-facade-tui/e2e/scene-tui-slash-commands.md) — 30 个 E2E 测试，覆盖 20 种斜杠命令 + 自然语言的 parse() 映射
+> - [场景三：dispatch 全路径](./scene-dispatch-full-coverage.md) — 21 个 E2E 测试，覆盖全部 21 种 AgentCommand 密封子类型的 dispatch 分发
 
 ---
 
@@ -103,7 +108,11 @@
 
 ## 统计
 
-- **总测试数**: **155 个**
+- **单元测试数**: **155 个**（Spock）
+- **E2E 测试数**: **76 个**（Python, 3 场景文档见下）
+  - [scene-cli-subcommands.md](./scene-cli-subcommands.md) — 25 个
+  - [scene-tui-slash-commands.md](./scene-tui-slash-commands.md) — 30 个
+  - [scene-dispatch-full-coverage.md](./scene-dispatch-full-coverage.md) — 21 个
 - **总覆盖率**: alice-facade-cmd 各 cmd 100%
 
 ---
