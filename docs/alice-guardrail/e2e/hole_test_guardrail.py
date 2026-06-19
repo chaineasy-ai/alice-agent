@@ -2,12 +2,9 @@
 """
 Hole Test — alice-guardrail module endpoints.
 
-This module currently has 0 unit tests — hole tests are the first
-verification layer. They probe the public API boundary by calling
-Gradle `test` (when unit tests exist) or via direct Java invocation.
-
-🟥 RED status: No unit tests exist yet for alice-guardrail.
-Once unit tests are written, re-run to verify GREEN.
+Probes GuardrailService, PolicyEngine, HallucinationDetector,
+and PermissionSandboxValidator via Spock unit tests added in
+`src/test/groovy/org/cland/alice/guardrail/`.
 
 See:
   docs/alice-agent-command/e2e/case-guardrail.md

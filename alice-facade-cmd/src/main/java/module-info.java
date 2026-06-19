@@ -24,4 +24,5 @@ module alice.agent.facade.cmd.main {
   requires io.vertx.core;
   requires org.slf4j;
   requires ch.qos.logback.classic;
+  requires org.jline.builtins;
 }

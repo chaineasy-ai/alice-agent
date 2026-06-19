@@ -49,6 +49,9 @@ dependencies {
     testImplementation "org.apache.groovy:groovy-json:4.0.30"
     testImplementation "org.apache.groovy:groovy-templates:4.0.30"
 
+    // JUnit Platform Launcher（Gradle Test Executor 需要）
+    testImplementation 'org.junit.platform:junit-platform-launcher:1.12.2'
+
     // 可选：若遇到 Java 模块系统兼容问题，添加 SLF4J 桥接（Java 25 强化了模块检查）
     testImplementation 'org.slf4j:slf4j-api:2.0.16'
 }
