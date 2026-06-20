@@ -260,6 +260,108 @@ class PlannerServiceSpec extends Specification {
         plan.type() == Plan.Type.SLOW_PATH
     }
 
+    def "StrategySelector should route long prompt to slow path"() {
+        given:
+        def fastPath = Stub(DecisionStrategy)
+        def slowPath = Stub(DecisionStrategy)
+        slowPath.decide(_) >> Plan.builder()
+                .type(Plan.Type.SLOW_PATH)
+                .summary("Long")
+                .addStep("FINISH", "FINISH")
+                .build()
+        def selector = StrategySelector.builder()
+            .fastPath(fastPath)
+            .slowPath(slowPath)
+            .build()
+
+        when:
+        def plan = selector.select([prompt: "A" * 250])
+
+        then:  // length > 200 → slow
+        plan.type() == Plan.Type.SLOW_PATH
+    }
+
+    def "StrategySelector should route by keyword to slow path"() {
+        given:
+        def fastPath = Stub(DecisionStrategy) { decide(!null) >> Plan.fastPath("Fast", "FINISH", "FINISH") }
+        def slowPath = Stub(DecisionStrategy) { decide(!null) >> Plan.builder().type(Plan.Type.SLOW_PATH).summary("Keyword").addStep("FINISH", "FINISH").build() }
+        def selector = StrategySelector.builder()
+            .fastPath(fastPath)
+            .slowPath(slowPath)
+            .build()
+
+        when:
+        def plan = selector.select([prompt: k])
+
+        then:
+        plan.type() == Plan.Type.SLOW_PATH
+
+        where:
+        k << ["analyze this", "compare X and Y", "evaluate options",
+              "synthesize findings", "create a plan", "strategy session",
+              "multi-step workflow", "complex task", "detailed report",
+              "分析报告", "比较方案", "评估结果", "制定计划",
+              "调整策略", "综合意见"]
+    }
+
+    def "StrategySelector should route by feedback to slow path"() {
+        given:
+        def fastPath = Stub(DecisionStrategy)
+        def slowPath = Stub(DecisionStrategy)
+        slowPath.decide(_) >> Plan.builder()
+                .type(Plan.Type.SLOW_PATH)
+                .summary("Feedback")
+                .addStep("FINISH", "FINISH")
+                .build()
+        def selector = StrategySelector.builder()
+            .fastPath(fastPath)
+            .slowPath(slowPath)
+            .build()
+
+        when:
+        def plan = selector.select([prompt: "hello", lastFeedback: "too slow"])
+
+        then:
+        plan.type() == Plan.Type.SLOW_PATH
+    }
+
+    def "StrategySelector should route by error to slow path"() {
+        given:
+        def fastPath = Stub(DecisionStrategy)
+        def slowPath = Stub(DecisionStrategy)
+        slowPath.decide(_) >> Plan.builder()
+                .type(Plan.Type.SLOW_PATH)
+                .summary("Error")
+                .addStep("FINISH", "FINISH")
+                .build()
+        def selector = StrategySelector.builder()
+            .fastPath(fastPath)
+            .slowPath(slowPath)
+            .build()
+
+        when:
+        def plan = selector.select([prompt: "hello", error: "timeout"])
+
+        then:
+        plan.type() == Plan.Type.SLOW_PATH
+    }
+
+    def "StrategySelector should accept custom complexity function"() {
+        given:
+        def fastPath = Stub(DecisionStrategy) { decide(_) >> Plan.fastPath("F", "FINISH", "FINISH") }
+        def slowPath = Stub(DecisionStrategy) { decide(_) >> Plan.builder().type(Plan.Type.SLOW_PATH).summary("S").addStep("FINISH", "FINISH").build() }
+        // 自定义函数：所有含 "custom_slow" 的走 Slow
+        def selector = StrategySelector.builder()
+            .fastPath(fastPath)
+            .slowPath(slowPath)
+            .complexityFunction({ ctx -> "custom_slow".equals(ctx.get("mode")) })
+            .build()
+
+        expect:
+        selector.select([prompt: "hello", mode: "fast"]).type() == Plan.Type.FAST_PATH
+        selector.select([prompt: "hello", mode: "custom_slow"]).type() == Plan.Type.SLOW_PATH
+    }
+
     // ========================================================================
     // FastPathStrategy
     // ========================================================================
