@@ -4,7 +4,7 @@ import java.util.Map;
 import java.util.Objects;
 import org.cland.alice.core.planner.Plan;
 import org.cland.alice.core.planner.model.ModelSession;
-import org.cland.alice.core.planner.model.ModelSupplier;
+import org.cland.alice.core.planner.model.PlannerModelSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,9 +23,9 @@ public final class FastPathStrategy implements DecisionStrategy {
 
   private static final Logger logger = LoggerFactory.getLogger(FastPathStrategy.class);
 
-  private final ModelSupplier modelSupplier;
+  private final PlannerModelSupplier modelSupplier;
 
-  public FastPathStrategy(ModelSupplier modelSupplier) {
+  public FastPathStrategy(PlannerModelSupplier modelSupplier) {
     this.modelSupplier = Objects.requireNonNull(modelSupplier, "modelSupplier must not be null");
   }
 

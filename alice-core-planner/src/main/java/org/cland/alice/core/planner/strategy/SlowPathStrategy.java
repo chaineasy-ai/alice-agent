@@ -3,7 +3,7 @@ package org.cland.alice.core.planner.strategy;
 import java.util.*;
 import java.util.function.Function;
 import org.cland.alice.core.planner.Plan;
-import org.cland.alice.core.planner.model.ModelSupplier;
+import org.cland.alice.core.planner.model.PlannerModelSupplier;
 import org.cland.alice.core.planner.tree.ThinkingNode;
 import org.cland.alice.core.planner.tree.ThinkingTree;
 import org.slf4j.Logger;
@@ -27,7 +27,7 @@ public final class SlowPathStrategy implements DecisionStrategy {
   private static final double DEFAULT_EXPLORATION_CONSTANT = Math.sqrt(2);
 
   private final ThinkingTree tree;
-  private final ModelSupplier modelSupplier;
+  private final PlannerModelSupplier modelSupplier;
   private final int mctsIterations;
   private final double explorationConstant;
 
@@ -209,7 +209,7 @@ public final class SlowPathStrategy implements DecisionStrategy {
 
   public static final class Builder {
     private ThinkingTree tree;
-    private ModelSupplier modelSupplier;
+    private PlannerModelSupplier modelSupplier;
     private int mctsIterations = DEFAULT_MCTS_ITERATIONS;
     private double explorationConstant = DEFAULT_EXPLORATION_CONSTANT;
 
@@ -220,7 +220,7 @@ public final class SlowPathStrategy implements DecisionStrategy {
       return this;
     }
 
-    public Builder modelSupplier(ModelSupplier modelSupplier) {
+    public Builder modelSupplier(PlannerModelSupplier modelSupplier) {
       this.modelSupplier = modelSupplier;
       return this;
     }

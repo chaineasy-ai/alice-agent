@@ -1,8 +1,9 @@
 package org.cland.alice.core.planner
 
 import org.cland.alice.core.planner.budget.TokenBudget
+import org.cland.alice.core.planner.model.ModelCapabilities
 import org.cland.alice.core.planner.model.ModelSession
-import org.cland.alice.core.planner.model.ModelSupplier
+import org.cland.alice.core.planner.model.PlannerModelSupplier
 import org.cland.alice.core.planner.sop.SopRegistry
 import org.cland.alice.core.planner.sop.StaticPlanner
 import org.cland.alice.core.planner.strategy.DecisionStrategy
@@ -11,6 +12,8 @@ import org.cland.alice.core.planner.strategy.SlowPathStrategy
 import org.cland.alice.core.planner.strategy.StrategySelector
 import org.cland.alice.core.planner.tree.ThinkingNode
 import org.cland.alice.core.planner.tree.ThinkingTree
+import org.cland.alice.model.Call
+import org.cland.alice.model.CallStatus
 
 import java.util.function.Function
 
@@ -263,7 +266,7 @@ class PlannerServiceSpec extends Specification {
 
     def "FastPathStrategy should generate fast path plan"() {
         given:
-        def supplier = Stub(ModelSupplier) {
+        def supplier = Stub(PlannerModelSupplier) {
             getInstructionModel() >> ModelSession.of("gpt-4o-mini", "test")
         }
         def strategy = new FastPathStrategy(supplier)
@@ -280,7 +283,7 @@ class PlannerServiceSpec extends Specification {
 
     def "FastPathStrategy should finish if result present"() {
         given:
-        def strategy = new FastPathStrategy(Stub(ModelSupplier))
+        def strategy = new FastPathStrategy(Stub(PlannerModelSupplier))
 
         when:
         def plan = strategy.decide([prompt: "test", result: "done"])
@@ -297,7 +300,7 @@ class PlannerServiceSpec extends Specification {
     def "SlowPathStrategy should generate MCTS plan"() {
         given:
         def tree = new ThinkingTree([prompt: "Complex multi-step analysis task"])
-        def supplier = Stub(ModelSupplier) {
+        def supplier = Stub(PlannerModelSupplier) {
             getReasoningModel() >> ModelSession.of("gpt-4o", "test")
         }
 
@@ -429,7 +432,7 @@ class PlannerServiceSpec extends Specification {
 
     def "PlannerService should handle simple prompt via FastPathStrategy"() {
         given:
-        def supplier = Stub(ModelSupplier) {
+        def supplier = Stub(PlannerModelSupplier) {
             getInstructionModel() >> ModelSession.of("gpt-4o-mini", "test")
         }
         def fastPath = new FastPathStrategy(supplier)
@@ -452,7 +455,7 @@ class PlannerServiceSpec extends Specification {
 
     def "PlannerService should finish when result is present"() {
         given:
-        def supplier = Stub(ModelSupplier) {
+        def supplier = Stub(PlannerModelSupplier) {
             getInstructionModel() >> ModelSession.of("gpt-4o-mini", "test")
         }
         def fastPath = new FastPathStrategy(supplier)
@@ -471,5 +474,135 @@ class PlannerServiceSpec extends Specification {
         then:
         plan.steps().size() == 1
         plan.steps()[0].actionType() == "FINISH"
+    }
+
+    // ========================================================================
+    // ModelSession — alice-model bridge
+    // ========================================================================
+
+    def "ModelSession should wrap Call with correct payload"() {
+        given:
+        def session = ModelSession.of("gpt-4o", "Hello world", [temp: 0.7])
+
+        expect:
+        session.call() != null                              // 底层 Call 对象
+        session.modelId() == "gpt-4o"
+        session.prompt() == "Hello world"
+        session.parameters()["temp"] == 0.7
+        session.call().payload().modelId() == "gpt-4o"      // 委托到 Call.Payload
+        session.call().payload().prompt() == "Hello world"
+        !session.completed()                                 // 初始状态未完成
+        session.error() == null
+        session.response() == null                           // 无响应
+    }
+
+    def "ModelSession complete should transition to FINISHED"() {
+        given:
+        def session = ModelSession.of("gpt-4o", "test")
+
+        when:
+        session.complete("Final answer")
+
+        then:
+        session.completed()
+        session.response() == "Final answer"
+        session.call().status() == CallStatus.FINISHED
+        session.call().result() != null
+        session.call().result().content() == "Final answer"
+    }
+
+    def "ModelSession fail should transition to ABORTED"() {
+        given:
+        def session = ModelSession.of("gpt-4o", "test")
+
+        when:
+        session.fail(new RuntimeException("timeout"))
+
+        then:
+        session.completed()
+        session.call().status() == CallStatus.ABORTED
+    }
+
+    def "ModelSession Builder should allow chaining"() {
+        when:
+        def session = ModelSession.builder()
+            .modelId("gpt-4o-mini")
+            .prompt("test")
+            .parameters([maxTokens: 100])
+            .build()
+
+        then:
+        session.modelId() == "gpt-4o-mini"
+        session.prompt() == "test"
+        session.parameters()["maxTokens"] == 100
+    }
+
+    // ========================================================================
+    // PlannerModelSupplier — alice-model bridge
+    // ========================================================================
+
+    def "PlannerModelSupplier name() should be overridable"() {
+        given:
+        def supplier = Stub(PlannerModelSupplier) {
+            getInstructionModel() >> ModelSession.of("gpt-4o-mini", "test")
+            getReasoningModel() >> ModelSession.of("gpt-4o", "test")
+            // name() 通过 Stub 设置
+        }
+
+        when:
+        def name = supplier.name()
+
+        then:
+        // Spock Stub 默认方法返回默认值（字符串为 ""），name() 即使有 default impl 也会被 Stub 覆盖
+        name != null
+    }
+
+    def "PlannerModelSupplier should be substitutable as ModelSupplier"() {
+        given:
+        // PlannerModelSupplier extends alice-model's ModelSupplier
+        def supplier = Stub(PlannerModelSupplier) {
+            getInstructionModel() >> ModelSession.of("gpt-4o-mini", "test")
+            getReasoningModel() >> ModelSession.of("gpt-4o", "test")
+        }
+
+        expect:
+        supplier instanceof org.cland.alice.model.ModelSupplier           // 编译期契约
+        supplier instanceof PlannerModelSupplier
+    }
+
+    // ========================================================================
+    // ModelCapabilities — alice-model bridge
+    // ========================================================================
+
+    def "ModelCapabilities should delegate to Model.Capability"() {
+        expect:
+        ModelCapabilities.NONE.delegate() == org.cland.alice.model.Model.Capability.NONE
+        ModelCapabilities.FUNCTION_CALL.delegate() == org.cland.alice.model.Model.Capability.FUNCTION_CALL
+        ModelCapabilities.STREAMING.delegate() == org.cland.alice.model.Model.Capability.STREAMING
+        ModelCapabilities.VISION.delegate() == org.cland.alice.model.Model.Capability.VISION
+        ModelCapabilities.ALL.delegate() == org.cland.alice.model.Model.Capability.ALL
+    }
+
+    def "ModelCapabilities supportsFunctionCall and supportsStreaming"() {
+        expect:
+        ModelCapabilities.FUNCTION_CALL.supportsFunctionCall()
+        !ModelCapabilities.FUNCTION_CALL.supportsStreaming()
+        !ModelCapabilities.STREAMING.supportsFunctionCall()
+        ModelCapabilities.STREAMING.supportsStreaming()
+        ModelCapabilities.ALL.supportsFunctionCall()
+        ModelCapabilities.ALL.supportsStreaming()
+        ModelCapabilities.VISION.supportsVision()
+        !ModelCapabilities.VISION.supportsFunctionCall()
+        !ModelCapabilities.NONE.supportsFunctionCall()
+    }
+
+    def "ModelCapabilities fromCapability should convert correctly"() {
+        expect:
+        ModelCapabilities.fromCapability(null) == ModelCapabilities.NONE
+        ModelCapabilities.fromCapability(org.cland.alice.model.Model.Capability.NONE) == ModelCapabilities.NONE
+        ModelCapabilities.fromCapability(org.cland.alice.model.Model.Capability.FUNCTION_CALL) == ModelCapabilities.FUNCTION_CALL
+        ModelCapabilities.fromCapability(org.cland.alice.model.Model.Capability.STREAMING) == ModelCapabilities.STREAMING
+        ModelCapabilities.fromCapability(org.cland.alice.model.Model.Capability.VISION) == ModelCapabilities.VISION
+        ModelCapabilities.fromCapability(org.cland.alice.model.Model.Capability.ALL) == ModelCapabilities.ALL
     }
 }

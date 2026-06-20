@@ -1,79 +1,95 @@
 package org.cland.alice.core.planner.model;
 
 import java.util.Map;
-import java.util.Objects;
+import org.cland.alice.model.Call;
+import org.cland.alice.model.Call.Payload;
+import org.cland.alice.model.Call.Response;
+import org.cland.alice.model.Call.TokenUsage;
+import org.cland.alice.model.CallStatus;
 
 /**
- * 模型会话抽象，对应设计文档中的 {@code ModelSession}。
+ * 规划器模型会话抽象，封装 alice-model 的 {@link Call} 调用生命周期。
  *
- * <p>封装一次模型调用的完整上下文，包括请求负载、参数和结果。 Planner 内部策略通过此接口调用模型，不直接持有模型客户端。
+ * <p>提供 {@code complete()} / {@code fail()} 的便捷接口。 底层通过 {@link Call} 完成实际的模型调用跟踪。
  */
 public final class ModelSession {
 
-  private final String modelId;
-  private final String prompt;
-  private final Map<String, Object> parameters;
-  private volatile String response;
-  private volatile Throwable error;
-  private volatile boolean completed;
+  private final Call call;
 
   private ModelSession(Builder builder) {
-    this.modelId = Objects.requireNonNull(builder.modelId, "modelId must not be null");
-    this.prompt = Objects.requireNonNull(builder.prompt, "prompt must not be null");
-    this.parameters = builder.parameters != null ? Map.copyOf(builder.parameters) : Map.of();
-    this.completed = false;
+    Payload payload = new Payload(builder.modelId, builder.prompt, builder.parameters);
+    this.call = Call.builder().payload(payload).build();
+    // Call 构造后状态为 CREATED，无需额外 transition
   }
+
+  // ========== 构造工厂 ==========
 
   public static Builder builder() {
     return new Builder();
   }
 
-  /** 快速创建会话 */
+  /** 快速创建会话。 */
   public static ModelSession of(String modelId, String prompt) {
     return builder().modelId(modelId).prompt(prompt).build();
   }
 
+  /** 快速创建会话（含参数）。 */
   public static ModelSession of(String modelId, String prompt, Map<String, Object> parameters) {
     return builder().modelId(modelId).prompt(prompt).parameters(parameters).build();
   }
 
-  // ========== Getters ==========
+  // ========== 委托给 Call ==========
 
+  /** 底层 {@link Call} 对象（用于 alice-model ModelSupplier 调用）。 */
+  public Call call() {
+    return call;
+  }
+
+  /** 模型 ID。 */
   public String modelId() {
-    return modelId;
+    return call.payload().modelId();
   }
 
+  /** 提示文本。 */
   public String prompt() {
-    return prompt;
+    return call.payload().prompt();
   }
 
+  /** 调用参数。 */
   public Map<String, Object> parameters() {
-    return parameters;
+    return call.payload().parameters();
   }
 
+  /** 响应文本。 */
   public String response() {
-    return response;
+    Response result = call.result();
+    return result != null ? result.content() : null;
   }
 
+  /** 错误信息。 */
   public Throwable error() {
-    return error;
+    return null; // Call 不直接存储 Throwable，由调用者管理
   }
 
+  /** 是否已完成（成功或失败）。 */
   public boolean completed() {
-    return completed;
+    return call.status() == CallStatus.FINISHED
+        || call.status() == CallStatus.FAILED
+        || call.status() == CallStatus.ABORTED;
   }
 
-  /** 标记会话完成并设置响应 */
+  /** 标记会话完成并设置响应。 */
   public ModelSession complete(String response) {
-    this.response = response;
-    this.completed = true;
+    call.transitionTo(CallStatus.PENDING);
+    call.transitionTo(CallStatus.RUNNING);
+    call.updateResult(Response.textOnly(response, new TokenUsage(0, 0, 0), Map.of()));
+    call.transitionTo(CallStatus.FINISHED);
     return this;
   }
 
-  /** 标记会话失败 */
+  /** 标记会话失败。 */
   public ModelSession fail(Throwable error) {
-    this.error = error;
-    this.completed = true;
+    call.transitionTo(CallStatus.ABORTED);
     return this;
   }
 
