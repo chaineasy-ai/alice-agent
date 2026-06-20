@@ -57,6 +57,55 @@ dependencies {
     testImplementation 'org.slf4j:slf4j-api:2.0.16'
 }
 
+// ========== Hole test source set ==========
+sourceSets {
+    hole {
+        java {
+            srcDirs = ['src/hole/java']
+        }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.runtimeClasspath
+    }
+}
+
+configurations {
+    holeImplementation.extendsFrom implementation
+    holeRuntimeOnly.extendsFrom runtimeOnly
+}
+
+dependencies {
+    // Hole test source set depends on main module output
+    holeImplementation sourceSets.main.output
+}
+
+// ========== runHoleTest task ==========
+/**
+ * Run a real module-boundary hole test.
+ *
+ * Usage:
+ *   ./gradlew :alice-model:runHoleTest --args="dispatch"
+ *   ./gradlew :alice-model:runHoleTest --args="call"
+ *   ./gradlew :alice-model:runHoleTest --args="supplier"
+ *   ./gradlew :alice-model:runHoleTest --args="config"
+ *   ./gradlew :alice-model:runHoleTest --args="multi"
+ *   ./gradlew :alice-model:runHoleTest --args="all"
+ */
+tasks.register('runHoleTest', JavaExec) {
+    group = 'verification'
+    description = 'Run ModelHoleTest (real module boundary probe)'
+
+    classpath = sourceSets.hole.runtimeClasspath
+    mainClass = 'org.cland.alice.model.ModelHoleTest'
+
+    modularity.inferModulePath = true
+    // Parse args from --args or default to "all"
+    args = project.hasProperty('holeArgs') ? holeArgs.tokenize() : (project.findProperty('args') ?: 'all').toString().tokenize()
+}
+
+tasks.named('runHoleTest') {
+    dependsOn 'classes', 'holeClasses'
+}
+
 // Apply a specific Java toolchain to ease working on different environments.
 java {
     toolchain {
