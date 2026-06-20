@@ -580,7 +580,7 @@ public final class AliceCliLauncher {
       // 4. DeepSeek (OpenAI-compatible) 从环境变量注册
       String deepseekKey = System.getenv("DEEPSEEK_API_KEY");
       if (deepseekKey != null && !deepseekKey.isEmpty()) {
-        if (provider.getSupplier("deepseek-chat") == null) {
+        if (provider.getSupplier("deepseek-v4-flash") == null) {
           provider.registerSupplier(
               new OpenAiSupplier(
                   "deepseek", deepseekKey, "https://api.deepseek.com/v1/chat/completions"));

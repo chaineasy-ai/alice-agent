@@ -455,7 +455,7 @@ public class AliceTuiLauncher implements AutoCloseable {
       String deepseekKey = System.getenv("DEEPSEEK_API_KEY");
       if (deepseekKey != null && !deepseekKey.isEmpty()) {
         // 如果配置加载没有注册 DeepSeek，手动注册一个（DeepSeek API 与 OpenAI 兼容）
-        if (ModelProvider.getInstance().getSupplier("deepseek-chat") == null) {
+        if (ModelProvider.getInstance().getSupplier("deepseek-v4-flash") == null) {
           ModelProvider.getInstance()
               .registerSupplier(
                   new org.cland.alice.model.supplier.OpenAiSupplier(

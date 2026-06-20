@@ -23,7 +23,7 @@ public enum ModelEnum {
   GEMMA_4("gemma-4", "gemma4", Capability.ALL, 0.0, 0.0),
 
   // ======== DeepSeek ========
-  DEEPSEEK_V3("deepseek-chat", "deepseek", Capability.FC, 0.27, 1.10),
+  DEEPSEEK_V3("deepseek-v4-flash", "deepseek", Capability.FC, 0.27, 1.10),
   DEEPSEEK_R1("deepseek-reasoner", "deepseek", Capability.NONE, 0.55, 2.19),
 
   // ======== Qwen ========

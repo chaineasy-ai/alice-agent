@@ -15,7 +15,7 @@
 
 ## 现象
 
-CLI 命令 `alice run "Say hello" --model deepseek-chat` 进入无限循环。
+CLI 命令 `alice run "Say hello" --model deepseek-v4-flash` 进入无限循环。
 
 典型日志输出：
 
@@ -134,7 +134,7 @@ return loopBody(ctx);
 ## 修复后的执行流
 
 ```
-alice run "Say hello" --model deepseek-chat
+alice run "Say hello" --model deepseek-v4-flash
 
 [Micro-ReAct/LLM] response length=6          ← DeepSeek 返回 "Hello."
 [Observe] result=Finish{answer='Hello.'}      ← Finish 正确传播
@@ -168,7 +168,7 @@ START → PERCEIVING → PLANNING → VERIFYING_PRE → ACTING
 | 测试 | 覆盖场景 | 状态 |
 |------|---------|------|
 | `AgentExecutorSpec` (现有) | PPAO 循环基础路径 | ✅ |
-| 手动 E2E: `run "Say hello" --model deepseek-chat` | 完整集成测试 | ✅ 1 次迭代 |
+| 手动 E2E: `run "Say hello" --model deepseek-v4-flash` | 完整集成测试 | ✅ 1 次迭代 |
 | 手动 E2E: `run "Hello" --model gpt-4o-mini` | 跨供应商 | ✅ |
 | 兜底熔断: 模拟 LLM 持续 | `isMaxIterationsReached` 兜底 | ✅ |
 

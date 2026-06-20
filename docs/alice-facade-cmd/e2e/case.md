@@ -22,11 +22,11 @@
 # 从项目根目录执行
 cd /mnt/develop/work/agentic/alice-agent
 
-# 基础测试：单次任务，模型指定 deepseek-chat
-./gradlew :alice-facade-cmd:run --args "run 'Say hello in one English word' --model deepseek-chat"
+# 基础测试：单次任务，模型指定 deepseek-v4-flash
+./gradlew :alice-facade-cmd:run --args "run 'Say hello in one English word' --model deepseek-v4-flash"
 
 # 验证：仅查看关键日志行
-./gradlew :alice-facade-cmd:run --args "run 'Say hello in one English word' --model deepseek-chat" \
+./gradlew :alice-facade-cmd:run --args "run 'Say hello in one English word' --model deepseek-v4-flash" \
   2>&1 | grep -E "response length|Final Answer|iter=|Sending request|error"
 ```
 
@@ -38,7 +38,7 @@ cd /mnt/develop/work/agentic/alice-agent
 
 | 字段 | 值 |
 |------|-----|
-| **命令** | `run 'Say hello in one English word' --model deepseek-chat` |
+| **命令** | `run 'Say hello in one English word' --model deepseek-v4-flash` |
 | **预期迭代数** | 1 |
 | **预期退出码** | 0 |
 | **预期输出** | 包含 Final Answer 且内容非空 |
@@ -56,7 +56,7 @@ Hello!
 
 | 字段 | 值 |
 |------|-----|
-| **命令** | `run 'What is 2+3? Answer with just the number' --model deepseek-chat` |
+| **命令** | `run 'What is 2+3? Answer with just the number' --model deepseek-v4-flash` |
 | **预期迭代数** | 1 |
 | **预期退出码** | 0 |
 | **预期输出** | Final Answer = "5" |
@@ -81,7 +81,7 @@ PPAO loop finished (iter=1)
 
 | 字段 | 值 |
 |------|-----|
-| **命令** | `run '用中文回答：今天天气怎么样？' --model deepseek-chat` |
+| **命令** | `run '用中文回答：今天天气怎么样？' --model deepseek-v4-flash` |
 | **预期迭代数** | 1 |
 | **预期退出码** | 0 |
 | **预期输出** | 中文字符串 |

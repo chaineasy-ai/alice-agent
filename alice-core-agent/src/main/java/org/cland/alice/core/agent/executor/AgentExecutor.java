@@ -602,8 +602,22 @@ public class AgentExecutor {
                 java.util.Map<String, Object> callParams = new java.util.LinkedHashMap<>();
                 if (agent.toolRegistry() != null) {
                   try {
-                    var tools = agent.toolRegistry().toFunctionCallingSchema();
-                    if (!tools.isEmpty()) {
+                    var allTools = agent.toolRegistry().allTools();
+                    if (!allTools.isEmpty()) {
+                      var tools =
+                          allTools.stream()
+                              .<java.util.Map<String, Object>>map(
+                                  meta -> {
+                                    var function = new java.util.LinkedHashMap<String, Object>();
+                                    function.put("name", meta.name());
+                                    function.put("description", meta.description());
+                                    function.put("parameters", meta.inputSchema());
+                                    var tool = new java.util.LinkedHashMap<String, Object>();
+                                    tool.put("type", "function");
+                                    tool.put("function", function);
+                                    return tool;
+                                  })
+                              .collect(java.util.stream.Collectors.toList());
                       callParams.put("tools", tools);
                       logger.info("[Micro-ReAct/LLM] Attached {} tools to LLM call", tools.size());
                       logger.debug("[Micro-ReAct/LLM] Tools schema: {}", tools);

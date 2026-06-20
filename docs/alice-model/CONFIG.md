@@ -131,7 +131,7 @@ touch ~/.alice/model.json
         "api_key": "${DEEPSEEK_API_KEY}",
         "available_models": [
           {
-            "name": "deepseek-chat",
+            "name": "deepseek-v4-flash",
             "max_tokens": 200000,
             "max_output_tokens": 32000,
             "max_completion_tokens": 200000,

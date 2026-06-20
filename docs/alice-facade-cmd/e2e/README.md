@@ -10,7 +10,7 @@ cd /mnt/develop/work/agentic/alice-agent
 export DEEPSEEK_API_KEY=sk-xxxxx
 
 # 运行基础 e2e 测试（单次任务 + DeepSeek）
-./gradlew :alice-facade-cmd:run --args "run 'Say hello' --model deepseek-chat"
+./gradlew :alice-facade-cmd:run --args "run 'Say hello' --model deepseek-v4-flash"
 ```
 
 ---
@@ -23,14 +23,14 @@ export DEEPSEEK_API_KEY=sk-xxxxx
 
 ```bash
 # 基础任务
-./gradlew :alice-facade-cmd:run --args "run '你的任务描述' --model deepseek-chat"
+./gradlew :alice-facade-cmd:run --args "run '你的任务描述' --model deepseek-v4-flash"
 
 # 查看精简日志
-./gradlew :alice-facade-cmd:run --args "run 'Hello' --model deepseek-chat" \
+./gradlew :alice-facade-cmd:run --args "run 'Hello' --model deepseek-v4-flash" \
   2>&1 | grep -E "response|Finish|iter=|Final|error"
 
 # 查看全部日志
-./gradlew :alice-facade-cmd:run --args "run 'Hello' --model deepseek-chat --verbose" 2>&1
+./gradlew :alice-facade-cmd:run --args "run 'Hello' --model deepseek-v4-flash --verbose" 2>&1
 
 # 指定其他模型
 ./gradlew :alice-facade-cmd:run --args "run 'Hello' --model gpt-4o-mini"
@@ -59,7 +59,7 @@ python3 e2e/run_alice_e2e.py --build
 ./gradlew installDist
 
 # 直接执行
-./alice-bootstrap/build/install/alice-agent/bin/alice run "Hello" --model deepseek-chat
+./alice-bootstrap/build/install/alice-agent/bin/alice run "Hello" --model deepseek-v4-flash
 ```
 
 ### 方式四：单元测试
@@ -144,7 +144,7 @@ Gradle 会自动继承当前 shell 的环境变量。
         "api_key": "${DEEPSEEK_API_KEY}",
         "available_models": [
           {
-            "name": "deepseek-chat",
+            "name": "deepseek-v4-flash",
             "max_tokens": 200000,
             "max_output_tokens": 32000,
             "max_completion_tokens": 200000,
@@ -178,9 +178,9 @@ Gradle 会自动继承当前 shell 的环境变量。
 
 ### 功能验证
 
-- [ ] `run` 基础任务：`run 'Hello' --model deepseek-chat` → iter=1
-- [ ] `run` 数值推理：`run '2+3?' --model deepseek-chat` → answer=5
-- [ ] `run` 中文输入：`run '用中文回答' --model deepseek-chat` → 中文输出
+- [ ] `run` 基础任务：`run 'Hello' --model deepseek-v4-flash` → iter=1
+- [ ] `run` 数值推理：`run '2+3?' --model deepseek-v4-flash` → answer=5
+- [ ] `run` 中文输入：`run '用中文回答' --model deepseek-v4-flash` → 中文输出
 - [ ] `run` 默认模型：`run 'Hello'` → 使用 gpt-4o-mini（需 OPENAI_API_KEY）
 - [ ] `run` 多轮不循环：确认 iter=1 而非 iter=10
 
