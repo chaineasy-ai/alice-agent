@@ -45,6 +45,42 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+// ========== Hole test source set ==========
+sourceSets {
+    hole {
+        java {
+            srcDirs = ['src/hole/java']
+        }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.runtimeClasspath
+    }
+}
+
+configurations {
+    holeImplementation.extendsFrom implementation
+    holeRuntimeOnly.extendsFrom runtimeOnly
+}
+
+dependencies {
+    holeImplementation sourceSets.main.output
+}
+
+// ========== runHoleTest task ==========
+tasks.register('runHoleTest', JavaExec) {
+    group = 'verification'
+    description = 'Run EnvAdapterHoleTest (real module boundary probe)'
+
+    classpath = sourceSets.hole.runtimeClasspath
+    mainClass = 'org.cland.alice.env.adapter.EnvAdapterHoleTest'
+
+    modularity.inferModulePath = true
+    args = (project.findProperty('args') ?: 'all').toString().tokenize()
+}
+
+tasks.named('runHoleTest') {
+    dependsOn 'classes', 'holeClasses'
+}
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)

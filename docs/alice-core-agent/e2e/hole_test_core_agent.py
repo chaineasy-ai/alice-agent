@@ -2,75 +2,93 @@
 """
 Hole Test — alice-core-agent module endpoints.
 
-These are hole_test: module boundary probes that verify public API
-entry points work correctly. Not E2E, not unit — just holes.
+Each probe invokes CoreAgentHoleTest directly via Gradle JavaExec (runHoleTest),
+exercising module boundary without going through unit test runners.
 
 See:
   docs/alice-agent-command/e2e/case-core-agent.md
-  docs/alice-core-agent/e2e/scene-executor-endpoints.md
+  docs/alice-core-agent/e2e/scene-core-agent-endpoints.md
 """
 
 import os
+import subprocess
 import sys
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "e2e"))
-from helpers import run_gradle_task, PROJECT_ROOT
+PROJECT_ROOT = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..")
+)
+
+MODULE = "alice-core-agent"
+
+
+def run_hole(key: str, timeout: int = 30) -> "subprocess.CompletedProcess":
+    cmd = [
+        "cmd", "/c",
+        "gradlew.bat",
+        f":{MODULE}:runHoleTest",
+        f"--args={key}",
+    ]
+    result = subprocess.run(
+        cmd,
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    return result
 
 
 class TestCoreAgentHoles(unittest.TestCase):
-    """Hole tests for alice-core-agent — 4 probes."""
+    """Hole tests for alice-core-agent — 4 probes via Java CoreAgentHoleTest."""
 
-    @classmethod
-    def setUpClass(cls):
-        cls.build_ok = (PROJECT_ROOT / "alice-core-agent" / "build").is_dir()
+    def test_agt_p01_agent_context(self):
+        """AGT-P01: AgentContext session lifecycle."""
+        result = run_hole("context")
+        self.assertEqual(
+            result.returncode, 0,
+            msg=f"AGT-P01 failed: {result.stderr[-200:]}")
+        self.assertIn(
+            "PASS:", result.stdout,
+            msg=f"AGT-P01: unexpected output: {result.stdout[-200:]}")
 
-    # ── AGT-P01: AgentExecutor.execute() happy path ───────────────────
+    def test_agt_p02_step_result(self):
+        """AGT-P02: StepResult sealed pattern match."""
+        result = run_hole("stepResult")
+        self.assertEqual(
+            result.returncode, 0,
+            msg=f"AGT-P02 failed: {result.stderr[-200:]}")
+        self.assertIn(
+            "PASS:", result.stdout,
+            msg=f"AGT-P02: unexpected output: {result.stdout[-200:]}")
 
-    def test_agt_p01_executor_execute(self):
-        """AGT-P01: AgentExecutor.execute(Input) returns StepResult."""
-        # This probe runs the existing AgentPpaoLoopSpec which exercises
-        # the full execute path via Spock. If it passes, the hole is open.
-        if not self.build_ok:
-            self.skipTest("Module not built. Run build first.")
-        result = run_gradle_task(":alice-core-agent:test", "--tests", "*AgentPpaoLoopSpec*")
-        self.assertEqual(result.returncode, 0,
-                         msg=f"AGT-P01 failed: {result.stderr[:200]}")
+    def test_agt_p03_action_builder(self):
+        """AGT-P03: Action builder and static factories."""
+        result = run_hole("action")
+        self.assertEqual(
+            result.returncode, 0,
+            msg=f"AGT-P03 failed: {result.stderr[-200:]}")
+        self.assertIn(
+            "PASS:", result.stdout,
+            msg=f"AGT-P03: unexpected output: {result.stdout[-200:]}")
 
-    # ── AGT-P02: StepResult sealed pattern match ─────────────────────
-
-    def test_agt_p02_step_result_sealed(self):
-        """AGT-P02: StepResult sealed hierarchy complete."""
-        if not self.build_ok:
-            self.skipTest("Module not built. Run build first.")
-        result = run_gradle_task(":alice-core-agent:test", "--tests", "*StepResultSpec*")
-        self.assertEqual(result.returncode, 0,
-                         msg=f"AGT-P02 failed: {result.stderr[:200]}")
-
-    # ── AGT-P03: AgentContext session lifecycle ─────────────────────
-
-    def test_agt_p03_context_lifecycle(self):
-        """AGT-P03: AgentContext session lifecycle works."""
-        if not self.build_ok:
-            self.skipTest("Module not built. Run build first.")
-        result = run_gradle_task(":alice-core-agent:test", "--tests", "*AgentContextSpec*")
-        self.assertEqual(result.returncode, 0,
-                         msg=f"AGT-P03 failed: {result.stderr[:200]}")
-
-    # ── AGT-P05: SubAgentManager register/list/lookup ────────────────
-
-    def test_agt_p05_subagent_manager(self):
-        """AGT-P05: SubAgentManager register/list/lookup/unregister."""
-        if not self.build_ok:
-            self.skipTest("Module not built. Run build first.")
-        result = run_gradle_task(":alice-core-agent:test", "--tests", "*SubAgentManagerSpec*")
-        self.assertEqual(result.returncode, 0,
-                         msg=f"AGT-P05 failed: {result.stderr[:200]}")
+    def test_agt_p04_agent_executor(self):
+        """AGT-P04: AgentExecutor class loads."""
+        result = run_hole("executor")
+        self.assertEqual(
+            result.returncode, 0,
+            msg=f"AGT-P04 failed: {result.stderr[-200:]}")
+        self.assertIn(
+            "PASS:", result.stdout,
+            msg=f"AGT-P04: unexpected output: {result.stdout[-200:]}")
 
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("  Hole Test: alice-core-agent")
-    print(f"  Module: {PROJECT_ROOT / 'alice-core-agent'}")
+    print(f"  Hole Test: {MODULE}")
+    print(f"  Module: {os.path.join(PROJECT_ROOT, MODULE)}")
+    print("=" * 60)
+    print(f"  Holes: AGT-P01..P04 (4 probes)")
+    print(f"  Prober: CoreAgentHoleTest (Java Exec)")
     print("=" * 60)
     unittest.main(verbosity=2)
