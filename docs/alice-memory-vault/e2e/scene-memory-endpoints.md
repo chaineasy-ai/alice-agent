@@ -50,11 +50,11 @@ updated: "2026-06-20"
 
 | Hole | Key | Method | What it proves |
 |------|-----|--------|----------------|
-| MEM-P01 | `mem_ctrl` | `VaultController.memorize()` + `recall()` | Full CRUD round-trip through aggregate root |
-| MEM-P02 | `episodic` | `EpisodicVault.appendStep()`, `getRecentSteps()`, `getImportantSteps()`, `penalizeStep()` | Trace append, query, significance decay |
-| MEM-P03 | `semantic` | `SemanticVault.store()`, `search()`, `searchAll()`, `remove()` | Knowledge storage, Jaccard similarity retrieval, collection isolation |
-| MEM-P04 | `procedural` | `ProceduralVault.register()`, `match()`, `findByTool()`, `remove()` | SOP registration, context matching, tool lookup |
-| MEM-P05 | `wal` | `FileWalStore.appendMessage()`, `getAllMessages()`, crash recovery | WAL append, session read, file-based persistence |
+| MEM-P01 | `mem_ctrl` | `VaultController.memorize()` + `recall()` + `finalizeSession()` + null safety | Full CRUD round-trip through aggregate root, async consolidation, NPE contracts |
+| MEM-P02 | `episodic` | All 10 EpisodicVault methods | Append, getRecentSteps/over-request, getImportantSteps/threshold-edge, getTrace/missing, sessionCount, getActiveSessionIds, stepCount, clearSession, penalizeStep/non-existent, clearAll |
+| MEM-P03 | `semantic` | All 11 SemanticVault methods | store(collection,k), store(k)/default-collection, storeAll, search/fallback, searchAll/fallback, getAll/missing-collection, getCollections, count/missing, remove/missing, removeCollection/missing, clearAll |
+| MEM-P04 | `procedural` | All 9 ProceduralVault methods | register, registerAll, match/exact+no-match, findByTool/exact+missing, getById/missing, getAll, count, re-register/update, remove/missing, clearAll |
+| MEM-P05 | `wal` | All 17 FileWalStore public methods | appendMessage, getAllMessages/missing-session, getMessage/found+missing, getMessagesAfter, messageCount, saveCheckpoint, getLatestCheckpoint/missing, checkpointCount, getCheckpointHistory, deleteCheckpointsUpTo, deleteMessagesUpTo, crash recovery, activeSessionIds, clearSession, clearAll |
 
 ## 4. How to Run
 
