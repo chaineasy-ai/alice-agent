@@ -81,6 +81,14 @@ class ControlCmdSpec extends Specification {
         thrown(NullPointerException)
     }
 
+    def "FeedbackCmd 拒绝 null traceId"() {
+        when:
+        new ControlCmd.FeedbackCmd("msg", SESSION, null)
+
+        then:
+        thrown(NullPointerException)
+    }
+
     // ========================================================================
     // InterruptCmd (Ctrl+C / /exit)
     // ========================================================================
@@ -100,6 +108,22 @@ class ControlCmdSpec extends Specification {
     def "InterruptCmd 拒绝 null cause"() {
         when:
         new ControlCmd.InterruptCmd(null, SESSION, TRACE)
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    def "InterruptCmd 拒绝 null sessionId"() {
+        when:
+        new ControlCmd.InterruptCmd("cause", null, TRACE)
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    def "InterruptCmd 拒绝 null traceId"() {
+        when:
+        new ControlCmd.InterruptCmd("cause", SESSION, null)
 
         then:
         thrown(NullPointerException)

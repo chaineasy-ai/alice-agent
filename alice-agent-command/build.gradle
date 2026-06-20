@@ -48,3 +48,30 @@ tasks.withType(GroovyCompile).configureEach {
 tasks.named('test') {
     useJUnitPlatform()
 }
+
+// ── Hole test source set (dedicated module boundary probes) ──
+sourceSets {
+    hole {
+        java {
+            srcDirs = ['src/hole/java']
+        }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.runtimeClasspath
+    }
+}
+
+configurations {
+    holeImplementation.extendsFrom implementation
+    holeRuntimeOnly.extendsFrom runtimeOnly
+}
+
+tasks.register('runHoleTest', JavaExec) {
+    description = 'Run a hole test probe against the command module boundary'
+    group = 'verification'
+    classpath = files(
+        sourceSets.hole.output,
+        sourceSets.main.output
+    ) + configurations.holeRuntimeClasspath
+    mainClass = 'org.cland.alice.agent.command.CommandHoleTest'
+    modularity.inferModulePath = false
+}

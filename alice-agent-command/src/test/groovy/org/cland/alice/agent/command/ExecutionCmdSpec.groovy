@@ -95,6 +95,22 @@ class ExecutionCmdSpec extends Specification {
         thrown(NullPointerException)
     }
 
+    def "ExecuteRawCmd 拒绝 null sessionId"() {
+        when:
+        new ExecutionCmd.ExecuteRawCmd("cmd", null, TRACE)
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    def "ExecuteRawCmd 拒绝 null traceId"() {
+        when:
+        new ExecutionCmd.ExecuteRawCmd("cmd", SESSION, null)
+
+        then:
+        thrown(NullPointerException)
+    }
+
     // ========================================================================
     // Record 方法
     // ========================================================================

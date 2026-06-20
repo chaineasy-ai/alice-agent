@@ -47,6 +47,14 @@ class CapabilityCmdSpec extends Specification {
         thrown(NullPointerException)
     }
 
+    def "RegisterSkillCmd 拒绝 null traceId"() {
+        when:
+        new CapabilityCmd.RegisterSkillCmd("ref", SESSION, null)
+
+        then:
+        thrown(NullPointerException)
+    }
+
     // ========================================================================
     // UpdateRulesCmd (/rules)
     // ========================================================================
@@ -70,6 +78,22 @@ class CapabilityCmdSpec extends Specification {
         thrown(NullPointerException)
     }
 
+    def "UpdateRulesCmd 拒绝 null sessionId"() {
+        when:
+        new CapabilityCmd.UpdateRulesCmd("ref", null, TRACE)
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    def "UpdateRulesCmd 拒绝 null traceId"() {
+        when:
+        new CapabilityCmd.UpdateRulesCmd("ref", SESSION, null)
+
+        then:
+        thrown(NullPointerException)
+    }
+
     // ========================================================================
     // ReloadKernelCmd (/reload)
     // ========================================================================
@@ -82,6 +106,22 @@ class CapabilityCmdSpec extends Specification {
         cmd.resource()  == "*"
         cmd.sessionId() == SESSION
         cmd.traceId()   == TRACE
+    }
+
+    def "ReloadKernelCmd 拒绝 null sessionId"() {
+        when:
+        new CapabilityCmd.ReloadKernelCmd(null, TRACE)
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    def "ReloadKernelCmd 拒绝 null traceId"() {
+        when:
+        new CapabilityCmd.ReloadKernelCmd(SESSION, null)
+
+        then:
+        thrown(NullPointerException)
     }
 
     // ========================================================================
