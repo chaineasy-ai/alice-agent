@@ -212,6 +212,63 @@ if result.returncode != 0 and "No tests executed" in result.stderr:
     # This is still RED — the hole documents a coverage gap
 ```
 
+### 7. Green Through Direct Module Entry (runHoleTest)
+
+If the hole requires a **real module boundary call** (not just running unit tests),
+create a dedicated Java main class in a separate source set (e.g. `src/hole/java/`)
+and invoke it via Gradle JavaExec:
+
+**Step 1**: Define the source set in `build.gradle`:
+
+```groovy
+sourceSets {
+    hole {
+        java { srcDirs = ['src/hole/java'] }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.runtimeClasspath
+    }
+}
+tasks.register('runHoleTest', JavaExec) {
+    classpath = sourceSets.hole.runtimeClasspath
+    mainClass = 'org.example.module.MyHoleTest'
+    modularity.inferModulePath = true
+}
+```
+
+**Step 2**: Write the Java hole test entry:
+
+```java
+public class MyHoleTest {
+    public static void main(String[] args) {
+        switch (args[0]) {
+            case "lookup" -> testLookup();
+            case "list"   -> testList();
+        }
+    }
+    static void fail(String msg) { System.err.println("FAIL: " + msg); System.exit(1); }
+}
+```
+
+**Step 3**: In Python hole test, call via Gradle JavaExec:
+
+```python
+def run_hole(key: str, *extra_args, timeout=60):
+    args_list = [key] + list(extra_args)
+    quoted = ["'{}'".format(a) if ' ' in a else a for a in args_list]
+    return run_gradle_task(":<module>:runHoleTest",
+                           "--args", " ".join(quoted), timeout=timeout)
+
+def test_hole_id(self):
+    result = run_hole("lookup")
+    self.assertEqual(result.returncode, 0)
+    self.assertIn("PASS:", result.stdout)
+```
+
+Use this pattern when you need to:
+- Test a tool that requires real network access (e.g. `web_search` → DuckDuckGo)
+- Exercise the full `ToolDiscovery → ToolRegistry → ExecutionEngine` chain
+- Avoid depending on unit test runners for module boundary verification
+
 ## RED Status Convention
 
 | Status | Meaning |

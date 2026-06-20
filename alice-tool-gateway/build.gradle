@@ -66,6 +66,27 @@ java {
     modularity.inferModulePath = true
 }
 
+// ========== Hole test source set ==========
+sourceSets {
+    hole {
+        java {
+            srcDirs = ['src/hole/java']
+        }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.runtimeClasspath
+    }
+}
+
+configurations {
+    holeImplementation.extendsFrom implementation
+    holeRuntimeOnly.extendsFrom runtimeOnly
+}
+
+dependencies {
+    // hole 源集依赖主模块
+    holeImplementation sourceSets.main.output
+}
+
 tasks.withType(JavaCompile).configureEach {
     options.release = 25
     options.encoding = 'UTF-8'
@@ -89,4 +110,20 @@ tasks.named('test') {
 
     // spock reports
     systemProperty 'com.athaydes.spockframework.report.showCodeBlocks', true
+}
+
+/**
+ * Hole test runner — exercises BuiltinTools at module boundary including real network calls.
+ *
+ * Usage:
+ *   ./gradlew :alice-tool-gateway:runHoleTest --args="web_search 'java programming' 3"
+ */
+tasks.register('runHoleTest', JavaExec) {
+    group = 'verification'
+    description = 'Run BuiltinTools hole test (real module boundary call)'
+
+    classpath = sourceSets.hole.runtimeClasspath
+    mainClass = 'org.cland.alice.tool.gateway.builtin.BuiltinToolsHoleTest'
+
+    modularity.inferModulePath = true
 }

@@ -1,8 +1,11 @@
 package org.cland.alice.tool.gateway;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 import org.cland.alice.tool.gateway.metadata.ToolMetadata;
 
 /**
@@ -13,7 +16,7 @@ import org.cland.alice.tool.gateway.metadata.ToolMetadata;
  * <ul>
  *   <li>存储所有已注册工具的 {@link ToolMetadata} 元数据
  *   <li>按名称查找工具
- *   <li>导出工具列表供 Planner 生成 function calling schema
+ *   <li>提供工具列表查询（{@link #toolNames()} / {@link #allTools()}）
  * </ul>
  *
  * <p>设计上对 alice-core-agent 无业务依赖，是一种纯粹的 <b>能力目录</b>。 方便将来将工具部署为独立微服务，通过 MCP 协议挂载。
@@ -65,30 +68,6 @@ public class ToolRegistry {
     return Collections.unmodifiableCollection(toolMap.values());
   }
 
-  /**
-   * 将工具元数据转换为 LLM function calling 格式的列表。
-   *
-   * <p>返回的 Map 列表可直接拼接到 OpenAI/Anthropic 的 tools 参数中。
-   *
-   * @return List of Map，每项包含 type, function.name, function.description, function.parameters
-   */
-  public List<Map<String, Object>> toFunctionCallingSchema() {
-    return toolMap.values().stream()
-        .map(
-            meta -> {
-              Map<String, Object> function = new LinkedHashMap<>();
-              function.put("name", meta.name());
-              function.put("description", meta.description());
-              function.put("parameters", meta.inputSchema());
-
-              Map<String, Object> tool = new LinkedHashMap<>();
-              tool.put("type", "function");
-              tool.put("function", function);
-              return tool;
-            })
-        .collect(Collectors.toList());
-  }
-
   /** 移除一个工具注册。 */
   public void unregister(String name) {
     toolMap.remove(name);
@@ -97,26 +76,5 @@ public class ToolRegistry {
   /** 获取已注册工具的数量。 */
   public int size() {
     return toolMap.size();
-  }
-
-  // ========== Legacy API（向后兼容） ==========
-
-  /**
-   * 简单执行一个工具（兼容旧版 AgentExecutor）。
-   *
-   * <p>查找工具元数据并通过 MethodHandle 直接调用。 无沙箱保护，无超时控制。新代码请使用 {@link
-   * org.cland.alice.tool.gateway.engine.ExecutionEngine}。
-   *
-   * @deprecated 请使用 {@link org.cland.alice.tool.gateway.engine.ExecutionEngine#invoke(String, Map)}
-   */
-  @Deprecated
-  public boolean execute(String name, Map<String, Object> params) {
-    ToolMetadata meta = lookup(name);
-    try {
-      meta.invoke(params != null ? params : Map.of());
-      return true;
-    } catch (Throwable e) {
-      return false;
-    }
   }
 }

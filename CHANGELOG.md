@@ -23,6 +23,34 @@ updated: "2026-06-19"
 
 # Changelog
 
+## 20260620
+
+### Features
+
+- **alice-tool-gateway/BuiltinTools 9 工具全线实现**: 完成全部 9 个内置工具（`read_file`, `write_file`, `grep`, `run`, `list_dir`, `file_exists`, `search_file`, `remove_file`, `web_search`），覆盖本地文件操作、Shell 执行、目录遍历、Web 搜索。
+  - 新增 `list_dir` 工具 — 列出目录内容（目录标记 `/`），4 条测试 ✅
+  - 新增 `file_exists` 工具 — 检查文件/目录是否存在，4 条测试 ✅
+  - 新增 `search_file` 工具 — glob 模式递归搜索文件，4 条测试 ✅
+  - 新增 `remove_file` 工具 — 安全删除文件（拒绝删除目录），4 条测试 ✅
+  - 新增 `web_search` 工具 — DuckDuckGo API 实时搜索（无需 API key），3+2 条测试 ✅
+  - 单元测试共计 38 条（2 条 @IgnoreIf 跳过网络）
+  - `web_search` 的网络验证由 hole test TGW-P07 执行
+
+### Tests
+
+- **新增独立 hole test 源集**: 在 `alice-tool-gateway` 模块添加 `src/hole/java/` 独立源集 + `runHoleTest` JavaExec task，hole test 直接调用模块边界（`ToolDiscovery → ToolRegistry → ExecutionEngine`），不经过单元测试 runner。
+  - `BuiltinToolsHoleTest.java` 支持 7 个入口：`lookup`, `list`, `scan`, `invoke`, `sandbox`, `builtins`, `web_search`
+  - TGW-P01~P06 全绿色通过，TGW-P07 无网络时优雅跳过
+  - 更新 `hole-tdd` 技能文档，新增「Green Through Direct Module Entry」模式
+
+### Docs
+
+- 新增 `docs/alice-tool-gateway/META_TOOLS.md` — 内置工具集完整分层架构（4 层全景）
+- 新增 `docs/alice-tool-gateway/inbound.md` — 入站端口设计文档
+- 更新 `docs/alice-agent-command/e2e/case-tool-gateway.md` — 7 个 probe 规格（每个对应一个 `runHoleTest` key）
+- 更新 `docs/alice-tool-gateway/e2e/scene-tool-gateway-endpoints.md` — Probe map 扩展为 7 个 + 架构图
+- 更新 `docs/alice-tool-gateway/e2e/hole_test_tool_gateway.py` — 所有 probe 通过 `runHoleTest` 直接调用
+
 ## 20260619
 
 ### Features
@@ -115,7 +143,7 @@ updated: "2026-06-19"
   - `ModelConfigLoader` 自动识别 `deepseek` 提供商并创建 `OpenAiSupplier(name, apiKey, "https://api.deepseek.com/v1/chat/completions")`
   - `AliceCliLauncher.initializeModelProvider()`: 新增 `DEEPSEEK_API_KEY` 环境变量注册（环境变量优先级低于配置文件）
   - `AliceTuiLauncher.launch()`: 新增 `ModelConfigLoader` 加载 + `DEEPSEEK_API_KEY` 降级注册
-  - E2E 验证：`run 'Say hello' --model deepseek-chat` → `Hello!` (1 次迭代)
+  - E2E 验证：`run 'Say hello' --model deepseek-v4-flash` → `Hello!` (1 次迭代)
 
 - **docs/e2e 测试文档**: 新增 CLI e2e 测试文档。
   - `docs/alice-facade-cmd/e2e/case.md`: 4 个测试用例（基础推理/数值推理/默认模型/中文输入），含预期结果和实测结果

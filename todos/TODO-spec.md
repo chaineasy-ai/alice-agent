@@ -74,10 +74,20 @@ updated: "2026-06-14"
 ## 二、工具与环境适配层 (Tool & Environment)
 
 ### □ 2.1 alice-tool-gateway — 工具执行网关
-- [/] 工具注册与发现 [priority:: high]
+- [x] 工具注册与发现 [priority:: high]
     - [x] 基础注解式注册
     - [x] 工具参数 Schema 生成 (JSON Schema)
-    - [/] 工具执行沙箱 (Sandbox) [priority:: high] [verify:: 沙箱隔离测试]
+    - [x] 工具执行沙箱 (Sandbox) [priority:: high] [verify:: 沙箱隔离测试]
+- [x] 内置工具集 (BuiltinTools) 实现 [priority:: high]
+    - [x] read_file / write_file / grep / run [status:: done]
+    - [x] list_dir / file_exists / search_file / remove_file [status:: done]
+    - [/] web_search (DuckDuckGo) [status:: done, future:: 替换为 Tavily/Bing]
+- [x] 内置工具集测试覆盖 (38 tests, 2 @IgnoreIf) [owner:: hole]
+- [ ] web_search 网络 provider 重构 [priority:: medium] [future:: 替换 DuckDuckGo 为 Tavily/Bing Search API]
+    - [ ] 提取 SearchProvider 接口（可插拔）
+    - [ ] DuckDuckGoSearchProvider（当前实现，保留为 fallback）
+    - [ ] BingSearchProvider / TavilySearchProvider
+    - [ ] Provider 通过配置 key 切换
 - [ ] 工具执行结果缓存 [priority:: medium]
     - [ ] LRU 缓存策略
     - [ ] 缓存命中统计

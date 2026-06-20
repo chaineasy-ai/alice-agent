@@ -1,6 +1,7 @@
 module alice.agent.alice.tool.gateway.main {
   requires com.fasterxml.jackson.databind;
   requires com.google.common;
+  requires java.net.http;
   requires org.slf4j;
   requires ch.qos.logback.classic;
 
