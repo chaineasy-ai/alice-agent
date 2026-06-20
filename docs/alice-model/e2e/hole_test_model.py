@@ -49,7 +49,7 @@ class TestModelHoles(unittest.TestCase):
         result = run_hole("dispatch")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"MDL-P01 failed: {result.stderr[-200:]}")
+            msg=f"MDL-P01 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"MDL-P01: unexpected output: {result.stdout[-200:]}")
@@ -59,7 +59,7 @@ class TestModelHoles(unittest.TestCase):
         result = run_hole("call")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"MDL-P02 failed: {result.stderr[-200:]}")
+            msg=f"MDL-P02 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"MDL-P02: unexpected output: {result.stdout[-200:]}")
@@ -69,7 +69,7 @@ class TestModelHoles(unittest.TestCase):
         result = run_hole("supplier")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"MDL-P03 failed: {result.stderr[-200:]}")
+            msg=f"MDL-P03 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"MDL-P03: unexpected output: {result.stdout[-200:]}")
@@ -79,7 +79,7 @@ class TestModelHoles(unittest.TestCase):
         result = run_hole("config")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"MDL-P04 failed: {result.stderr[-200:]}")
+            msg=f"MDL-P04 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"MDL-P04: unexpected output: {result.stdout[-200:]}")
@@ -89,7 +89,7 @@ class TestModelHoles(unittest.TestCase):
         result = run_hole("multi")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"MDL-P05 failed: {result.stderr[-200:]}")
+            msg=f"MDL-P05 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"MDL-P05: unexpected output: {result.stdout[-200:]}")

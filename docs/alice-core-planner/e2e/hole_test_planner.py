@@ -50,7 +50,7 @@ class TestPlannerHoles(unittest.TestCase):
         result = run_hole("service")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"PLN-P01 failed: {result.stderr[-200:]}")
+            msg=f"PLN-P01 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"PLN-P01: unexpected output: {result.stdout[-200:]}")
@@ -60,7 +60,7 @@ class TestPlannerHoles(unittest.TestCase):
         result = run_hole("fast_path")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"PLN-P02 failed: {result.stderr[-200:]}")
+            msg=f"PLN-P02 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"PLN-P02: unexpected output: {result.stdout[-200:]}")
@@ -70,7 +70,7 @@ class TestPlannerHoles(unittest.TestCase):
         result = run_hole("slow_path")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"PLN-P03 failed: {result.stderr[-200:]}")
+            msg=f"PLN-P03 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"PLN-P03: unexpected output: {result.stdout[-200:]}")
@@ -80,7 +80,7 @@ class TestPlannerHoles(unittest.TestCase):
         result = run_hole("selector")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"PLN-P04 failed: {result.stderr[-200:]}")
+            msg=f"PLN-P04 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"PLN-P04: unexpected output: {result.stdout[-200:]}")
@@ -90,7 +90,7 @@ class TestPlannerHoles(unittest.TestCase):
         result = run_hole("budget")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"PLN-P05 failed: {result.stderr[-200:]}")
+            msg=f"PLN-P05 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"PLN-P05: unexpected output: {result.stdout[-200:]}")
@@ -100,7 +100,7 @@ class TestPlannerHoles(unittest.TestCase):
         result = run_hole("tree")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"PLN-P06 failed: {result.stderr[-200:]}")
+            msg=f"PLN-P06 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"PLN-P06: unexpected output: {result.stdout[-200:]}")
@@ -110,7 +110,7 @@ class TestPlannerHoles(unittest.TestCase):
         result = run_hole("static_planner")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"PLN-P07 failed: {result.stderr[-200:]}")
+            msg=f"PLN-P07 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"PLN-P07: unexpected output: {result.stdout[-200:]}")

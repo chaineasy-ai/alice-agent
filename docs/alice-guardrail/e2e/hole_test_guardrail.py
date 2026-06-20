@@ -49,7 +49,7 @@ class TestGuardrailHoles(unittest.TestCase):
         result = run_hole("verifyPlan")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"GRD-P01 failed: {result.stderr[-200:]}")
+            msg=f"GRD-P01 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"GRD-P01: unexpected output: {result.stdout[-200:]}")
@@ -59,7 +59,7 @@ class TestGuardrailHoles(unittest.TestCase):
         result = run_hole("verifyResult")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"GRD-P02 failed: {result.stderr[-200:]}")
+            msg=f"GRD-P02 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"GRD-P02: unexpected output: {result.stdout[-200:]}")
@@ -69,7 +69,7 @@ class TestGuardrailHoles(unittest.TestCase):
         result = run_hole("policyEngine")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"GRD-P03 failed: {result.stderr[-200:]}")
+            msg=f"GRD-P03 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"GRD-P03: unexpected output: {result.stdout[-200:]}")
@@ -79,7 +79,7 @@ class TestGuardrailHoles(unittest.TestCase):
         result = run_hole("hallucinate")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"GRD-P04 failed: {result.stderr[-200:]}")
+            msg=f"GRD-P04 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"GRD-P04: unexpected output: {result.stdout[-200:]}")
@@ -89,7 +89,7 @@ class TestGuardrailHoles(unittest.TestCase):
         result = run_hole("sandbox")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"GRD-P05 failed: {result.stderr[-200:]}")
+            msg=f"GRD-P05 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"GRD-P05: unexpected output: {result.stdout[-200:]}")

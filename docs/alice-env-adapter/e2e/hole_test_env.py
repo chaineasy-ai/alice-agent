@@ -47,7 +47,7 @@ class TestEnvAdapterHoles(unittest.TestCase):
         result = run_hole("envState")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"ENV-P01 failed: {result.stderr[-200:]}")
+            msg=f"ENV-P01 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"ENV-P01: unexpected output: {result.stdout[-200:]}")
@@ -57,7 +57,7 @@ class TestEnvAdapterHoles(unittest.TestCase):
         result = run_hole("envSnapshot")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"ENV-P02 failed: {result.stderr[-200:]}")
+            msg=f"ENV-P02 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"ENV-P02: unexpected output: {result.stdout[-200:]}")
@@ -67,7 +67,7 @@ class TestEnvAdapterHoles(unittest.TestCase):
         result = run_hole("snapshotManager")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"ENV-P03 failed: {result.stderr[-200:]}")
+            msg=f"ENV-P03 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"ENV-P03: unexpected output: {result.stdout[-200:]}")
@@ -77,7 +77,7 @@ class TestEnvAdapterHoles(unittest.TestCase):
         result = run_hole("mcpClient")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"ENV-P04 failed: {result.stderr[-200:]}")
+            msg=f"ENV-P04 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"ENV-P04: unexpected output: {result.stdout[-200:]}")
@@ -87,7 +87,7 @@ class TestEnvAdapterHoles(unittest.TestCase):
         result = run_hole("mcpTransport")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"ENV-P05 failed: {result.stderr[-200:]}")
+            msg=f"ENV-P05 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"ENV-P05: unexpected output: {result.stdout[-200:]}")

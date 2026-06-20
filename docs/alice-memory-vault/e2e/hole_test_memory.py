@@ -48,7 +48,7 @@ class TestMemoryVaultHoles(unittest.TestCase):
         result = run_hole("mem_ctrl")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"MEM-P01 failed: {result.stderr[:200]}"
+            msg=f"MEM-P01 failed: {result.stdout[:200]}"
         )
         self.assertIn(
             "PASS:", result.stdout,
@@ -60,7 +60,7 @@ class TestMemoryVaultHoles(unittest.TestCase):
         result = run_hole("episodic")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"MEM-P02 failed: {result.stderr[:200]}"
+            msg=f"MEM-P02 failed: {result.stdout[:200]}"
         )
         self.assertIn(
             "PASS:", result.stdout,
@@ -72,7 +72,7 @@ class TestMemoryVaultHoles(unittest.TestCase):
         result = run_hole("semantic")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"MEM-P03 failed: {result.stderr[:200]}"
+            msg=f"MEM-P03 failed: {result.stdout[:200]}"
         )
         self.assertIn(
             "PASS:", result.stdout,
@@ -84,7 +84,7 @@ class TestMemoryVaultHoles(unittest.TestCase):
         result = run_hole("procedural")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"MEM-P04 failed: {result.stderr[:200]}"
+            msg=f"MEM-P04 failed: {result.stdout[:200]}"
         )
         self.assertIn(
             "PASS:", result.stdout,
@@ -96,7 +96,7 @@ class TestMemoryVaultHoles(unittest.TestCase):
         result = run_hole("wal")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"MEM-P05 failed: {result.stderr[:200]}"
+            msg=f"MEM-P05 failed: {result.stdout[:200]}"
         )
         self.assertIn(
             "PASS:", result.stdout,

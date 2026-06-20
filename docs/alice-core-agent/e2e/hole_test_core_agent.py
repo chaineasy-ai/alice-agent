@@ -47,7 +47,7 @@ class TestCoreAgentHoles(unittest.TestCase):
         result = run_hole("context")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"AGT-P01 failed: {result.stderr[-200:]}")
+            msg=f"AGT-P01 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"AGT-P01: unexpected output: {result.stdout[-200:]}")
@@ -57,7 +57,7 @@ class TestCoreAgentHoles(unittest.TestCase):
         result = run_hole("stepResult")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"AGT-P02 failed: {result.stderr[-200:]}")
+            msg=f"AGT-P02 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"AGT-P02: unexpected output: {result.stdout[-200:]}")
@@ -67,7 +67,7 @@ class TestCoreAgentHoles(unittest.TestCase):
         result = run_hole("action")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"AGT-P03 failed: {result.stderr[-200:]}")
+            msg=f"AGT-P03 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"AGT-P03: unexpected output: {result.stdout[-200:]}")
@@ -77,7 +77,7 @@ class TestCoreAgentHoles(unittest.TestCase):
         result = run_hole("executor")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"AGT-P04 failed: {result.stderr[-200:]}")
+            msg=f"AGT-P04 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"AGT-P04: unexpected output: {result.stdout[-200:]}")

@@ -56,6 +56,17 @@ public class BuiltinToolsHoleTest {
       case "web_search" -> testWebSearch(args);
       case "mcp_tool" -> testMcpToolModel();
       case "mcp_registry" -> testMcpToolInRegistry();
+      case "mcp_debug" -> testMcpDebug();
+      case "all" -> {
+        testToolRegistryLookup();
+        testToolRegistryList();
+        testToolDiscoveryScan();
+        testExecutionEngineInvoke();
+        testSandboxProvider();
+        testAllBuiltinTools();
+        testMcpToolModel();
+        testMcpToolInRegistry();
+      }
       default -> fail("Unknown toolKey: " + args[0]);
     }
   }
@@ -369,5 +380,60 @@ public class BuiltinToolsHoleTest {
   static void fail(String msg) {
     System.err.println("FAIL: " + msg);
     System.exit(1);
+  }
+
+  // ==================== Debug: isolate MCP registry hang ====================
+
+  static void testMcpDebug() {
+    var registry = new ToolRegistry();
+
+    var mcpTool =
+        McpTool.builder()
+            .serverId("filesystem")
+            .toolName("read")
+            .description("Read file contents")
+            .inputSchema(Map.of("type", "object"))
+            .invoker(params -> "mock file content")
+            .build();
+
+    System.out.println("[debug] tool created");
+    System.out.flush();
+
+    var metadata = McpToolAdapter.toToolMetadata(mcpTool);
+    registry.register(metadata);
+    System.out.println("[debug] registered");
+    System.out.flush();
+
+    var found = registry.lookup("filesystem:read");
+    System.out.println("[debug] lookup OK: " + found.name());
+    System.out.flush();
+
+    var engine = ExecutionEngine.builder().registry(registry).build();
+    System.out.println("[debug] engine built");
+    System.out.flush();
+
+    System.out.println("[debug] invoke starting... (30s default timeout)");
+    System.out.flush();
+    long t0 = System.currentTimeMillis();
+    var result = engine.invoke("filesystem:read", Map.of());
+    long elapsed = System.currentTimeMillis() - t0;
+    System.out.println("[debug] invoke returned after " + elapsed + "ms");
+    System.out.println(
+        "[debug] status="
+            + result.status()
+            + " data='"
+            + result.rawData()
+            + "' summary='"
+            + result.summary()
+            + "'");
+    System.out.flush();
+
+    if (result.status() != ToolResult.Status.SUCCESS) {
+      fail("invoke failed: " + result.summary());
+    }
+    if (!"mock file content".equals(result.rawData())) {
+      fail("unexpected data: " + result.rawData());
+    }
+    System.out.println("PASS: McpTool mcp_debug (" + elapsed + "ms)");
   }
 }

@@ -49,7 +49,7 @@ class TestBootstrapHoles(unittest.TestCase):
         result = run_hole("facadeSelector")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"BTS-P01 failed: {result.stderr[-200:]}")
+            msg=f"BTS-P01 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"BTS-P01: unexpected output: {result.stdout[-200:]}")
@@ -59,7 +59,7 @@ class TestBootstrapHoles(unittest.TestCase):
         result = run_hole("aliceApp")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"BTS-P02 failed: {result.stderr[-200:]}")
+            msg=f"BTS-P02 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"BTS-P02: unexpected output: {result.stdout[-200:]}")
@@ -69,7 +69,7 @@ class TestBootstrapHoles(unittest.TestCase):
         result = run_hole("facadeContract")
         self.assertEqual(
             result.returncode, 0,
-            msg=f"BTS-P03 failed: {result.stderr[-200:]}")
+            msg=f"BTS-P03 failed: {result.stdout[-200:]}")
         self.assertIn(
             "PASS:", result.stdout,
             msg=f"BTS-P03: unexpected output: {result.stdout[-200:]}")

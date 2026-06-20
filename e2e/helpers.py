@@ -56,12 +56,13 @@ def run_gradle(task: str, *extra_args, timeout: int = 300) -> subprocess.Complet
     result = subprocess.run(
         cmd,
         cwd=PROJECT_ROOT,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         text=True,
         timeout=timeout,
     )
     if result.returncode != 0:
-        print(f"  ❌ Gradle failed:\n{result.stderr[-500:]}")
+        print(f"  ❌ Gradle failed:\n{result.stdout[-500:]}")
     else:
         print(f"  ✅ Gradle {task} succeeded")
     return result
