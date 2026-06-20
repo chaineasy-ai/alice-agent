@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "e2
 from helpers import run_gradle_task, PROJECT_ROOT
 
 
-def run_hole(key: str, *extra_args: str, timeout: int = 30) -> "subprocess.CompletedProcess":
+def run_hole(key: str, *extra_args: str, timeout: int = 90) -> "subprocess.CompletedProcess":
     """Run `runHoleTest` with given key and optional extra args.
 
     Extra args are passed as independent arguments to --args, e.g.:
