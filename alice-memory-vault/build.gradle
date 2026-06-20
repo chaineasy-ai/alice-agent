@@ -97,3 +97,53 @@ tasks.named('test') {
     // spock reports
     systemProperty 'com.athaydes.spockframework.report.showCodeBlocks', true
 }
+
+// ========== Hole test source set ==========
+sourceSets {
+    hole {
+        java {
+            srcDirs = ['src/hole/java']
+        }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.runtimeClasspath
+    }
+}
+
+configurations {
+    holeImplementation.extendsFrom implementation
+    holeRuntimeOnly.extendsFrom runtimeOnly
+}
+
+dependencies {
+    // hole 源集依赖主模块
+    holeImplementation sourceSets.main.output
+}
+
+/**
+ * Hole test runner — exercises memory vault public API at module boundary.
+ *
+ * Usage:
+ *   ./gradlew :alice-memory-vault:runHoleTest --args="mem_ctrl"
+ *   ./gradlew :alice-memory-vault:runHoleTest --args="episodic"
+ *   ./gradlew :alice-memory-vault:runHoleTest --args="semantic"
+ *   ./gradlew :alice-memory-vault:runHoleTest --args="procedural"
+ *   ./gradlew :alice-memory-vault:runHoleTest --args="wal"
+ *   ./gradlew :alice-memory-vault:runHoleTest --args="all"
+ */
+tasks.register('runHoleTest', JavaExec) {
+    group = 'verification'
+    description = 'Run memory vault hole test (module boundary probe)'
+
+    classpath = sourceSets.hole.runtimeClasspath
+    mainClass = 'org.cland.alice.memory.hole.MemoryVaultHoleTest'
+
+    // 默认 args（如果用户未传参则运行 "all"）
+    args = project.hasProperty('holeArgs') ? holeArgs.tokenize() : (project.findProperty('args') ?: 'all').toString().tokenize()
+}
+
+// 处理 --args 传递到 JavaExec
+tasks.named('runHoleTest') {
+    if (project.hasProperty('args')) {
+        args project.property('args').toString().tokenize()
+    }
+}
