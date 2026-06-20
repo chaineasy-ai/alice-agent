@@ -9,7 +9,9 @@
  *   <li>{@code ExecutionCmd} — 任务驱动（/run, /exec）
  *   <li>{@code CapabilityCmd} — 能力装载（/skill, /rules, /reload）
  *   <li>{@code AlignmentCmd} — 运行配置（/model）
- *   <li>{@code ControlCmd} — 控制与反馈（/new, /feedback, /exit）
+ *   <li>{@code ControlCmd} — 控制与反馈（/new, /feedback, /exit, /clear, /context, /compact）
+ *   <li>{@code RoutineTimeCmd} — 定时调度（/routine）
+ *   <li>{@code SubAgentCmd} — 多 Agent 管理（/sub-agent spawn/connect/list/cancel/results/send/prompt）
  * </ul>
  */
 module alice.agent.command.main {

@@ -20,9 +20,6 @@ repositories {
 dependencies {
     implementation 'org.slf4j:slf4j-api:2.0.16'
 
-    // 可选的工具列表引用（ToolMetadata）
-    compileOnly project(':alice-tool-gateway')
-
     // Groovy / Spock for testing
     testImplementation 'org.apache.groovy:groovy:4.0.30'
     testImplementation 'org.spockframework:spock-core:2.4-groovy-4.0'
