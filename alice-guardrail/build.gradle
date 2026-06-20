@@ -56,6 +56,42 @@ dependencies {
     testImplementation 'org.slf4j:slf4j-api:2.0.16'
 }
 
+// ========== Hole test source set ==========
+sourceSets {
+    hole {
+        java {
+            srcDirs = ['src/hole/java']
+        }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.runtimeClasspath
+    }
+}
+
+configurations {
+    holeImplementation.extendsFrom implementation
+    holeRuntimeOnly.extendsFrom runtimeOnly
+}
+
+dependencies {
+    holeImplementation sourceSets.main.output
+}
+
+// ========== runHoleTest task ==========
+tasks.register('runHoleTest', JavaExec) {
+    group = 'verification'
+    description = 'Run GuardrailHoleTest (real module boundary probe)'
+
+    classpath = sourceSets.hole.runtimeClasspath
+    mainClass = 'org.cland.alice.guardrail.GuardrailHoleTest'
+
+    modularity.inferModulePath = true
+    args = (project.findProperty('args') ?: 'all').toString().tokenize()
+}
+
+tasks.named('runHoleTest') {
+    dependsOn 'classes', 'holeClasses'
+}
+
 // Apply a specific Java toolchain to ease working on different environments.
 java {
     toolchain {

@@ -2,9 +2,8 @@
 """
 Hole Test — alice-guardrail module endpoints.
 
-Probes GuardrailService, PolicyEngine, HallucinationDetector,
-and PermissionSandboxValidator via Spock unit tests added in
-`src/test/groovy/org/cland/alice/guardrail/`.
+Each probe invokes GuardrailHoleTest directly via Gradle JavaExec (runHoleTest),
+exercising module boundary without going through unit test runners.
 
 See:
   docs/alice-agent-command/e2e/case-guardrail.md
@@ -12,90 +11,96 @@ See:
 """
 
 import os
+import subprocess
 import sys
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "e2e"))
-from helpers import run_gradle_task, PROJECT_ROOT
+# Project root detection
+PROJECT_ROOT = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..")
+)
+
+MODULE = "alice-guardrail"
 
 
-# ── Detect if guardrail has any test sources ──────────────────────
-def _guardrail_has_tests():
-    """Check if alice-guardrail has actual .groovy or .java test files."""
-    test_dir = PROJECT_ROOT / "alice-guardrail" / "src" / "test"
-    if not test_dir.exists():
-        return False
-    return any(
-        f.suffix in (".groovy", ".java")
-        for f in test_dir.rglob("*")
-        if f.is_file()
+def run_hole(key: str, timeout: int = 30) -> "subprocess.CompletedProcess":
+    """Run a single hole test probe via Gradle runHoleTest task."""
+    cmd = [
+        "cmd", "/c",
+        "gradlew.bat",
+        f":{MODULE}:runHoleTest",
+        f"--args={key}",
+    ]
+    result = subprocess.run(
+        cmd,
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
     )
-_HAS_TESTS = _guardrail_has_tests()
+    return result
 
 
 class TestGuardrailHoles(unittest.TestCase):
-    """Hole tests for alice-guardrail — 5 probes."""
-
-    @classmethod
-    def setUpClass(cls):
-        cls.build_ok = (PROJECT_ROOT / "alice-guardrail" / "build").is_dir()
-
-    def _check_has_tests(self):
-        """Skip if no unit tests exist. This hole is 🟥 RED until tests are written."""
-        if not _HAS_TESTS:
-            self.skipTest("GRD: 🟥 RED — no unit tests exist yet for alice-guardrail")
+    """Hole tests for alice-guardrail — 5 probes via Java GuardrailHoleTest."""
 
     def test_grd_p01_verify_plan(self):
         """GRD-P01: GuardrailService.verifyPlan() pre-validation."""
-        if not self.build_ok:
-            self.skipTest("Module not built.")
-        self._check_has_tests()
-        result = run_gradle_task(":alice-guardrail:test")
-        self.assertEqual(result.returncode, 0,
-                         msg=f"GRD-P01 failed: {result.stderr[:200]}")
+        result = run_hole("verifyPlan")
+        self.assertEqual(
+            result.returncode, 0,
+            msg=f"GRD-P01 failed: {result.stderr[-200:]}")
+        self.assertIn(
+            "PASS:", result.stdout,
+            msg=f"GRD-P01: unexpected output: {result.stdout[-200:]}")
 
     def test_grd_p02_verify_result(self):
         """GRD-P02: GuardrailService.verifyResult() post-validation."""
-        if not self.build_ok:
-            self.skipTest("Module not built.")
-        self._check_has_tests()
-        result = run_gradle_task(":alice-guardrail:test")
-        self.assertEqual(result.returncode, 0,
-                         msg=f"GRD-P02 failed: {result.stderr[:200]}")
+        result = run_hole("verifyResult")
+        self.assertEqual(
+            result.returncode, 0,
+            msg=f"GRD-P02 failed: {result.stderr[-200:]}")
+        self.assertIn(
+            "PASS:", result.stdout,
+            msg=f"GRD-P02: unexpected output: {result.stdout[-200:]}")
 
     def test_grd_p03_policy_engine(self):
-        """GRD-P03: PolicyEngine.evaluate() policy matching."""
-        if not self.build_ok:
-            self.skipTest("Module not built.")
-        self._check_has_tests()
-        result = run_gradle_task(":alice-guardrail:test")
-        self.assertEqual(result.returncode, 0,
-                         msg=f"GRD-P03 failed: {result.stderr[:200]}")
+        """GRD-P03: PolicyEngine evaluate + schema validation + safety filter."""
+        result = run_hole("policyEngine")
+        self.assertEqual(
+            result.returncode, 0,
+            msg=f"GRD-P03 failed: {result.stderr[-200:]}")
+        self.assertIn(
+            "PASS:", result.stdout,
+            msg=f"GRD-P03: unexpected output: {result.stdout[-200:]}")
 
     def test_grd_p04_hallucination_detector(self):
         """GRD-P04: HallucinationDetector detects contradictions."""
-        if not self.build_ok:
-            self.skipTest("Module not built.")
-        self._check_has_tests()
-        result = run_gradle_task(":alice-guardrail:test")
-        self.assertEqual(result.returncode, 0,
-                         msg=f"GRD-P04 failed: {result.stderr[:200]}")
+        result = run_hole("hallucinate")
+        self.assertEqual(
+            result.returncode, 0,
+            msg=f"GRD-P04 failed: {result.stderr[-200:]}")
+        self.assertIn(
+            "PASS:", result.stdout,
+            msg=f"GRD-P04: unexpected output: {result.stdout[-200:]}")
 
     def test_grd_p05_permission_sandbox(self):
         """GRD-P05: PermissionSandboxValidator access control."""
-        if not self.build_ok:
-            self.skipTest("Module not built.")
-        self._check_has_tests()
-        result = run_gradle_task(":alice-guardrail:test")
-        self.assertEqual(result.returncode, 0,
-                         msg=f"GRD-P05 failed: {result.stderr[:200]}")
+        result = run_hole("sandbox")
+        self.assertEqual(
+            result.returncode, 0,
+            msg=f"GRD-P05 failed: {result.stderr[-200:]}")
+        self.assertIn(
+            "PASS:", result.stdout,
+            msg=f"GRD-P05: unexpected output: {result.stdout[-200:]}")
 
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("  Hole Test: alice-guardrail")
-    print(f"  Module: {PROJECT_ROOT / 'alice-guardrail'}")
-    status = "🟥 RED" if not _HAS_TESTS else "🟩 GREEN (with existing tests)"
-    print(f"  Status: {status}")
+    print(f"  Hole Test: {MODULE}")
+    print(f"  Module: {os.path.join(PROJECT_ROOT, MODULE)}")
+    print("=" * 60)
+    print(f"  Holes: GRD-P01..P05 (5 probes)")
+    print(f"  Prober: GuardrailHoleTest (Java Exec)")
     print("=" * 60)
     unittest.main(verbosity=2)
