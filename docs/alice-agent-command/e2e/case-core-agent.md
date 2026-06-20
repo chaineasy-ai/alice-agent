@@ -23,8 +23,6 @@ AgentExecutor.execute(Input) ──► StepResult [Finish|Continue|Failure]
          ● (AGT-P01)                     ● (AGT-P02)
 AgentContext.getSession() ──► SessionState
          ● (AGT-P03)
-SubAgentManager.register() / lookup() ──► SubAgent
-         ● (AGT-P05)
 ```
 
 Each hole injects known input at the module boundary and verifies the output shape/type — no internals introspection.
@@ -61,9 +59,9 @@ Each hole injects known input at the module boundary and verifies the output sha
 | **Assertion** | `getSession() != null` after create; state transition clean |
 | **Unit ref** | `AgentContextSpec.groovy` — session state management |
 
-### AGT-P04: (skipped — config loading is unit-only, no module boundary)
+### AGT-P04: (skipped — SubAgentManager not yet implemented)
 
-### AGT-P05: `SubAgentManager` register/list/lookup
+### AGT-P04: SubAgentManager register/list/lookup (skipped — no SubAgentManager impl)
 
 | Field | Value |
 |-------|-------|

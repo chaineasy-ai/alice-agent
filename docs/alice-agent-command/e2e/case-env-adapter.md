@@ -19,46 +19,61 @@ Probe the **alice-env-adapter** module's public API boundary — environment exe
 ## 2. Hole Design
 
 ```
-Action ──► EnvManager.execute() ──► Observation
-              ● (ENV-P01)
+State ──► EnvState (DISCONNECTED → READY → FINISHED)
+           ● (ENV-P01)
+EnvSnapshot.builder() ──► EnvSnapshot
+           ● (ENV-P02)
+SnapshotManager.save()/rollback() ──► EnvState
+           ● (ENV-P03)
 McpClient.callTool(name, params) ──► Result
-              ● (ENV-P02)  ─── via FakeMcpTransport
-McpClient.listTools() ──► List<Tool>
-              ● (ENV-P03)
-EnvSnapshot ──► SnapshotManager.save()/rollback() ──► EnvState
-              ● (ENV-P04)
+           ● (ENV-P04)  ─── via McpTool model
+McpTransport.connect()/disconnect() ──► void
+           ● (ENV-P05)
 ```
 
 ## 3. Hole Tests
 
-### ENV-P01: `EnvManager.execute()` action execution
+### ENV-P01: `EnvState` state machine
 
 | Field | Value |
 |-------|-------|
-| **Input** | Mock `Action` |
-| **Expected** | Returns `Observation`, not null |
-| **Assertion** | `observation != null` |
+| **Target** | `EnvState` enum — canExecute(), isTerminal(), isTransitional() |
+| **Input** | Check READY → canExecute=true, FINISHED → isTerminal=true |
+| **Expected** | State machine flags correctly classify each state |
+| **Assertion** | `canExecute()` and `isTerminal()` return expected values |
 
-### ENV-P02: `McpClient.callTool()` via Fake transport
-
-| Field | Value |
-|-------|-------|
-| **Input** | `FakeMcpTransport` returning known response |
-| **Expected** | Returns `Result` matching fake response |
-| **Assertion** | `result != null`, result contains expected fields |
-
-### ENV-P03: `McpClient.listTools()` returns tool list
+### ENV-P02: `EnvSnapshot` builder
 
 | Field | Value |
 |-------|-------|
-| **Input** | Client with fake transport returning 2 tools |
-| **Expected** | Returns `List<Tool>` of size 2 |
-| **Assertion** | `len(tools) == 2` |
+| **Target** | `EnvSnapshot.builder()` — resources, state, effects |
+| **Input** | Build EnvSnapshot with resources and irreversible effects |
+| **Expected** | Snapshot fields match builder input |
+| **Assertion** | `snapshot.resources().containsKey("file:/tmp")` |
 
-### ENV-P04: `SnapshotManager.save()` + `rollback()`
+### ENV-P03: `SnapshotManager.save()` + `rollback()`
 
 | Field | Value |
 |-------|-------|
+| **Target** | `SnapshotManager` — save, rollback, commit |
 | **Input** | Save snapshot of current state, mutate, rollback |
 | **Expected** | After rollback, state matches saved snapshot |
 | **Assertion** | `state == snapshot.state` |
+
+### ENV-P04: `McpClient` / `McpTool` model
+
+| Field | Value |
+|-------|-------|
+| **Target** | `McpTool` — create, invoke, error path |
+| **Input** | Create McpTool with name & handler, invoke with valid/invalid params |
+| **Expected** | Valid invoke returns result; invalid returns error |
+| **Assertion** | `result != null`, error case caught |
+
+### ENV-P05: `McpTransport` interface contract
+
+| Field | Value |
+|-------|-------|
+| **Target** | `McpTransport` — connect(), disconnect(), sendMessage() |
+| **Input** | Verify interface methods exist and accept expected types |
+| **Expected** | Interface compiles and methods return CompletableFuture |
+| **Assertion** | Methods present with correct signatures |
