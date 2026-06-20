@@ -59,6 +59,57 @@ dependencies {
     testImplementation 'org.slf4j:slf4j-api:2.0.16'
 }
 
+// ========== Hole test source set ==========
+sourceSets {
+    hole {
+        java {
+            srcDirs = ['src/hole/java']
+        }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.runtimeClasspath
+    }
+}
+
+configurations {
+    holeImplementation.extendsFrom implementation
+    holeRuntimeOnly.extendsFrom runtimeOnly
+}
+
+dependencies {
+    // Hole test source set depends on main module output
+    holeImplementation sourceSets.main.output
+}
+
+// ========== runHoleTest task ==========
+/**
+ * Run a real module-boundary hole test.
+ *
+ * Usage:
+ *   ./gradlew :alice-core-planner:runHoleTest --args="service"
+ *   ./gradlew :alice-core-planner:runHoleTest --args="fast_path"
+ *   ./gradlew :alice-core-planner:runHoleTest --args="slow_path"
+ *   ./gradlew :alice-core-planner:runHoleTest --args="selector"
+ *   ./gradlew :alice-core-planner:runHoleTest --args="budget"
+ *   ./gradlew :alice-core-planner:runHoleTest --args="tree"
+ *   ./gradlew :alice-core-planner:runHoleTest --args="static_planner"
+ *   ./gradlew :alice-core-planner:runHoleTest --args="all"
+ */
+tasks.register('runHoleTest', JavaExec) {
+    group = 'verification'
+    description = 'Run PlannerHoleTest (real module boundary probe)'
+
+    classpath = sourceSets.hole.runtimeClasspath
+    mainClass = 'org.cland.alice.core.planner.PlannerHoleTest'
+
+    modularity.inferModulePath = true
+    // Parse args from --args or default to "all"
+    args = project.hasProperty('holeArgs') ? holeArgs.tokenize() : (project.findProperty('args') ?: 'all').toString().tokenize()
+}
+
+tasks.named('runHoleTest') {
+    dependsOn 'classes', 'holeClasses'
+}
+
 // Apply a specific Java toolchain to ease working on different environments.
 java {
     toolchain {
