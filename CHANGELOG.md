@@ -18,7 +18,7 @@ scope:
   - "alice-facade-tui"
   - "alice-facade-web"
 status: "active"
-updated: "2026-06-19"
+updated: "2026-06-20"
 ---
 
 # Changelog
@@ -38,10 +38,22 @@ updated: "2026-06-19"
 
 ### Tests
 
-- **新增独立 hole test 源集**: 在 `alice-tool-gateway` 模块添加 `src/hole/java/` 独立源集 + `runHoleTest` JavaExec task，hole test 直接调用模块边界（`ToolDiscovery → ToolRegistry → ExecutionEngine`），不经过单元测试 runner。
-  - `BuiltinToolsHoleTest.java` 支持 7 个入口：`lookup`, `list`, `scan`, `invoke`, `sandbox`, `builtins`, `web_search`
-  - TGW-P01~P06 全绿色通过，TGW-P07 无网络时优雅跳过
-  - 更新 `hole-tdd` 技能文档，新增「Green Through Direct Module Entry」模式
+- **hole test 统一迁移: 8 模块全部从 Spock 委托升级为独立 JavaExec 边界探测**:
+  - 所有 Python `hole_test_*.py` 脚本不再调用 `./gradlew :module:test`，改为调用 JavaExec task `runHoleTest`，直接执行 `src/hole/java/` 中的 Java `main()` 方法
+  - 每个 probe 对应一个 `static void testXxx()` 方法，无 JUnit/Spock 依赖，纯标准输出断言
+  - 共 43 个 hole probes 覆盖 8 个模块:
+    - `alice-core-planner` (7: PLN-P01~P07) — PlannerService, FastPath/SlowPath, StrategySelector, TokenBudget, ThinkingTree, StaticPlanner
+    - `alice-model` (5: MDL-P01~P05) — ModelProvider dispatch, Call lifecycle, ModelSupplier, ConfigLoader, Multi-routing
+    - `alice-tool-gateway` (9: TGW-P01~P09) — ToolRegistry lookup/scan/list/invoke, SandboxProvider, BuiltinTools, web_search, McpTool model/registry
+    - `alice-memory-vault` (5: MEM-P01~P05) — VaultController recall/memorize, Episodic/Semantic/Procedural vaults, MemoryRouter
+    - `alice-guardrail` (5: GRD-P01~P05) — GuardrailService pre/post-verify, PolicyEngine, HallucinationDetector, PermissionSandboxValidator
+    - `alice-bootstrap` (3: BTS-P01~P03) — FacadeSelector launch, AliceApp class, AliceFacade SPI contract
+    - `alice-core-agent` (4: AGT-P01~P04) — AgentContext lifecycle, StepResult sealed hierarchy, Action builder/factories, AgentExecutor
+    - `alice-env-adapter` (5: ENV-P01~P05) — EnvState state machine, EnvSnapshot builder, SnapshotManager, McpClient/Tool model, McpTransport interface
+
+- **Windows subprocess 死锁修复**: `e2e/helpers.py` 中 `run_gradle()` 从 `capture_output=True` 改为 `stdout=PIPE + stderr=STDOUT`，避免 Gradle WARNING 日志填满 stderr 管道导致 deadlock。所有 8 个 `hole_test_*.py` 同步从 `result.stderr` 改为 `result.stdout`。
+
+- **TGW 单次 Gradle 调用**: `BuiltinToolsHoleTest.java` 新增 `"all"` 入口键，一次运行全部 8 个 probe（TGW-P01~P09 除 web_search 因需网络参数单独测试），避免多次 `gradlew` 调用导致 Windows 下 Gradle daemon 崩溃 (exit code 3221225794)。Python 脚本也重写为单次 Gradle 调用。
 
 ### Docs
 
