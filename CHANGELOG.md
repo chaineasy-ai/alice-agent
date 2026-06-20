@@ -42,14 +42,14 @@ updated: "2026-06-20"
   - 所有 Python `hole_test_*.py` 脚本不再调用 `./gradlew :module:test`，改为调用 JavaExec task `runHoleTest`，直接执行 `src/hole/java/` 中的 Java `main()` 方法
   - 每个 probe 对应一个 `static void testXxx()` 方法，无 JUnit/Spock 依赖，纯标准输出断言
   - 共 43 个 hole probes 覆盖 8 个模块:
-    - `alice-core-planner` (7: PLN-P01~P07) — PlannerService, FastPath/SlowPath, StrategySelector, TokenBudget, ThinkingTree, StaticPlanner
-    - `alice-model` (5: MDL-P01~P05) — ModelProvider dispatch, Call lifecycle, ModelSupplier, ConfigLoader, Multi-routing
-    - `alice-tool-gateway` (9: TGW-P01~P09) — ToolRegistry lookup/scan/list/invoke, SandboxProvider, BuiltinTools, web_search, McpTool model/registry
-    - `alice-memory-vault` (5: MEM-P01~P05) — VaultController recall/memorize, Episodic/Semantic/Procedural vaults, MemoryRouter
-    - `alice-guardrail` (5: GRD-P01~P05) — GuardrailService pre/post-verify, PolicyEngine, HallucinationDetector, PermissionSandboxValidator
-    - `alice-bootstrap` (3: BTS-P01~P03) — FacadeSelector launch, AliceApp class, AliceFacade SPI contract
-    - `alice-core-agent` (4: AGT-P01~P04) — AgentContext lifecycle, StepResult sealed hierarchy, Action builder/factories, AgentExecutor
-    - `alice-env-adapter` (5: ENV-P01~P05) — EnvState state machine, EnvSnapshot builder, SnapshotManager, McpClient/Tool model, McpTransport interface
+    - `alice-core-planner` (7: PLN-P01~P07)
+    - `alice-model` (5: MDL-P01~P05)
+    - `alice-tool-gateway` (9: TGW-P01~P09)
+    - `alice-memory-vault` (5: MEM-P01~P05)
+    - `alice-guardrail` (5: GRD-P01~P05)
+    - `alice-bootstrap` (3: BTS-P01~P03)
+    - `alice-core-agent` (4: AGT-P01~P04)
+    - `alice-env-adapter` (5: ENV-P01~P05)
 
 - **Windows subprocess 死锁修复**: `e2e/helpers.py` 中 `run_gradle()` 从 `capture_output=True` 改为 `stdout=PIPE + stderr=STDOUT`，避免 Gradle WARNING 日志填满 stderr 管道导致 deadlock。所有 8 个 `hole_test_*.py` 同步从 `result.stderr` 改为 `result.stdout`。
 
@@ -59,9 +59,16 @@ updated: "2026-06-20"
 
 - 新增 `docs/alice-tool-gateway/META_TOOLS.md` — 内置工具集完整分层架构（4 层全景）
 - 新增 `docs/alice-tool-gateway/inbound.md` — 入站端口设计文档
-- 更新 `docs/alice-agent-command/e2e/case-tool-gateway.md` — 7 个 probe 规格（每个对应一个 `runHoleTest` key）
-- 更新 `docs/alice-tool-gateway/e2e/scene-tool-gateway-endpoints.md` — Probe map 扩展为 7 个 + 架构图
-- 更新 `docs/alice-tool-gateway/e2e/hole_test_tool_gateway.py` — 所有 probe 通过 `runHoleTest` 直接调用
+- 更新 `docs/alice-agent-command/e2e/case-tool-gateway.md`
+- 更新 `docs/alice-tool-gateway/e2e/scene-tool-gateway-endpoints.md`
+- 更新 `docs/alice-tool-gateway/e2e/hole_test_tool_gateway.py`
+- 更新 `docs/alice-bootstrap/e2e/hole_test_bootstrap.py`
+- 更新 `docs/alice-core-agent/e2e/hole_test_core_agent.py`
+- 更新 `docs/alice-core-planner/e2e/hole_test_planner.py`
+- 更新 `docs/alice-env-adapter/e2e/hole_test_env.py`
+- 更新 `docs/alice-guardrail/e2e/hole_test_guardrail.py`
+- 更新 `docs/alice-memory-vault/e2e/hole_test_memory.py`
+- 更新 `docs/alice-model/e2e/hole_test_model.py`
 
 ## 20260619
 
