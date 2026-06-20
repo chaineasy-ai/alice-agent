@@ -54,8 +54,8 @@ class ModelProviderSpec extends Specification {
         provider.getModel("gpt-4o").supplierName() == "openai"
         provider.getModel("claude-3-5-sonnet-latest") != null
         provider.getModel("claude-3-5-sonnet-latest").supplierName() == "anthropic"
-        provider.getModel("deepseek-chat") != null
-        provider.getModel("deepseek-chat").supplierName() == "deepseek"
+        provider.getModel("deepseek-v4-flash") != null
+        provider.getModel("deepseek-v4-flash").supplierName() == "deepseek"
     }
 
     def "get(ModelEnum) should return null if supplier not registered"() {

@@ -48,7 +48,7 @@ class ModelEnumSpec extends Specification {
         expect:
         ModelEnum.fromModelId("gpt-4o") == ModelEnum.GPT_4O
         ModelEnum.fromModelId("claude-3-5-sonnet-latest") == ModelEnum.CLAUDE_3_5_SONNET
-        ModelEnum.fromModelId("deepseek-chat") == ModelEnum.DEEPSEEK_V3
+        ModelEnum.fromModelId("deepseek-v4-flash") == ModelEnum.DEEPSEEK_V3
         ModelEnum.fromModelId("gemini-2.0-flash") == ModelEnum.GEMINI_2_0_FLASH
         ModelEnum.fromModelId("gemma-4") == ModelEnum.GEMMA_4
     }
