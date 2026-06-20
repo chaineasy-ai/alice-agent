@@ -5,6 +5,8 @@
  */
 package org.cland.alice.tool.gateway;
 
+import org.cland.alice.tool.gateway.metadata.ToolMetadata;
+
 /**
  * 工具注册中心全局持有者。
  *
@@ -28,7 +30,7 @@ public final class ToolRegistryHolder {
   }
 
   /** 获取所有已注册的工具列表（快捷方法）。 */
-  public java.util.Collection<org.cland.alice.tool.gateway.metadata.ToolMetadata> allTools() {
+  public java.util.Collection<ToolMetadata> allTools() {
     return registry.allTools();
   }
 }

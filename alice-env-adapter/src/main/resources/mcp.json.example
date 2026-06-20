@@ -1,0 +1,54 @@
+{
+  "_note": "MCP Servers template for Alice Agent. Copy to ~/.alice/mcp.json and customize.",
+  "mcp_servers": {
+    "filesystem": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/workspace"
+      ],
+      "auto_connect": true,
+      "_comment": "Provides file system tools: read, write, search, list_dir"
+    },
+    "github": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_TOKEN": "${env:GITHUB_TOKEN}"
+      },
+      "_comment": "GitHub API tools: list repos, create issues, search code"
+    },
+    "sqlite": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sqlite",
+        "${env:HOME}/alice-data.db"
+      ],
+      "disabled": true,
+      "_comment": "Read-only SQL queries. Set disabled=false and adjust db path to enable."
+    },
+    "playwright": {
+      "type": "sse",
+      "url": "https://mcp.playwright.company.com/sse",
+      "disabled": true,
+      "_comment": "Remote browser automation. Replace url with your Playwright MCP endpoint."
+    },
+    "slack": {
+      "type": "sse",
+      "url": "http://localhost:8080/mcp/sse",
+      "disabled": true,
+      "env": {
+        "SLACK_BOT_TOKEN": "${env:SLACK_BOT_TOKEN}"
+      },
+      "_comment": "Slack messaging tools. Requires running a Slack MCP bridge server."
+    }
+  }
+}

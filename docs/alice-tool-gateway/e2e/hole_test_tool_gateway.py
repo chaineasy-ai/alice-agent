@@ -98,6 +98,22 @@ class TestToolGatewayHoles(unittest.TestCase):
         self.assertIn("PASS:", result.stdout,
                       msg=f"TGW-P07: unexpected output: {result.stdout[:200]}")
 
+    def test_tgw_p08_mcp_tool_model(self):
+        """TGW-P08: McpTool model — create, invoke, error path."""
+        result = run_hole("mcp_tool")
+        self.assertEqual(result.returncode, 0,
+                         msg=f"TGW-P08 failed: {result.stderr[:200]}")
+        self.assertIn("PASS:", result.stdout,
+                      msg=f"TGW-P08: unexpected output: {result.stdout[:200]}")
+
+    def test_tgw_p09_mcp_tool_in_registry(self):
+        """TGW-P09: McpToolAdapter + ToolRegistry + ExecutionEngine integration."""
+        result = run_hole("mcp_registry")
+        self.assertEqual(result.returncode, 0,
+                         msg=f"TGW-P09 failed: {result.stderr[:200]}")
+        self.assertIn("PASS:", result.stdout,
+                      msg=f"TGW-P09: unexpected output: {result.stdout[:200]}")
+
 
 if __name__ == "__main__":
     print("=" * 60)

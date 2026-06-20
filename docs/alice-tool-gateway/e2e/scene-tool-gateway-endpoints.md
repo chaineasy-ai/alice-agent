@@ -13,7 +13,7 @@ updated: "2026-06-20"
 
 ## 1. Scene Overview
 
-7 hole probes into the `alice-tool-gateway` module, each calling the module boundary
+9 hole probes into the `alice-tool-gateway` module, each calling the module boundary
 directly via `BuiltinToolsHoleTest` (Gradle `runHoleTest` task — no unit test runners).
 
 **Case doc**: `docs/alice-agent-command/e2e/case-tool-gateway.md`
@@ -21,17 +21,19 @@ directly via `BuiltinToolsHoleTest` (Gradle `runHoleTest` task — no unit test 
 ## 2. Probe Map
 
 ```
-┌─────────────────────────────────────┐
-│         alice-tool-gateway          │
-│                                     │
-│  TGW-P01  ToolRegistry.lookup()     │
-│  TGW-P02  ToolDiscovery scan        │
-│  TGW-P03  ExecutionEngine invoke    │
-│  TGW-P04  SandboxProvider isolate   │
-│  TGW-P05  ToolRegistry list query   │
-│  TGW-P06  BuiltinTools 9 methods    │
-│  TGW-P07  web_search (network)      │
-└─────────────────────────────────────┘
+┌───────────────────────────────────────────┐
+│           alice-tool-gateway              │
+│                                           │
+│  TGW-P01  ToolRegistry.lookup()           │
+│  TGW-P02  ToolDiscovery scan              │
+│  TGW-P03  ExecutionEngine invoke          │
+│  TGW-P04  SandboxProvider isolate         │
+│  TGW-P05  ToolRegistry list query         │
+│  TGW-P06  BuiltinTools 9 methods          │
+│  TGW-P07  web_search (network)            │
+│  TGW-P08  McpTool model (create+invoke)   │
+│  TGW-P09  McpToolAdapter + Registry + EE  │
+└───────────────────────────────────────────┘
 ```
 
 | Hole | Status | Key | Notes |
@@ -43,6 +45,8 @@ directly via `BuiltinToolsHoleTest` (Gradle `runHoleTest` task — no unit test 
 | TGW-P05 | 🟩 GREEN | `list` | toolNames() / allTools() consistent |
 | TGW-P06 | 🟩 GREEN | `builtins` | All 9 BuiltinTools methods (no network) |
 | TGW-P07 | 🟩 SKIP ⏭️ | `web_search` | DuckDuckGo API — SKIP if no network |
+| TGW-P08 | 🟩 GREEN | `mcp_tool` | McpTool model create/invoke/error |
+| TGW-P09 | 🟩 GREEN | `mcp_registry` | McpToolAdapter → Registry → ExecutionEngine |
 
 ## 3. How to Run
 
@@ -73,4 +77,10 @@ Python hole_test_tool_gateway.py
   └── TGW-P07 ── Gradle runHoleTest ── BuiltinToolsHoleTest.testWebSearch()
                                        → BuiltinTools.webSearch(query, maxResults)
                                        → HttpConnectTimeoutException → SKIP
+
+  TGW-P08 ── Gradle runHoleTest ── BuiltinToolsHoleTest.testMcpToolModel()
+                                    → McpTool.builder().invoke()
+
+  TGW-P09 ── Gradle runHoleTest ── BuiltinToolsHoleTest.testMcpToolInRegistry()
+                                    → McpToolAdapter → ToolRegistry → ExecutionEngine
 ```

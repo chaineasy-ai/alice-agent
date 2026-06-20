@@ -2,11 +2,14 @@ package org.cland.alice.tool.gateway.builtin;
 
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.cland.alice.tool.gateway.ToolRegistry;
 import org.cland.alice.tool.gateway.engine.ExecutionEngine;
 import org.cland.alice.tool.gateway.engine.ToolDiscovery;
 import org.cland.alice.tool.gateway.engine.ToolResult;
+import org.cland.alice.tool.gateway.metadata.McpToolAdapter;
+import org.cland.alice.tool.gateway.model.McpTool;
 
 /**
  * Hole test entry point for alice-tool-gateway.
@@ -17,7 +20,8 @@ import org.cland.alice.tool.gateway.engine.ToolResult;
  * <p>Usage (via Gradle): ./gradlew :alice-tool-gateway:runHoleTest --args="&lt;toolKey&gt;
  * [args...]"
  *
- * <p>Supported toolKeys: lookup, list, scan, invoke, sandbox, builtins, web_search
+ * <p>Supported toolKeys: lookup, list, scan, invoke, sandbox, builtins, web_search, mcp_tool,
+ * mcp_registry
  *
  * <p>Exit 0 = PASS, non-zero = FAIL.
  */
@@ -50,6 +54,8 @@ public class BuiltinToolsHoleTest {
       case "sandbox" -> testSandboxProvider();
       case "builtins" -> testAllBuiltinTools();
       case "web_search" -> testWebSearch(args);
+      case "mcp_tool" -> testMcpToolModel();
+      case "mcp_registry" -> testMcpToolInRegistry();
       default -> fail("Unknown toolKey: " + args[0]);
     }
   }
@@ -259,6 +265,98 @@ public class BuiltinToolsHoleTest {
     } catch (Exception e) {
       fail("web_search threw: " + e.getClass().getSimpleName() + ": " + e.getMessage());
     }
+  }
+
+  // ==================== TGW-P08: McpTool model ====================
+
+  static void testMcpToolModel() {
+    var tool =
+        McpTool.builder()
+            .serverId("filesystem")
+            .toolName("read")
+            .description("Read file contents")
+            .inputSchema(
+                Map.of("type", "object", "properties", Map.of("path", Map.of("type", "string"))))
+            .invoker(params -> "file content: " + params.get("path"))
+            .build();
+
+    if (!"filesystem:read".equals(tool.qualifiedName())) {
+      fail("qualifiedName mismatch: " + tool.qualifiedName());
+    }
+    if (!"filesystem".equals(tool.serverId())) {
+      fail("serverId mismatch");
+    }
+    if (!"read".equals(tool.toolName())) {
+      fail("toolName mismatch");
+    }
+
+    var result = tool.invoke(Map.of("path", "/tmp/test.txt"));
+    if (!"file content: /tmp/test.txt".equals(result)) {
+      fail("invoke returned unexpected: " + result);
+    }
+
+    // Error path
+    var errTool =
+        McpTool.builder()
+            .serverId("test")
+            .toolName("crash")
+            .invoker(
+                params -> {
+                  throw new RuntimeException("simulated error");
+                })
+            .build();
+    var errResult = errTool.invoke(Map.of());
+    if (!errResult.contains("simulated error")) {
+      fail("error invoke did not contain expected message: " + errResult);
+    }
+
+    System.out.println("PASS: McpTool model OK");
+  }
+
+  // ==================== TGW-P09: McpToolAdapter + ToolRegistry integration ====================
+
+  static void testMcpToolInRegistry() {
+    var registry = new ToolRegistry();
+
+    // Create MCP tool and convert to metadata
+    var mcpTool =
+        McpTool.builder()
+            .serverId("filesystem")
+            .toolName("read")
+            .description("Read file contents")
+            .inputSchema(Map.of("type", "object"))
+            .invoker(params -> "mock file content")
+            .build();
+
+    var metadata = McpToolAdapter.toToolMetadata(mcpTool);
+    registry.register(metadata);
+
+    // Lookup and verify
+    var found = registry.lookup("filesystem:read");
+    if (found == null) {
+      fail("MCP tool not found in registry");
+    }
+    if (!"filesystem:read".equals(found.name())) {
+      fail("name mismatch: " + found.name());
+    }
+
+    // Execute through ExecutionEngine
+    var engine = ExecutionEngine.builder().registry(registry).build();
+    var result = engine.invoke("filesystem:read", Map.of());
+    if (result.status() != ToolResult.Status.SUCCESS) {
+      fail("execution failed: " + result.summary());
+    }
+    if (!"mock file content".equals(result.rawData())) {
+      fail("execution returned unexpected data: " + result.rawData());
+    }
+
+    // Unregister and verify removal
+    registry.unregister("filesystem:read");
+    if (registry.hasTool("filesystem:read")) {
+      fail("tool not removed after unregister");
+    }
+
+    System.out.println("PASS: McpTool in registry OK");
   }
 
   // ==================== helpers ====================
