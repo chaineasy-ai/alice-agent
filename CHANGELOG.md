@@ -18,12 +18,42 @@ scope:
   - "alice-facade-tui"
   - "alice-facade-web"
 status: "active"
-updated: "2026-06-20"
+updated: "2026-06-22"
 ---
 
 # Changelog
 
+## 20260622
+
+### Features
+
+- **/compact 命令端到端实现**: 完整的上下文压缩流程 — WAL 消息读取 → LLM 摘要生成 → 紧凑摘要写入 WAL。
+  - `RawMessage`: 新增 `"compact"` 角色到 `VALID_ROLES`（`system`, `user`, `assistant`, `tool`, `compact`），新增 `compact()` 工厂方法
+  - `WalEpisodicVault`: 新增 `case "compact" -> "compact_summary"` 消息类型映射
+  - `WalSession`: 新增 `compact(sessionId, content)` 便捷方法 — 创建 `RawMessage.compact` 并通过 `store.appendMessage()` 写入
+  - `Agent.compactContext()`: 实现完整流程 — (1) 从 WAL 获取全部消息, (2) 过滤 `system` + 已有 `compact`, (3) 组装 LLM 摘要提示词（含工具调用详情）, (4) 调用 `ModelProvider.dispatch()` 生成摘要, (5) 通过 `WalSession.compact()` 写入, (6) 在长期记忆中记录时间戳
+  - 摘要提示词使用中文，保留工具调用上下文（函数名 + 参数）
+  - `AgentFacadeSpec.groovy`: 测试从旧桩输出 (`"compactContext returns result string"`) 更新为真实行为 (`"compactContext returns failure when WAL not injected"`)
+
+- **WAL 注入到 CLI/TUI 入口点**: 所有 facade 入口点现在都创建 `WalSession`（通过 `FileWalStore`）并通过 `agent.withWal(wal)` 注入。
+  - `AliceTuiLauncher`: TUI 启动时创建 WAL
+  - `JLineChatSession`: CLI 聊天模式创建 WAL
+  - `ExecutionCoordinator`: CLI 运行模式创建 WAL
+  - `Agent.withWal(WalSession)`: 新增便捷方法委托给 `executor.withWal(wal)`
+  - 两个 facade 模块的 `build.gradle` 添加 `implementation project(':alice-memory-vault')`
+  - 两个 facade 模块的 `module-info.java` 添加 `requires alice.agent.alice.memory.vault.main`
+
+### Fixes
+
+- **DefaultMemorySummarizer 空安全**: 修复 `extractSuccessPatterns()` 和 `extractFacts()` 中 `step.input()` / `step.output()` 可能为 null 时导致的 NPE 风险
+
+- **e2e/smoke/parser.py 烟雾测试夹具修复**: `parse_payload()` 添加 `try/except json.JSONDecodeError` 处理非法 JSON 输入，使 `test_payload_parsing_broken` 测试通过（返回 `{"error": "invalid"}` 而非崩溃）
+
 ## 20260620
+
+### Features
+
+- **alice-tool-gateway/BuiltinTools 9 工具全线实现**: 完成全部 9 个内置工具（`read_file`, `write_file`, `grep`, `run`, `list_dir`, `file_exists`, `search_file`, `remove_file`, `web_search`），覆盖本地文件操作、Shell 执行、目录遍历、Web 搜索。
 
 ### Features
 
