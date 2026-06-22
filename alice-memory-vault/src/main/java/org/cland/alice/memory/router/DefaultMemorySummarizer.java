@@ -3,6 +3,7 @@ package org.cland.alice.memory.router;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import org.cland.alice.memory.core.Step;
 import org.cland.alice.memory.core.Summary;
@@ -13,16 +14,23 @@ import org.cland.alice.memory.core.Summary;
  * <p>从原始会话 Trace 中提炼：
  *
  * <ul>
- *   <li><b>Facts</b>：从成功的步骤中提取事实性陈述
+ *   <li><b>Facts</b>：从成功的步骤中提取事实性陈述（引入重要度过滤与去重）
  *   <li><b>Success Patterns</b>：从连续成功的步骤序列中提取可复用的模式
  * </ul>
- *
- * 对应设计文档中 "The Consolidation Process" 的 Summarizer 实现。
  */
 public final class DefaultMemorySummarizer implements MemorySummarizer {
 
   /** 连续成功步骤的最小数量，才能构成一个 Success Pattern */
   private static final int MIN_SUCCESS_RUN = 3;
+
+  /** 纳入事实提取的最小步骤重要度阈值 */
+  private static final double FACT_IMPORTANCE_THRESHOLD = 0.3;
+
+  /** 事实描述中 Output 预览的最大截断长度 */
+  private static final int OUTPUT_PREVIEW_LENGTH = 100;
+
+  /** Session ID 链路分隔符 */
+  private static final String SESSION_SEPARATOR = "::";
 
   @Override
   public Summary summarize(List<Step> trace) {
@@ -35,17 +43,8 @@ public final class DefaultMemorySummarizer implements MemorySummarizer {
           .build();
     }
 
-    String sessionId =
-        trace.get(0).stepId() != null
-            ? trace.get(0).stepId().contains("::")
-                ? trace.get(0).stepId().substring(0, trace.get(0).stepId().indexOf("::"))
-                : trace.get(0).stepId()
-            : "session-" + System.currentTimeMillis();
-
-    // 1. 提取 Facts：成功的、重要度高的步骤 → 事实
+    String sessionId = resolveSessionId(trace.get(0).stepId());
     List<String> facts = extractFacts(trace);
-
-    // 2. 提取 Success Patterns：连续成功的步骤序列
     List<String> patterns = extractSuccessPatterns(trace);
 
     return Summary.builder()
@@ -57,61 +56,82 @@ public final class DefaultMemorySummarizer implements MemorySummarizer {
         .build();
   }
 
-  /** 从 Trace 中提取事实性陈述。 事实 = 成功步骤中 action + input → output 的简洁描述。 */
+  /** 解析会话 ID。从 stepId (如 "session123::step456") 中截取前缀 */
+  private String resolveSessionId(String stepId) {
+    if (stepId == null || stepId.isBlank()) {
+      return "session-" + System.currentTimeMillis();
+    }
+    int index = stepId.indexOf(SESSION_SEPARATOR);
+    // 确保分隔符存在且不在首位，否则直接降级返回整个 stepId
+    return index > 0 ? stepId.substring(0, index) : stepId;
+  }
+
+  /** 从 Trace 中提取事实性陈述 */
   private List<String> extractFacts(List<Step> trace) {
     List<String> facts = new ArrayList<>();
     Set<String> seen = new HashSet<>();
 
     for (Step step : trace) {
-      if (!step.success()) continue;
-      if (step.importance() < 0.3) continue;
+      if (step == null || !step.success() || step.importance() < FACT_IMPORTANCE_THRESHOLD) {
+        continue;
+      }
 
-      // 去重
-      String factKey = step.action() + ":" + step.input();
-      if (seen.contains(factKey)) continue;
-      seen.add(factKey);
+      String action = Objects.requireNonNullElse(step.action(), "UNKNOWN_ACTION");
+      String input = Objects.requireNonNullElse(step.input(), "UNKNOWN_INPUT");
 
+      // 业务唯一性去重键
+      String factKey = action + ":" + input;
+      if (!seen.add(factKey)) {
+        continue;
+      }
+
+      String output = step.output();
       String outputPreview =
-          step.output() != null
-              ? step.output().substring(0, Math.min(100, step.output().length()))
+          (output != null)
+              ? output.substring(0, Math.min(OUTPUT_PREVIEW_LENGTH, output.length()))
               : "";
-      String fact = "使用 %s 处理 '%s' 得到: %s".formatted(step.action(), step.input(), outputPreview);
-      facts.add(fact);
+
+      facts.add("使用 %s 处理 '%s' 得到: %s".formatted(action, input, outputPreview));
     }
 
     return facts;
   }
 
-  /** 从 Trace 中提取成功模式。 模式 = 连续 MIN_SUCCESS_RUN 个以上成功的步骤序列。 */
+  /** 从 Trace 中提取成功模式 */
   private List<String> extractSuccessPatterns(List<Step> trace) {
     List<String> patterns = new ArrayList<>();
+    List<Step> currentRun = new ArrayList<>();
 
-    int runStart = -1;
-    for (int i = 0; i < trace.size(); i++) {
-      Step step = trace.get(i);
-      if (step.success()) {
-        if (runStart == -1) runStart = i;
+    for (Step step : trace) {
+      if (step != null && step.success()) {
+        currentRun.add(step);
       } else {
-        if (runStart >= 0 && (i - runStart) >= MIN_SUCCESS_RUN) {
-          patterns.add(buildPattern(trace.subList(runStart, i)));
-        }
-        runStart = -1;
+        // 遭遇失败节点或坏数据，立即尝试结算并斩断链路
+        结算当前序列(currentRun, patterns);
       }
     }
-    // 检查末尾的连续成功
-    if (runStart >= 0 && (trace.size() - runStart) >= MIN_SUCCESS_RUN) {
-      patterns.add(buildPattern(trace.subList(runStart, trace.size())));
-    }
+    // 循环结束，结算末尾残留的成功序列
+    结算当前序列(currentRun, patterns);
 
     return patterns;
   }
 
-  /** 将一段连续的步骤序列构建为模式文本。 */
+  /** 检查并结算满足长度要求的模式 */
+  private void 结算当前序列(List<Step> currentRun, List<String> patterns) {
+    if (currentRun.size() >= MIN_SUCCESS_RUN) {
+      patterns.add(buildPattern(currentRun));
+    }
+    currentRun.clear(); // 强制清空
+  }
+
+  /** 将一段连续的步骤序列构建为模式文本 */
   private String buildPattern(List<Step> run) {
     StringBuilder sb = new StringBuilder("成功模式: ");
     for (int i = 0; i < run.size(); i++) {
-      if (i > 0) sb.append(" → ");
-      sb.append(run.get(i).action());
+      if (i > 0) {
+        sb.append(" → ");
+      }
+      sb.append(Objects.requireNonNullElse(run.get(i).action(), "UNKNOWN"));
     }
     return sb.toString();
   }

@@ -21,6 +21,8 @@ import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
 import org.cland.alice.facade.tui.bridge.EventBridge;
 import org.cland.alice.facade.tui.state.TuiState;
+import org.cland.alice.memory.wal.FileWalStore;
+import org.cland.alice.memory.wal.WalSession;
 import org.cland.alice.model.ModelConfigLoader;
 import org.cland.alice.model.ModelProvider;
 import org.slf4j.Logger;
@@ -63,8 +65,13 @@ public class AliceTuiLauncher implements AutoCloseable {
   public AliceTuiLauncher(AgentConfig config) throws IOException {
     this.sessionId = UUID.randomUUID().toString().substring(0, 8);
 
-    // 1. 创建 Agent
-    this.agent = new Agent(config);
+    // 1. 创建 Agent 并注入 WAL
+    WalSession wal =
+        new WalSession(
+            new FileWalStore(
+                java.nio.file.Paths.get(
+                    System.getProperty("user.home"), ".alice", "wal", sessionId)));
+    this.agent = new Agent(config).withWal(wal);
 
     // 2. 创建 EventBridge
     this.eventBridge = new EventBridge();

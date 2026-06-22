@@ -188,6 +188,7 @@ public final class WalEpisodicVault implements EpisodicVault {
                   ? "assistant_tool_calls"
                   : "assistant";
           case "tool" -> "tool_result";
+          case "compact" -> "compact_summary";
           default -> msg.role();
         };
 

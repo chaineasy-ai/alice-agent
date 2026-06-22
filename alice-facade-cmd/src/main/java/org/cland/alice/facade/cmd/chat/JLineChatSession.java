@@ -9,6 +9,8 @@ import org.cland.alice.agent.command.AgentCommand;
 import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
 import org.cland.alice.facade.cmd.AliceCliLauncher;
+import org.cland.alice.memory.wal.FileWalStore;
+import org.cland.alice.memory.wal.WalSession;
 import org.jline.builtins.Completers;
 import org.jline.reader.Completer;
 import org.jline.reader.Highlighter;
@@ -54,8 +56,16 @@ public class JLineChatSession implements AutoCloseable {
     // 1. 初始化 Terminal
     this.terminal = TerminalBuilder.builder().system(true).build();
 
-    // 2. 初始化 Agent
-    this.agent = new Agent(config);
+    // 2. 创建 WAL 并初始化 Agent
+    WalSession wal =
+        new WalSession(
+            new FileWalStore(
+                java.nio.file.Paths.get(
+                    System.getProperty("user.home"),
+                    ".alice",
+                    "wal",
+                    UUID.randomUUID().toString().substring(0, 8))));
+    this.agent = new Agent(config).withWal(wal);
 
     // 3. 构建 LineReader
     this.reader = buildLineReader();

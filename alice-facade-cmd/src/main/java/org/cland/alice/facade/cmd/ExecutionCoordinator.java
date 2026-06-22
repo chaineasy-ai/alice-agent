@@ -9,6 +9,8 @@ import org.cland.alice.core.agent.AgentContext;
 import org.cland.alice.core.agent.result.StepResult;
 import org.cland.alice.facade.cmd.config.RunConfig;
 import org.cland.alice.facade.cmd.render.OutputRenderer;
+import org.cland.alice.memory.wal.FileWalStore;
+import org.cland.alice.memory.wal.WalSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,8 +80,16 @@ public final class ExecutionCoordinator {
         return 0;
       }
 
-      // 3. 创建 Agent
-      Agent agent = new Agent(agentConfig);
+      // 3. 创建 WAL 并初始化 Agent
+      WalSession wal =
+          new WalSession(
+              new FileWalStore(
+                  java.nio.file.Paths.get(
+                      System.getProperty("user.home"),
+                      ".alice",
+                      "wal",
+                      java.util.UUID.randomUUID().toString().substring(0, 8))));
+      Agent agent = new Agent(agentConfig).withWal(wal);
       logger.debug("Agent created: {}", agent.agentId());
 
       // 4. 注册内置工具（read_file, write_file, grep, run）到 ToolRegistry

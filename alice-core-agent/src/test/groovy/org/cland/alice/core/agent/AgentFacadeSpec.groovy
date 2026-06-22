@@ -44,17 +44,17 @@ class AgentFacadeSpec extends Specification {
         noExceptionThrown()
     }
 
-    def "compactContext returns result string"() {
-        given: "a default Agent"
+    def "compactContext returns failure when WAL not injected"() {
+        given: "a default Agent without WAL"
         def agent = new Agent()
 
         when: "compacting context"
         def result = agent.compactContext()
 
-        then: "a summary string is returned"
+        then: "a failure message is returned"
         result != null
         !result.isEmpty()
-        result.contains("上下文压缩完成")
+        result.contains("上下文压缩失败")
     }
 
     def "switchModel accepts valid model id"() {

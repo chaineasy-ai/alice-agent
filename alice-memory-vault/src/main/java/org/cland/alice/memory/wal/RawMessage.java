@@ -18,11 +18,12 @@ import java.util.Objects;
  *   <li>{@code user} — 用户输入（纯文本或多模态）
  *   <li>{@code assistant} — 助理回复或工具调用指令
  *   <li>{@code tool} — 工具执行结果回传
+ *   <li>{@code compact} — 压缩摘要：由 {@code /compact} 命令触发，将历史对话提炼为一段摘要
  * </ul>
  *
  * @param messageId 单调递增消息 ID（全局或会话级）
  * @param sessionId 所属会话 ID
- * @param role 消息角色: system | user | assistant | tool
+ * @param role 消息角色: system | user | assistant | tool | compact
  * @param content 消息内容（纯文本），当 tool_calls 存在时为 null
  * @param toolCalls 工具调用指令列表（仅 assistant 角色）
  * @param toolCallId 工具调用回传配对 ID（仅 tool 角色）
@@ -42,7 +43,8 @@ public record RawMessage(
     Map<String, Object> metadata) {
 
   /** 有效角色枚举 */
-  public static final List<String> VALID_ROLES = List.of("system", "user", "assistant", "tool");
+  public static final List<String> VALID_ROLES =
+      List.of("system", "user", "assistant", "tool", "compact");
 
   public RawMessage {
     Objects.requireNonNull(sessionId, "sessionId must not be null");
@@ -102,6 +104,11 @@ public record RawMessage(
   public static RawMessage userWithName(
       long messageId, String sessionId, String content, String name) {
     return new RawMessage(messageId, sessionId, "user", content, null, null, name, 0, Map.of());
+  }
+
+  /** 创建 compact 消息（压缩摘要） */
+  public static RawMessage compact(long messageId, String sessionId, String content) {
+    return new RawMessage(messageId, sessionId, "compact", content, null, null, null, 0, Map.of());
   }
 
   @Override

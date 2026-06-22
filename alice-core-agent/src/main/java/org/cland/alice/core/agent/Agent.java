@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 import org.cland.alice.core.agent.executor.AgentExecutor;
 import org.cland.alice.core.agent.lifecycle.Action;
 import org.cland.alice.core.agent.result.StepResult;
@@ -12,7 +13,10 @@ import org.cland.alice.core.planner.PlannerService;
 import org.cland.alice.env.adapter.EnvEvent;
 import org.cland.alice.guardrail.Verificator;
 import org.cland.alice.memory.agent.AgentSession;
+import org.cland.alice.memory.wal.RawMessage;
+import org.cland.alice.memory.wal.WalSession;
 import org.cland.alice.model.Call;
+import org.cland.alice.model.CallStatus;
 import org.cland.alice.model.ModelProvider;
 import org.cland.alice.tool.gateway.ToolRegistry;
 import org.slf4j.Logger;
@@ -119,6 +123,12 @@ public class Agent {
 
   public Agent withEnvAdapter(EnvEvent envAdapter) {
     this.envAdapter = envAdapter;
+    return this;
+  }
+
+  /** 注入 {@link WalSession}，启用 WAL 双轨制持久化与上下文压缩能力。 */
+  public Agent withWal(WalSession wal) {
+    this.executor.withWal(wal);
     return this;
   }
 
@@ -392,16 +402,95 @@ public class Agent {
    *
    * <p>支持 {@code /compact} 命令执行。
    *
+   * <p>完整流程：
+   *
+   * <ol>
+   *   <li>从 WAL 获取该 session 所有消息（排除已存在的 compact + system）
+   *   <li>组装为对话文本，调用 LLM 总结为一段紧凑摘要
+   *   <li>以 role {@code compact} 写入 WAL
+   *   <li>写 Checkpoint 标记旧消息可被 WalCompactor 清理
+   * </ol>
+   *
    * @return 压缩结果信息
    */
   public String compactContext() {
     logger.info("Compacting context for agent {}", agentId);
-    // 如果有 WAL，先写入（持久化短期记忆到长期记忆作为 checkpoint 的替代）
+
+    WalSession wal = executor.wal();
+    if (wal == null) {
+      return "上下文压缩失败：WAL 未注入，无法获取历史消息";
+    }
+
+    // 1. 获取该 session 所有消息
+    java.util.List<RawMessage> allMessages = wal.getAllMessages(sessionId);
+    if (allMessages.isEmpty()) {
+      return "没有历史消息需要压缩";
+    }
+
+    // 2. 选出可压缩的消息（排除 system + 已存在的 compact）
+    java.util.List<RawMessage> compressible =
+        allMessages.stream()
+            .filter(m -> !"compact".equals(m.role()))
+            .filter(m -> !"system".equals(m.role()))
+            .collect(Collectors.toList());
+    if (compressible.isEmpty()) {
+      return "没有可压缩的消息（全部已为 compact 或 system）";
+    }
+
+    // 3. 组装 LLM 总结 prompt
+    StringBuilder dialogBuilder = new StringBuilder();
+    dialogBuilder.append("请将以下对话提炼为一段紧凑的中文摘要，保留关键事实、决策和工具调用结果。\n\n");
+    for (RawMessage msg : compressible) {
+      String roleLabel =
+          switch (msg.role()) {
+            case "user" -> "用户";
+            case "assistant" -> "助手";
+            case "tool" -> "工具结果";
+            default -> msg.role();
+          };
+      dialogBuilder.append("【").append(roleLabel).append("】");
+      if (msg.content() != null) {
+        dialogBuilder.append(" ").append(msg.content());
+      }
+      if (msg.toolCalls() != null && !msg.toolCalls().isEmpty()) {
+        String toolCallStr =
+            msg.toolCalls().stream()
+                .map(tc -> tc.function().name() + "(" + tc.function().arguments() + ")")
+                .collect(Collectors.joining(", "));
+        dialogBuilder.append(" [调用工具: ").append(toolCallStr).append("]");
+      }
+      dialogBuilder.append("\n");
+    }
+
+    // 4. 调用 LLM 总结
+    String summaryContent;
+    try {
+      ModelProvider provider = ModelProvider.getInstance();
+      Call result = provider.dispatch(config.defaultModelId(), dialogBuilder.toString());
+      if (result.status() == CallStatus.FINISHED && result.result() != null) {
+        summaryContent = result.result().content();
+      } else {
+        logger.warn("LLM compact summary failed: status={}", result.status());
+        summaryContent = "[压缩摘要生成失败] " + compressible.size() + " 条历史消息";
+      }
+    } catch (Exception e) {
+      logger.error("LLM compact summary error", e);
+      summaryContent = "[压缩摘要生成异常] " + compressible.size() + " 条历史消息: " + e.getMessage();
+    }
+
+    // 5. 以 compact role 写入 WAL
+    wal.compact(sessionId, summaryContent);
+
+    // 6. 写时间戳到 longTermMemory
     if (memory != null) {
       memory.putLongTerm("__last_compact_ts_" + sessionId, java.time.Instant.now().toString());
     }
-    // TODO: 触发 LLM 总结（需等待 Memory 模块提供总结接口）
-    return "上下文压缩完成（释放 Token: N/A，待 Memory 模块提供总结接口）";
+
+    logger.info(
+        "Context compacted: {} messages → 1 compact summary (session={})",
+        compressible.size(),
+        sessionId);
+    return "上下文压缩完成：将 " + compressible.size() + " 条历史消息提炼为 1 条摘要";
   }
 
   /**

@@ -5,4 +5,7 @@ import json
 
 def parse_payload(raw: str) -> dict:
     """Parse a JSON payload string into a dict."""
-    return json.loads(raw)
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return {"error": "invalid"}

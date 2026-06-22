@@ -78,6 +78,14 @@ public final class WalSession {
     return appender.appendToolResult(sessionId, toolCallId, content);
   }
 
+  /** 追加 compact 压缩摘要消息 */
+  public long compact(String sessionId, String content) {
+    RawMessage msg = RawMessage.compact(0, sessionId, content);
+    long id = store.appendMessage(msg);
+    log.debug("Appended COMPACT message id={} session={}", id, sessionId);
+    return id;
+  }
+
   // ============================================================
   // Checkpoint 操作
   // ============================================================
