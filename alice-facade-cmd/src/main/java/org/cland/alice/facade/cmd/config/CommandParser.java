@@ -207,6 +207,11 @@ public class CommandParser {
     @Option(names = "--json", description = "Output results in JSON format")
     private boolean jsonOutput;
 
+    @Option(
+        names = "--session-id",
+        description = "Client-provided session ID for WAL tracking (auto-generated if omitted)")
+    private String sessionId;
+
     @Option(names = "--timeout", description = "Task timeout in seconds (default: 180)")
     private long timeoutSeconds;
 
@@ -222,6 +227,9 @@ public class CommandParser {
 
       if (model != null && !model.isBlank()) {
         builder.model(model);
+      }
+      if (sessionId != null && !sessionId.isBlank()) {
+        builder.sessionId(sessionId);
       }
       if (timeoutSeconds > 0) {
         builder.timeoutSeconds(timeoutSeconds);

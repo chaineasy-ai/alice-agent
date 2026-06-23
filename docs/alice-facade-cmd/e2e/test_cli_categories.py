@@ -221,7 +221,7 @@ class TestMetaSelfCommands(unittest.TestCase):
     # ── A10: run --help ──────────────────────────────────────────────
 
     def test_meta_a10_run_help(self):
-        """A10: `alice run --help` shows run-specific options."""
+        """A10: `alice run --help` shows run-specific options including --session-id."""
         result = cli(["run", "--help"])
         output = extract_output(result)
         self.assertEqual(result.returncode, 0)
@@ -229,10 +229,11 @@ class TestMetaSelfCommands(unittest.TestCase):
         self.assertIn("--model", output)
         self.assertIn("--verbose", output)
         self.assertIn("--json", output)
+        self.assertIn("--session-id", output)
         self.assertIn("--timeout", output)
         self.assertIn("<task>", output)
         self.assertNotIn("Configuration cache", output, "Must NOT be Gradle help")
-        print(f"  ✅ [META A10] run --help: all run options displayed")
+        print(f"  ✅ [META A10] run --help: all run options displayed (incl. --session-id)")
 
 
 # ========================================================================
@@ -280,6 +281,35 @@ class TestAgentCommands(unittest.TestCase):
         self.assertIn("model='gpt-4o'", output,
                        "RunConfig must show overridden model")
         print(f"  ✅ [AGENT B3] run -m gpt-4o: model override (exit={result.returncode})")
+
+    # ── B3b-B3c: session-id pass-through (TC-RUN-06 / TC-RUN-07) ───
+
+    def test_agent_b3b_run_session_id(self):
+        """B3b: `alice run --session-id my-test-001 <task>` passes session ID through."""
+        result = cli(
+            ["run", "--session-id", "my-test-001", "session test"],
+            timeout=TIMEOUT_LONG)
+        output = extract_output(result)
+        self.assertIn(result.returncode, [0, 1])
+        self.assertIn("sessionId='my-test-001'", output,
+                       "RunConfig must show client-provided session ID")
+        # WAL directory should be deterministically derived
+        expected_hash = hex(hash("my-test-001") & 0xFFFF)[2:]
+        print(f"  ✅ [AGENT B3b] run --session-id: 'my-test-001' passed through"
+              f" (walDir=...{expected_hash}) (exit={result.returncode})")
+
+    def test_agent_b3c_run_session_id_omitted(self):
+        """B3c: `alice run <task>` without --session-id auto-generates an 8-char ID."""
+        result = cli(["run", "auto-id test"], timeout=TIMEOUT_LONG)
+        output = extract_output(result)
+        self.assertIn(result.returncode, [0, 1])
+        # sessionId should appear in RunConfig with some non-empty value
+        self.assertIn("sessionId=", output,
+                       "RunConfig must show sessionId field")
+        self.assertNotIn("sessionId=''", output,
+                         "sessionId must not be empty")
+        print(f"  ✅ [AGENT B3c] run (no --session-id): auto-generated ID"
+              f" (exit={result.returncode})")
 
     def test_agent_b4_run_missing_task(self):
         """B4: `alice run` without task exits with error (ParseException exit=2 internally,

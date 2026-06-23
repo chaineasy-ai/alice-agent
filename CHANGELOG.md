@@ -45,6 +45,13 @@ updated: "2026-06-22"
 
 ### Features
 
+- **Session ID 客户端透传**: 客户端可通过 `--session-id` 传入自定义会话 ID，沿 CLI → RunConfig → ExecutionCoordinator → AgentContext → WalSession 全链路透传，实现 WAL 恢复的可追溯性。
+  - `RunConfig`: 新增 `sessionId` 字段、getter、builder
+  - `CommandParser.RunCommand`: 新增 `--session-id` CLI 选项
+  - `ExecutionCoordinator`: 使用客户端 sessionId 创建 `AgentContext`；WAL 目录改为确定性哈希 `Integer.toHexString(sessionId.hashCode() & 0xFFFF)`
+  - `AgentExecutor`: 新增 `execute(String input, String sessionId)` 重载，支持程序化 API 传入
+  - `RunConfig.toString()`: 新增 `sessionId` 输出
+
 - **PromptMelter 双轨上下文熔炼**: 将 WAL + Checkpoint 双轨数据熔炼为三段式 LLM Prompt（静态主干区 + 快照状态区 + 极短消息尾部），最大化 DeepSeek Disk Prompt Cache 命中率。
   - `PromptMelter.melt(sessionId, staticTrunk)`: 三段拼接入口
   - `buildSnapshotState(checkpoint)`: 从 Checkpoint 变量快照生成结构化状态摘要

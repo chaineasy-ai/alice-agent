@@ -115,6 +115,22 @@ public class AgentExecutor {
   }
 
   /**
+   * 使用客户端指定的 sessionId 启动 PPAO 循环。
+   *
+   * @param input 用户输入或环境信号
+   * @param sessionId 客户端传入的会话 ID（WAL 恢复用）；为空时自动生成
+   * @return 完成后的 AgentContext
+   */
+  public Future<AgentContext> execute(String input, String sessionId) {
+    String sid =
+        (sessionId != null && !sessionId.isBlank())
+            ? sessionId
+            : java.util.UUID.randomUUID().toString().substring(0, 8);
+    AgentContext context = new AgentContext(sid);
+    return executeLoop(input, context);
+  }
+
+  /**
    * 使用预填充的上下文启动 PPAO 循环。
    *
    * @param input 用户输入

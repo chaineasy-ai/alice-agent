@@ -67,12 +67,14 @@ public final class RunConfig {
   private final String subAgentPromptText;
   private final boolean listTools;
   private final boolean toolDetail;
+  private final String sessionId;
   private final String configAction;
   private final String configKey;
   private final String configValue;
 
   private RunConfig(Builder builder) {
     this.task = Objects.requireNonNull(builder.task, "task must not be null");
+    this.sessionId = builder.sessionId;
     this.model = builder.model != null ? builder.model : DEFAULT_MODEL;
     this.chat = builder.chat;
     this.jsonOutput = builder.jsonOutput;
@@ -100,6 +102,11 @@ public final class RunConfig {
   }
 
   // ========== Getters ==========
+
+  /** 会话 ID（客户端传入，可为 null） */
+  public String sessionId() {
+    return sessionId;
+  }
 
   /** 任务描述 */
   public String task() {
@@ -249,6 +256,7 @@ public final class RunConfig {
     private String subAgentPromptText;
     private boolean listTools;
     private boolean toolDetail;
+    private String sessionId;
     private String configAction;
     private String configKey;
     private String configValue;
@@ -368,6 +376,11 @@ public final class RunConfig {
       return this;
     }
 
+    public Builder sessionId(String sessionId) {
+      this.sessionId = sessionId;
+      return this;
+    }
+
     public Builder configAction(String configAction) {
       this.configAction = configAction;
       return this;
@@ -399,7 +412,9 @@ public final class RunConfig {
         .append(jsonOutput)
         .append(", verbose=")
         .append(verbose)
-        .append(", timeout=")
+        .append(", sessionId='")
+        .append(sessionId)
+        .append("', timeout=")
         .append(timeoutSeconds)
         .append("s");
     if (routineCron != null) {

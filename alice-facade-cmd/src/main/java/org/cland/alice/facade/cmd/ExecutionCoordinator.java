@@ -98,17 +98,22 @@ public final class ExecutionCoordinator {
         return 0;
       }
 
-      // 3. 创建 WAL 并初始化 Agent
+      // 3. 使用客户端传入的 sessionId（或自动生成）
+      String sessionId = config.sessionId();
+      if (sessionId == null || sessionId.isBlank()) {
+        sessionId = java.util.UUID.randomUUID().toString().substring(0, 8);
+      }
+
+      // 3b. 创建 WAL（目录基于 sessionId 哈希，确保同一 session 复用目录）
+      String walDirName = Integer.toHexString(sessionId.hashCode() & 0xFFFF);
       WalSession wal =
           new WalSession(
               new FileWalStore(
                   java.nio.file.Paths.get(
-                      System.getProperty("user.home"),
-                      ".alice",
-                      "wal",
-                      java.util.UUID.randomUUID().toString().substring(0, 8))));
+                      System.getProperty("user.home"), ".alice", "wal", walDirName)));
       Agent agent = new Agent(agentConfig).withWal(wal);
-      logger.debug("Agent created: {}", agent.agentId());
+      logger.debug(
+          "Agent created: {} session={} walDir={}", agent.agentId(), sessionId, walDirName);
 
       // 4. 注册内置工具（read_file, write_file, grep, run）到 ToolRegistry
       org.cland.alice.tool.gateway.ToolRegistry tr =
@@ -120,8 +125,8 @@ public final class ExecutionCoordinator {
       agent.withToolRegistry(tr);
       logger.info("Registered {} builtin tool(s) from BuiltinTools", toolCount);
 
-      // 5. 构建上下文
-      AgentContext context = new AgentContext();
+      // 5. 构建上下文（使用客户端 sessionId）
+      AgentContext context = new AgentContext(sessionId);
       context.put("prompt", config.task());
       context.put("model", config.model());
 

@@ -17,10 +17,11 @@ updated: "2026-06-19"
 
 Verify that the `alice run <task>` subcommand correctly:
 - Parses task text as an `AcquireGoalCmd`
-- Accepts `--model`, `--verbose`, `--json` flags
+- Accepts `--model`, `--verbose`, `--json`, `--session-id` flags
 - Rejects missing task parameter
 - Shows help with `--help`
 - Routes through `AliceCliLauncher.run()` → `ExecutionCoordinator` → PPAO loop
+- Propagates client-provided `--session-id` to `AgentContext` and WAL directory
 
 ## 2. TDD Test Cases
 
@@ -66,12 +67,29 @@ Verify that the `alice run <task>` subcommand correctly:
 |-------|-------|
 | **Command** | `alice run --help` |
 | **Expected exit** | 0 |
-| **Expected output** | Usage info with --model, --verbose, --json |
-| **Assertion** | `assertIn("--model", output)` |
+| **Expected output** | Usage info with --model, --verbose, --json, --session-id |
+| **Assertion** | `assertIn("--model", output)` and `assertIn("--session-id", output)` |
+
+### TC-RUN-06: Session ID pass-through via `--session-id`
+
+| Field | Value |
+|-------|-------|
+| **Command** | `alice run "task" --session-id my-test-001` |
+| **Expected exit** | 0 or 1 |
+| **Expected output** | `my-test-001` in RunConfig log |
+| **WAL check** | WAL directory hash matches `Integer.toHexString("my-test-001".hashCode() & 0xFFFF)` |
+| **Assertion** | `assertIn("my-test-001", output)` |
+
+### TC-RUN-07: Session ID omitted (auto-generate)
+
+| Field | Value |
+|-------|-------|
+| **Command** | `alice run "task"` (no `--session-id`) |
+| **Expected exit** | 0 or 1 |
+| **Expected output** | `sessionId` in RunConfig log, 8-char UUID |
+| **Assertion** | `assertIn("sessionId", output)` |
 
 ## 3. Implementation
-
-**Test file**: `e2e/test_run.py` (or `e2e/scene_cli_subcommands.py`)
 
 **Helper**: `run_cli(args, module=':alice-facade-cmd:run')`
 
@@ -93,3 +111,5 @@ def test_run_01_basic(self):
 | TC-RUN-03 | 2026-06-19 | ✅ | verbose flag logged |
 | TC-RUN-04 | 2026-06-19 | ✅ | Missing param error |
 | TC-RUN-05 | 2026-06-19 | ✅ | Help with --model |
+| TC-RUN-06 | 2026-06-23 | ✅ | --session-id pass-through (`test_agent_b3b_run_session_id`) |
+| TC-RUN-07 | 2026-06-23 | ✅ | Omitted session-id auto-generate (`test_agent_b3c_run_session_id_omitted`) |
