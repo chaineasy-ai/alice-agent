@@ -23,6 +23,50 @@ updated: "2026-06-22"
 
 # Changelog
 
+## 20260623
+
+### Fixes
+
+- **WAL 工具结果保存原始数据**: 工具执行结果从状态摘要字符串（`"Tool read_file executed successfully"`）改为记录实际返回内容（文件内容、命令输出、搜索结果等）。这使得 WAL 重放后 Agent 能准确知道之前看到了什么。
+  - `AgentExecutor.dispatchToolCall()`: `wal.toolResult()` 现在传入 `result.rawData()` 或 `result.summary()`，而非固定状态字符串
+
+- **WAL 保存 LLM 推理链（`<thought>`）**: 当 LLM 返回 `tool_calls` 且 content 为空时，从原始元数据的 `reasoning_content` 字段提取推理链，用 `<thought>...</thought>` 包裹后写入 WAL。恢复重放时 Agent 的推理上下文不会丢失。
+  - `AgentExecutor.dispatchLlmInference()`: 新增 `reasoning_content` 解析逻辑
+  - 跳过完全空的 assistant 消息（无 content + 无 tool_calls），避免 WAL 被无意义记录污染
+
+- **所有 Agent 会话以 FINISHED Checkpoint 结束**: 之前所有会话的最后 Checkpoint 都是 `ACTING`（来自 onToolReturn）或 `ERROR`（来自 circuit breaker），无法区分正常完成与异常中断。
+  - `AgentExecutor.loopBody()`: 新增 early_finish / normal_finish 路径的 FINISHED Checkpoint
+  - `AgentExecutor.reflect()`: 新增 finish_action / max_iterations 路径的 FINISHED Checkpoint
+  - `CheckpointManager`: 修复幂等性检查 — 不同 `stateNode`（如 `ERROR → FINISHED`）即使 `lastAppliedMessageId` 相同也允许写入，确保最终状态不被覆盖
+
+- **Checkpoint 变量快照丰富化**: 新增 `iteration`、`phase`、`reason`、`messageCount` 等字段，方便恢复时准确判断会话阶段
+
+- **ExecutionCoordinator 读取 agent.max_iterations 配置**: 之前 `maxIterations` 始终使用默认值 10，导致复杂任务（如 TDD 多步工作流）在 circuit breaker 处中断。现在从 `~/.alice/config.json` 的 `agent.max_iterations` 读取配置。
+
+### Features
+
+- **PromptMelter 双轨上下文熔炼**: 将 WAL + Checkpoint 双轨数据熔炼为三段式 LLM Prompt（静态主干区 + 快照状态区 + 极短消息尾部），最大化 DeepSeek Disk Prompt Cache 命中率。
+  - `PromptMelter.melt(sessionId, staticTrunk)`: 三段拼接入口
+  - `buildSnapshotState(checkpoint)`: 从 Checkpoint 变量快照生成结构化状态摘要
+  - `buildShortTail(messages, rounds)`: 提取最近 N 轮纯文本对话，剥离 tool_calls
+  - `MeltedPrompt.cacheKey()`: 返回 `"prompt:{lastAppliedId}"` 格式的缓存键
+
+- **文档更新**: `docs/alice-memory-vault/AWL&CheckPoint.md` 全面重写，新增：
+  - WAL 消息格式规范（角色定义、JSON 示例、设计要点）
+  - 存储布局（`~/.alice/wal/<sessionIdHash>/`）
+  - Checkpoint 安全边界触发映射表（PPAO 各阶段 → stateNode）
+  - PromptMelter context2prompt 三段式熔炼说明
+  - 消息链路校验 API
+  - 代码入口速查表
+
+### Smoke Tests
+
+- **PMTEV 冒烟测试全通过**: 修复后 5 个测试用例全部通过。
+  - `e2e/smoke/config.py`: 默认模型 `deepseek-chat` → `deepseek-v4-flash`（与 ModelEnum 对齐）
+  - Case 1（基础工具编辑）: PASS
+  - Case 2（跨文件重构）: PASS
+  - Case 3（TDD 自省闭环）: PASS
+
 ## 20260622
 
 ### Features
