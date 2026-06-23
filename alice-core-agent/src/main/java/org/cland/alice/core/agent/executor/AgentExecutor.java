@@ -14,6 +14,7 @@ import org.cland.alice.core.agent.lifecycle.Observation;
 import org.cland.alice.core.agent.prompt.PromptManager;
 import org.cland.alice.core.agent.result.StepResult;
 import org.cland.alice.core.planner.Plan;
+import org.cland.alice.memory.wal.Checkpoint;
 import org.cland.alice.memory.wal.WalSession;
 import org.cland.alice.model.Call;
 import org.cland.alice.model.ModelProvider;
@@ -155,6 +156,14 @@ public class AgentExecutor {
           agent.agentId(),
           context.iteration(),
           config.maxIterations());
+      // WAL: FINISHED checkpoint
+      if (wal != null) {
+        var vars = new java.util.LinkedHashMap<>(context.asMap());
+        vars.put("iteration", context.iteration());
+        vars.put("phase", context.currentPhase().name());
+        vars.put("reason", "early_finish");
+        wal.checkpointOnReActEnd(context.sessionId(), Checkpoint.NODE_FINISHED, vars, "");
+      }
       return Future.succeededFuture(context);
     }
 
@@ -174,6 +183,14 @@ public class AgentExecutor {
                     agent.agentId(),
                     ctx.iteration(),
                     config.maxIterations());
+                // WAL: FINISHED checkpoint
+                if (wal != null) {
+                  var vars = new java.util.LinkedHashMap<>(ctx.asMap());
+                  vars.put("iteration", ctx.iteration());
+                  vars.put("phase", ctx.currentPhase().name());
+                  vars.put("reason", "normal_finish");
+                  wal.checkpointOnReActEnd(ctx.sessionId(), Checkpoint.NODE_FINISHED, vars, "");
+                }
                 return Future.succeededFuture(ctx);
               }
               // 每轮 Macro 迭代递增计数器，确保 isMaxIterationsReached 兜底生效
@@ -220,6 +237,14 @@ public class AgentExecutor {
     if (wal != null) {
       wal.user(context.sessionId(), input);
       wal.checkpointOnUserInput(context.sessionId());
+      wal.checkpointOnReActEnd(
+          context.sessionId(),
+          Checkpoint.NODE_PERCEIVING,
+          java.util.Map.of(
+              "input_length", input.length(),
+              "iteration", context.iteration(),
+              "phase", context.currentPhase().name()),
+          "");
     }
 
     context.put("input", input);
@@ -664,9 +689,40 @@ public class AgentExecutor {
                         toolCalls.size());
                   }
 
-                  // WAL: 记录 assistant 回复
+                  // WAL: 记录 assistant 回复（含 reasoning/原始输出，跳过空消息）
                   if (wal != null) {
-                    wal.assistant(ctx.sessionId(), content);
+                    String walContent = content;
+                    // 当 content 为空且有 tool_calls 时，从原始元数据中提取 reasoning_content
+                    if ((walContent == null || walContent.isEmpty())
+                        && toolCalls != null
+                        && !toolCalls.isEmpty()) {
+                      Object raw = response.metadata().get("raw");
+                      if (raw != null) {
+                        String rawStr = raw.toString();
+                        int idx = rawStr.indexOf("\"reasoning_content\":\"");
+                        if (idx >= 0) {
+                          idx += 22;
+                          StringBuilder sb = new StringBuilder();
+                          while (idx < rawStr.length()) {
+                            char c = rawStr.charAt(idx);
+                            if (c == '\\' && idx + 1 < rawStr.length()) {
+                              sb.append(rawStr.charAt(idx + 1));
+                              idx += 2;
+                            } else if (c == '"') {
+                              break;
+                            } else {
+                              sb.append(c);
+                              idx++;
+                            }
+                          }
+                          walContent = "<thought>" + sb.toString() + "</thought>";
+                        }
+                      }
+                    }
+                    // 跳过完全空的 assistant 消息
+                    if (walContent != null && !walContent.isEmpty()) {
+                      wal.assistant(ctx.sessionId(), walContent);
+                    }
                   }
 
                   // 将 LLM 输出包装为 Observation，让 Reason 阶段处理 tool_calls 或文本标记
@@ -759,12 +815,14 @@ public class AgentExecutor {
                         ? result.summary().substring(0, Math.min(200, result.summary().length()))
                         : "null");
 
-                // WAL: 记录工具执行结果
+                // WAL: 记录工具执行结果（含实际返回数据）
                 if (wal != null) {
+                  String rawData = result.rawData();
+                  String summary = result.summary();
                   String resultContent =
-                      success
-                          ? "Tool " + action.target() + " executed successfully"
-                          : "Tool " + action.target() + " returned failure";
+                      rawData != null && !rawData.isBlank()
+                          ? rawData
+                          : (summary != null ? summary : "");
                   wal.toolResult(ctx.sessionId(), action.actionId(), resultContent);
                   wal.checkpointOnToolReturn(ctx.sessionId(), action.target(), success);
                 }
@@ -902,10 +960,14 @@ public class AgentExecutor {
           });
     }
 
-    // WAL: Macro ReAct 循环结束，触发 Checkpoint
+    // WAL: Macro ReAct 循环结束，触发 Checkpoint（含迭代和阶段信息）
     if (wal != null) {
       String stateNode = ctx.currentPhase().name();
-      wal.checkpointOnReActEnd(ctx.sessionId(), stateNode, ctx.asMap(), "");
+      var vars = new java.util.LinkedHashMap<>(ctx.asMap());
+      vars.put("iteration", ctx.iteration());
+      vars.put("phase", stateNode);
+      vars.put("messageCount", wal != null ? wal.messageCount(ctx.sessionId()) : -1);
+      wal.checkpointOnReActEnd(ctx.sessionId(), stateNode, vars, "");
     }
 
     ctx.transitionTo(AgentContext.Phase.VERIFYING_POST);
@@ -932,7 +994,10 @@ public class AgentExecutor {
 
     // WAL: Post-verify 失败
     if (wal != null) {
-      wal.checkpointOnError(ctx.sessionId(), "POST_VERIFY_FAIL", "Post-verify audit rejected");
+      wal.checkpointOnError(
+          ctx.sessionId(),
+          "POST_VERIFY_FAIL",
+          "Post-verify audit rejected at iteration " + ctx.iteration());
     }
 
     Action revision = Action.revision("Post-verify audit rejected: " + result);
@@ -962,6 +1027,14 @@ public class AgentExecutor {
         if (!ctx.containsKey("result")) {
           ctx.put("result", "Agent completed without explicit result.");
         }
+        // WAL: FINISHED checkpoint
+        if (wal != null) {
+          var vars = new java.util.LinkedHashMap<>(ctx.asMap());
+          vars.put("iteration", ctx.iteration());
+          vars.put("phase", "FINISH");
+          vars.put("reason", "finish_action");
+          wal.checkpointOnReActEnd(ctx.sessionId(), Checkpoint.NODE_FINISHED, vars, "");
+        }
         return Future.succeededFuture(ctx);
       }
     }
@@ -983,6 +1056,14 @@ public class AgentExecutor {
       ctx.transitionTo(AgentContext.Phase.FINISH);
       if (!ctx.containsKey("result")) {
         ctx.put("result", "Max iterations reached without final answer.");
+      }
+      // WAL: FINISHED checkpoint (max iterations)
+      if (wal != null) {
+        var vars = new java.util.LinkedHashMap<>(ctx.asMap());
+        vars.put("iteration", ctx.iteration());
+        vars.put("phase", "FINISH");
+        vars.put("reason", "max_iterations");
+        wal.checkpointOnReActEnd(ctx.sessionId(), Checkpoint.NODE_FINISHED, vars, "");
       }
     }
 

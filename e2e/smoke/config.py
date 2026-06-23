@@ -55,5 +55,5 @@ class SmokeCase:
 
 # Default model for smoke tests. Set ALICE_SMOKE_MODEL to override.
 # Requires corresponding DEEPSEEK_API_KEY env var to be set.
-PROJECT_MODEL = os.environ.get("ALICE_SMOKE_MODEL", "deepseek-chat")
+PROJECT_MODEL = os.environ.get("ALICE_SMOKE_MODEL", "deepseek-v4-flash")
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")

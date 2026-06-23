@@ -115,14 +115,18 @@ public final class CheckpointManager {
     // 获取当前最新消息 ID 作为 Last_Applied_ID
     long currentLastAppliedId = getLastMessageId(sessionId);
 
-    // 幂等性检查：如果与上次保存的 last_applied_id 相同，跳过
+    // 幂等性检查：如果与上次保存的 last_applied_id 相同并且状态节点也相同，跳过
+    // 不同状态节点（如 ERROR → FINISHED）即使 lastAppliedId 相同也要允许写入
     if (lastState != null
         && lastState.sessionId.equals(sessionId)
-        && lastState.lastAppliedMessageId == currentLastAppliedId) {
+        && lastState.lastAppliedMessageId == currentLastAppliedId
+        && lastState.stateNode != null
+        && lastState.stateNode.equals(stateNode)) {
       log.trace(
-          "[Checkpoint] Skipped (idempotent) session={} lastAppliedId={}",
+          "[Checkpoint] Skipped (idempotent) session={} lastAppliedId={} node={}",
           sessionId,
-          currentLastAppliedId);
+          currentLastAppliedId,
+          stateNode);
       return lastState.checkpointId;
     }
 
@@ -141,7 +145,7 @@ public final class CheckpointManager {
             System.currentTimeMillis());
 
     long cpId = store.saveCheckpoint(cp);
-    this.lastState = new CheckpointState(sessionId, cpId, currentLastAppliedId);
+    this.lastState = new CheckpointState(sessionId, cpId, currentLastAppliedId, stateNode);
 
     log.info(
         "[Checkpoint] Saved session={} id={} node={} lastAppliedId={}",
@@ -183,5 +187,10 @@ public final class CheckpointManager {
   // ============================================================
 
   /** 内部追踪的上次 Checkpoint 状态（用于幂等性判断）。 */
-  public record CheckpointState(String sessionId, long checkpointId, long lastAppliedMessageId) {}
+  public record CheckpointState(
+      String sessionId, long checkpointId, long lastAppliedMessageId, String stateNode) {
+    public CheckpointState(String sessionId, long checkpointId, long lastAppliedMessageId) {
+      this(sessionId, checkpointId, lastAppliedMessageId, null);
+    }
+  }
 }

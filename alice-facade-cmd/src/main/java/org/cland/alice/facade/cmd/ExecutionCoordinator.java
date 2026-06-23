@@ -7,6 +7,7 @@ import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
 import org.cland.alice.core.agent.AgentContext;
 import org.cland.alice.core.agent.result.StepResult;
+import org.cland.alice.facade.cmd.config.AliceConfigStore;
 import org.cland.alice.facade.cmd.config.RunConfig;
 import org.cland.alice.facade.cmd.render.OutputRenderer;
 import org.cland.alice.memory.wal.FileWalStore;
@@ -63,8 +64,25 @@ public final class ExecutionCoordinator {
 
     try {
       // 1. 构建 AgentConfig
+      int maxIterations = AgentConfig.DEFAULT_MAX_ITERATIONS;
+      try {
+        String iterStr = new AliceConfigStore().get("agent.max_iterations");
+        if (iterStr != null && !iterStr.isBlank()) {
+          int parsed = Integer.parseInt(iterStr);
+          if (parsed > 0) maxIterations = parsed;
+        }
+      } catch (Exception e) {
+        logger.debug(
+            "Failed to read agent.max_iterations from config, using default {}",
+            AgentConfig.DEFAULT_MAX_ITERATIONS,
+            e);
+      }
       AgentConfig agentConfig =
-          AgentConfig.builder().defaultModelId(config.model()).debug(config.verbose()).build();
+          AgentConfig.builder()
+              .defaultModelId(config.model())
+              .maxIterations(maxIterations)
+              .debug(config.verbose())
+              .build();
 
       // 2. 检查 chat 模式
       if (config.chat()) {
