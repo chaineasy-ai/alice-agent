@@ -118,13 +118,13 @@ public class ModelHoleTest {
 
   static void testConfigLoader() throws Exception {
     // Create a temp JSON config file
-    // Format: language_models.openai_compatible.<provider_name> = { api_url, available_models[] }
+    // Format: language_models.openai_compatible.<provider_name> = { base_url, available_models[] }
     String json =
         "{\n"
             + "  \"language_models\": {\n"
             + "    \"openai_compatible\": {\n"
             + "      \"openai\": {\n"
-            + "        \"api_url\": \"https://api.openai.com/v1\",\n"
+            + "        \"base_url\": \"https://api.openai.com/v1\",\n"
             + "        \"api_key\": \"${OPENAI_API_KEY}\",\n"
             + "        \"available_models\": [\n"
             + "          { \"name\": \"gpt-4o\", \"max_tokens\": 8192, \"max_output_tokens\": 4096, \"capabilities\": {\"tools\": true} }\n"

@@ -218,16 +218,16 @@ public final class ModelConfigLoader {
 
   /** 解析单个提供商配置对象 JSON。 */
   private ProviderConfig parseProviderConfig(String name, String json) {
-    String apiUrl = extractStringField(json, "api_url");
+    String apiUrl = extractStringField(json, "base_url");
     if (apiUrl == null) {
-      logger.warn("Provider '{}' missing 'api_url', skipping", name);
+      logger.warn("Provider '{}' missing 'base_url', skipping", name);
       return null;
     }
 
-    // 校验 api_url 格式
+    // 校验 base_url 格式
     if (!apiUrl.startsWith("http://") && !apiUrl.startsWith("https://")) {
       logger.warn(
-          "Provider '{}' has invalid api_url (must start with http:// or https://): {}",
+          "Provider '{}' has invalid base_url (must start with http:// or https://): {}",
           name,
           apiUrl);
       return null;

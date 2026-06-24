@@ -33,7 +33,7 @@ class ModelConfigLoaderSpec extends Specification {
                 "language_models": {
                     "openai_compatible": {
                         "deepseek": {
-                            "api_url": "https://api.deepseek.com/v1",
+                            "base_url": "https://api.deepseek.com/v1",
                             "api_key": "\${DEEPSEEK_API_KEY}",
                             "available_models": [
                                 {
@@ -93,7 +93,7 @@ class ModelConfigLoaderSpec extends Specification {
                 "language_models": {
                     "openai_compatible": {
                         "openai": {
-                            "api_url": "https://api.openai.com/v1",
+                            "base_url": "https://api.openai.com/v1",
                             "api_key": "\${OPENAI_API_KEY}",
                             "available_models": [
                                 {
@@ -112,7 +112,7 @@ class ModelConfigLoaderSpec extends Specification {
                             ]
                         },
                         "deepseek": {
-                            "api_url": "https://api.deepseek.com/v1",
+                            "base_url": "https://api.deepseek.com/v1",
                             "api_key": "\${DEEPSEEK_API_KEY}",
                             "available_models": [
                                 {
@@ -152,7 +152,7 @@ class ModelConfigLoaderSpec extends Specification {
                 "language_models": {
                     "openai_compatible": {
                         "local": {
-                            "api_url": "http://localhost:8080/v1",
+                            "base_url": "http://localhost:8080/v1",
                             "available_models": [
                                 {
                                     "name": "llama3",
@@ -231,7 +231,7 @@ class ModelConfigLoaderSpec extends Specification {
                 "language_models": {
                     "openai_compatible": {
                         "bad_provider": {
-                            "api_url": "not-a-url",
+                            "base_url": "not-a-url",
                             "available_models": [
                                 {
                                     "name": "test-model",
@@ -275,7 +275,7 @@ class ModelConfigLoaderSpec extends Specification {
                 "language_models": {
                     "openai_compatible": {
                         "test": {
-                            "api_url": "https://api.test.com/v1",
+                            "base_url": "https://api.test.com/v1",
                             "api_key": "test-key",
                             "available_models": [
                                 {
@@ -317,7 +317,7 @@ class ModelConfigLoaderSpec extends Specification {
                 "language_models": {
                     "openai_compatible": {
                         "deepseek": {
-                            "api_url": "https://api.deepseek.com/v1",
+                            "base_url": "https://api.deepseek.com/v1",
                             "api_key": "\${DEEPSEEK_API_KEY}",
                             "available_models": [
                                 {
@@ -365,7 +365,7 @@ class ModelConfigLoaderSpec extends Specification {
                 "language_models": {
                     "openai_compatible": {
                         "empty_provider": {
-                            "api_url": "https://api.test.com/v1"
+                            "base_url": "https://api.test.com/v1"
                         }
                     }
                 }
@@ -388,7 +388,7 @@ class ModelConfigLoaderSpec extends Specification {
                 "language_models": {
                     "openai_compatible": {
                         "test": {
-                            "api_url": "https://api.test.com/v1",
+                            "base_url": "https://api.test.com/v1",
                             "available_models": [
                                 {
                                     "name": "minimal-model",

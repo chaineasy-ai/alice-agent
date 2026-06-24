@@ -191,11 +191,16 @@ public class AliceTuiLauncher implements AutoCloseable {
         () -> {
           try {
             String result = agent.ask(task);
-            eventBridge.onTaskComplete(result, "Agent 执行完成");
+            if (result == null || result.isBlank()) {
+              logger.warn("Agent returned empty result for task: {}", task);
+              eventBridge.onTaskComplete("(Agent 返回了空结果，请检查模型配置或 API 状态)", "warning");
+            } else {
+              eventBridge.onTaskComplete(result, "Agent 执行完成");
+            }
             screenManager.markContentDirty();
           } catch (Exception e) {
             logger.error("Task execution failed", e);
-            eventBridge.onTaskError(e.getMessage());
+            eventBridge.onTaskError("任务执行失败: " + e.getMessage());
             screenManager.markContentDirty();
           }
         });

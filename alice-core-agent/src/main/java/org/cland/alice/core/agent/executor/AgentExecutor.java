@@ -695,8 +695,12 @@ public class AgentExecutor {
                                   Math.min(
                                       3000, response.metadata().get("raw").toString().length()))
                           : "no-raw");
-                  ctx.put("result", content);
-                  ctx.put("__llm_response", content);
+                  // Only set result if content is non-empty, so that reflect() can
+                  // set a fallback message when the LLM returns empty content.
+                  if (content != null && !content.isBlank()) {
+                    ctx.put("result", content);
+                  }
+                  ctx.put("__llm_response", content != null ? content : "");
                   ctx.remove("__tool_call_index");
 
                   // 如果 LLM 返回了结构化 tool_calls，存入上下文
@@ -1042,7 +1046,9 @@ public class AgentExecutor {
       Action nextAction = cont.nextAction();
       if (nextAction != null && nextAction.type() == Action.Type.FINISH) {
         ctx.transitionTo(AgentContext.Phase.FINISH);
-        if (!ctx.containsKey("result")) {
+        // Check both missing and blank result — dispatchLlmInference may skip
+        // setting "result" when LLM returns empty content.
+        if (!ctx.containsKey("result") || ctx.get("result").toString().isBlank()) {
           ctx.put("result", "Agent completed without explicit result.");
         }
         // WAL: FINISHED checkpoint
@@ -1072,7 +1078,7 @@ public class AgentExecutor {
     // 检查最大迭代
     if (ctx.isMaxIterationsReached()) {
       ctx.transitionTo(AgentContext.Phase.FINISH);
-      if (!ctx.containsKey("result")) {
+      if (!ctx.containsKey("result") || ctx.get("result").toString().isBlank()) {
         ctx.put("result", "Max iterations reached without final answer.");
       }
       // WAL: FINISHED checkpoint (max iterations)

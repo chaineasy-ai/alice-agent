@@ -217,7 +217,10 @@ public class ScreenManager implements AutoCloseable {
               contentDirty.set(true);
             }
             case TuiEvent.TaskComplete e -> {
-              layout.thought().addAgentMessage(e.result());
+              String result = e.result();
+              if (result != null && !result.isBlank()) {
+                layout.thought().addAgentMessage(result);
+              }
               state.transitionTo(TuiState.State.IDLE);
               contentDirty.set(true);
             }
