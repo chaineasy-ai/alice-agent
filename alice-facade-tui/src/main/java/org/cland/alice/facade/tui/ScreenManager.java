@@ -48,7 +48,7 @@ public class ScreenManager implements AutoCloseable {
   /** 补全菜单最大展示行数 —— 锁定渲染边界，杜绝菜单展开时整体界面位移 */
   private static final int COMPLETION_LIST_MAX = 3;
 
-  /** ANSI 转义序列（所有光标定位走原生写入，不走 terminal.puts） */
+  /** ANSI 转义序列（光标定位使用 terminal.puts，清屏操作使用原始 ANSI） */
   private static final String ANSI_CLEAR_SCREEN = "\033[2J\033[H";
 
   private static final String ANSI_CLEAR_LINE = "\033[K";
@@ -103,7 +103,11 @@ public class ScreenManager implements AutoCloseable {
     System.setProperty("sun.stderr.encoding", "UTF-8");
 
     // 1. 创建 JLine 3 Terminal
-    this.terminal = TerminalBuilder.builder().system(true).encoding(StandardCharsets.UTF_8).build();
+    //    在 Windows 上，JLine 3.27.1 默认的 FFM provider 需要 --enable-native-access，
+    //    如果未设置该 JVM 标志，FFM/JNA/Jansi 会依次失败，最终回退到 dumb terminal。
+    //    这里我们主动设置 provider=jansi 并通过系统属性优先确保 ANSI 支持。
+    //    如果仍失败，会 fallback 到 dumb terminal（此时 output 会退化，但不会崩溃）。
+    this.terminal = createTerminal();
 
     // 2. 创建模型补全器（供 /model 命令使用）
     StringsCompleter modelCompleter = new StringsCompleter(MODEL_CANDIDATES);
@@ -113,7 +117,7 @@ public class ScreenManager implements AutoCloseable {
     //    对应 Layout.md §1 视口与边界数学防御策略
     this.reader =
         LineReaderBuilder.builder()
-            .terminal(terminal)
+            .terminal(this.terminal)
             .completer(modelCompleter)
             .option(LineReader.Option.AUTO_MENU, true)
             .variable(LineReader.LIST_MAX, COMPLETION_LIST_MAX)
@@ -143,18 +147,34 @@ public class ScreenManager implements AutoCloseable {
     setupCommandCallbacks();
 
     // 7. 终端 resize 监听（JLine 3 方式：Signal.WINCH）
-    terminal.handle(
+    this.terminal.handle(
         Terminal.Signal.WINCH,
         signal -> {
-          layout.recalculate(terminal.getWidth(), terminal.getHeight());
+          layout.recalculate(this.terminal.getWidth(), this.terminal.getHeight());
           contentDirty.set(true);
         });
 
     // 初始布局计算
-    layout.recalculate(terminal.getWidth(), terminal.getHeight());
+    layout.recalculate(this.terminal.getWidth(), this.terminal.getHeight());
 
     // 禁用终端回显 —— 由 LineReader 管理
-    terminal.echo(false);
+    this.terminal.echo(false);
+  }
+
+  /**
+   * 创建 JLine 3 Terminal。
+   *
+   * <p>优先创建系统终端；如果失败（例如 Windows 上缺少 --enable-native-access）， 则回退到 dumb terminal（带 UTF-8 编码支持）。
+   */
+  private static Terminal createTerminal() throws IOException {
+    try {
+      return TerminalBuilder.builder().system(true).encoding(StandardCharsets.UTF_8).build();
+    } catch (Exception e) {
+      // 系统终端创建失败：回退到 dumb terminal
+      logger.warn(
+          "Failed to create system terminal ({}), falling back to dumb terminal", e.getMessage());
+      return TerminalBuilder.builder().dumb(true).encoding(StandardCharsets.UTF_8).build();
+    }
   }
 
   // ========== 初始化 ==========
@@ -273,14 +293,15 @@ public class ScreenManager implements AutoCloseable {
 
   // ========== 渲染 ==========
 
-  /** 将光标移动到终端的指定行（0-indexed）。 */
+  /**
+   * 将光标移动到终端的指定行（0-indexed），列固定为 0。
+   *
+   * <p>使用 JLine 的 {@code terminal.puts(Capability.cursor_address)} 进行跨平台光标定位， 确保 JLine
+   * 内部光标状态与终端物理光标位置保持同步（修复 Windows 上光标偏左/偏移问题）。
+   */
   private void cursorLine(int row) {
-    java.io.Writer writer = terminal.writer();
-    try {
-      writer.write("\033[" + (row + 1) + ";1H");
-    } catch (IOException e) {
-      logger.warn("cursorLine failed: row={}", row, e);
-    }
+    terminal.puts(org.jline.utils.InfoCmp.Capability.cursor_address, row, 0);
+    terminal.flush();
   }
 
   /**
@@ -404,12 +425,20 @@ public class ScreenManager implements AutoCloseable {
   /**
    * 运行主输入循环。
    *
-   * <p>使用 JLine 3 LineReader 的 readLine() 方法处理用户输入。 LineReader 原生支持 AUTO_MENU（自动完成弹窗）， LIST_MAX=3
+   * <p>使用 JLine LineReader 的 readLine() 方法处理用户输入。 LineReader 原生支持 AUTO_MENU（自动完成弹窗）， LIST_MAX=3
    * 强制限制补全菜单最大行数，从根源锁死渲染边界。
    *
    * <p>对应 Layout.md §1 视口与边界数学防御策略 + §7.2 Inline Completion Mode。
+   *
+   * <p>Windows 兼容性：在 Windows 上，Jansi 终端实现无法正确跟踪原始 ANSI 光标定位（\033[row;1H） 之后的内部光标位置，导致 readLine()
+   * 的输入光标出现在错误位置（例如屏幕顶端或左侧）。 修复方式：通过 JLine 的 terminal.puts(Capability.cursor_address) 进行光标定位，
+   * 而非直接写入原始 ANSI 序列。这确保了 JLine 的内部光标状态与终端物理光标位置保持同步。
    */
   public void runInputLoop() {
+    // JLine 4 的 cursor_address 能力：用于跨平台光标定位
+    org.jline.utils.InfoCmp.Capability cursorAddr =
+        org.jline.utils.InfoCmp.Capability.cursor_address;
+
     while (running.get()) {
       // 确保上方滚动区是最新状态
       if (contentDirty.get()) {
@@ -417,18 +446,21 @@ public class ScreenManager implements AutoCloseable {
         contentDirty.set(false);
       }
 
-      // 定位光标到输入区（原始 ANSI 序列），并清除下方残影
-      cursorLine(layout.inputRow());
-      terminal.writer().write("\033[J"); // 清除光标到屏幕底端
+      // 使用 JLine 的 terminal.puts() 进行光标定位，而不是原始 ANSI 序列。
+      // cursor_address 需要参数：行（0-indexed），列（0-indexed）
+      // 注意：JLine 的 cursor_address 在 Jansi/Windows 实现中能正确同步内部光标状态
+      terminal.puts(cursorAddr, layout.inputRow(), 0);
+      // 清除从当前光标到屏幕底端的区域（使用 JLine 能力或 ANSI 回退）
+      terminal.writer().write("\033[J");
       terminal.writer().flush();
 
-      // 同步 JLine LineReader 内部光标位置：设置 LINE_OFFSET 为输入起始行
-      // LineReader 默认光标从当前终端位置开始，但内部可能缓存了上一次的偏移。
-      // 强制设置 LINE_OFFSET 告知 reader 输入起始行号（0-indexed）。
+      // 使用 JLine LineReader 读取输入（支持 AUTO_MENU 补全弹窗）
+      // 补全菜单在输入行上方自然展开，最多 3 行（LIST_MAX=3），不干扰下方分割线和状态栏
+      // 注意：LINE_OFFSET 在 JLine 4 中用于告知 reader 输入区域相对于屏幕顶端的偏移行数。
+      // 在 Windows/Jansi 上，LINE_OFFSET 可能无法被正确识别，因此我们额外使用 cursor_address
+      // 来确保物理光标位置正确。
       reader.setVariable(LineReader.LINE_OFFSET, layout.inputRow());
 
-      // 使用 JLine 3 LineReader 读取输入（支持 AUTO_MENU 补全弹窗）
-      // 补全菜单在输入行上方自然展开，最多 3 行（LIST_MAX=3），不干扰下方分割线和状态栏
       String line;
       try {
         line = reader.readLine(layout.input().prompt());

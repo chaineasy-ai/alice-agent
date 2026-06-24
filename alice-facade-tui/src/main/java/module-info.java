@@ -17,10 +17,12 @@ module alice.agent.facade.tui.main {
   requires alice.agent.command.main;
   requires alice.agent.alice.memory.vault.main;
 
-  // JLine 3: 三层单线分割布局 + 原生向上顶出补全（AUTO_MENU）
-  // org.jline.utils 包含在 jline-terminal 自动模块内
-  requires org.jline.reader;
-  requires org.jline.terminal;
+  // JLine 4: 三层单线分割布局 + 原生向上顶出补全（AUTO_MENU）
+  // 4.2.1 fat bundle 自动模块名 org.jline
+  requires org.jline;
+
+  // JUL: 用于抑制 JLine 内部 org.jline 日志输出
+  requires java.logging;
 
   // Guava (automatic module)
   requires com.google.common;

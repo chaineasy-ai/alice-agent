@@ -426,20 +426,66 @@ public class AliceTuiLauncher implements AutoCloseable {
     // 1. 锁死编码
     System.setProperty("file.encoding", "UTF-8");
 
-    // 2. 【核心修复】强行通知 JLine 允许在 Windows 10+ / Linux 管道中使用 ANSI 逃逸码
-    System.setProperty("org.jline.terminal.jansi", "true");
-    System.setProperty("org.jline.terminal.exec", "true");
+    // 1.1 抑制 JLine 内部 Log.warn() 输出。
+    //     JLine 用 java.lang.System.getLogger("org.jline") 输出日志，后端通常为
+    //     java.util.logging (JUL)。设置 "org.jline" 的日志级别为 SEVERE 以抑制
+    //     "Unable to create a system terminal, creating a dumb terminal" 警告。
+    //     该警告在非交互式终端（Git Bash、管道、GraalVM）上属于预期行为。
+    java.util.logging.Logger.getLogger("org.jline").setLevel(java.util.logging.Level.SEVERE);
 
-    // 3. 如果在 Windows 下，强制开启原生控制台虚拟终端模式
-    // 这能让左边那些 [1;1H 控制码瞬间被终端本身消化掉，变成真正的物理定位
+    // 2. JLine 4.2.1 提供以下终端提供商（按优先级排列）：
+    //    - ffm (Foreign Function & Memory API, JDK 22+) — 需要 --enable-native-access
+    //    - jni (JNI native)
+    //    - exec (子进程终端)
+    //    - dumb (回退终端)
+    //
+    //    JLine 4 不再提供 jansi terminal provider（jansi 已被自带的 jansi-core 取代作为
+    //    ANSI 码渲染器，但不再是 terminal provider）。
+    //
+    //    在 Windows 上（特别是 Git Bash/MSYS2/Cygwin 环境），终端是一个伪终端（pty），
+    //    不是原生 Win32 控制台句柄。FFM 和 JNI provider 会因无法获取控制台句柄而失败。
+    //    此时应优先使用 exec provider（它通过 fork 子进程来管理终端 I/O）。
+    //
+    //    如果是原生 Windows CMD/PowerShell 控制台，FFM provider 可正常工作
+    //    （需 --enable-native-access=ALL-UNNAMED）。
+    //
+    //    GraalVM CE 不完全支持 FFM（Foreign Function & Memory）API：
+    //    GraalVM 使用自己的 Truffle/NFI 原生接口，而非标准 Panama FFM API。
+    //    在 GraalVM 上 FFM provider 会失败，此时应优先使用 exec provider。
+    //
+    //    策略：
+    //    - GraalVM + Windows + Git Bash: exec,ffm,jni,dumb
+    //    - GraalVM + Windows (CMD/PowerShell): exec,ffm,jni,dumb
+    //      (FFM 在 GraalVM 上不可用，先试 exec)
+    //    - OpenJDK + Windows + Git Bash: exec,ffm,jni,dumb
+    //    - OpenJDK + Windows (CMD/PowerShell): ffm,jni,exec,dumb
+    //    - Linux/macOS: exec,ffm,jni,dumb
+    boolean isGraalVm = System.getProperty("java.vm.name", "").toLowerCase().contains("graal");
+    String osName = System.getProperty("os.name").toLowerCase();
+    String termProgram = System.getenv("TERM_PROGRAM");
+    String msystem = System.getenv("MSYSTEM");
+    boolean isGitBash =
+        (msystem != null && !msystem.isEmpty())
+            || (termProgram != null && termProgram.contains("mintty"));
+    if (osName.contains("win") && !isGitBash && !isGraalVm) {
+      // OpenJDK + Windows 原生控制台（CMD/PowerShell）：FFM provider 优先
+      System.setProperty("org.jline.terminal.providers", "ffm,jni,exec,dumb");
+    } else {
+      // Git Bash / GraalVM / Linux / macOS：exec provider 优先（pty 环境），FFM 次之
+      System.setProperty("org.jline.terminal.providers", "exec,ffm,jni,dumb");
+    }
+
+    // 3. 如果在 Windows 下，启用原生控制台虚拟终端模式
+    //    JLine 4 自带 org.jline.jansi.AnsiConsole，不再是旧的 org.fusesource.jansi。
+    //    这里尝试通过 JLine 4 内置的 jansi-core 安装 ANSI 支持。
     try {
       if (System.getProperty("os.name").toLowerCase().contains("win")) {
-        // 反射安全调用 JANSI，完美契合 GraalVM AOT（即使无硬编码编译依赖也能降级正常编译）
-        Class<?> ansiConsole = Class.forName("org.fusesource.jansi.AnsiConsole");
+        // JLine 4 内置的 jansi-core（包名 org.jline.jansi）
+        Class<?> ansiConsole = Class.forName("org.jline.jansi.AnsiConsole");
         ansiConsole.getMethod("systemInstall").invoke(null);
       }
     } catch (Throwable t) {
-      // 静默降级：说明处于纯 Linux SSH 或者无需特权接管的环境
+      // 静默降级：可能缺少 --enable-native-access，或非 Windows 环境
     }
 
     try {

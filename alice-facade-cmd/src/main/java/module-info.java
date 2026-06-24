@@ -16,8 +16,7 @@ module alice.agent.facade.cmd.main {
   requires alice.agent.alice.tool.gateway.main;
   requires alice.agent.alice.memory.vault.main;
   requires info.picocli;
-  requires org.jline.reader;
-  requires org.jline.terminal;
+  requires org.jline;
   requires com.fasterxml.jackson.databind;
   requires com.fasterxml.jackson.core;
   requires com.fasterxml.jackson.datatype.jsr310;
@@ -25,5 +24,4 @@ module alice.agent.facade.cmd.main {
   requires io.vertx.core;
   requires org.slf4j;
   requires ch.qos.logback.classic;
-  requires org.jline.builtins;
 }

@@ -32,11 +32,11 @@ dependencies {
     implementation project(':alice-model')
     implementation project(':alice-agent-command')
 
-    // JLine3: 纯硬编码三层单线分割布局（TAO Standard Mode）
-    // 参考 docs/alice-facade-tui/Layout.md：依赖 JLine 3 原生 AUTO_MENU 实现向上顶出补全
-    implementation 'org.jline:jline-terminal:3.27.1'
-    implementation 'org.jline:jline-reader:3.27.1'
-    implementation 'org.jline:jline-builtins:3.27.1'
+    // JLine 4: 纯硬编码三层单线分割布局（TAO Standard Mode）
+    // 参考 docs/alice-facade-tui/Layout.md：依赖 JLine 4 原生 AUTO_MENU 实现向上顶出补全
+    // 4.2.1 fat bundle 包含 terminal/reader/builtins/FFM provider 等全部模块
+    // 默认 jar（无 classifier）包含 FFM provider，适用于 JDK 25+
+    implementation 'org.jline:jline:4.2.1'
 
     // JANSI: Windows VT 终端底座 —— 在 GraalVM AOT 静态分析阶段显式依赖，
     // 确保 native-image 能打包 org.fusesource.jansi.AnsiConsole 及其依赖的 JNA 库。

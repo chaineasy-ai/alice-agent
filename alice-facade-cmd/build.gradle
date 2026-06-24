@@ -40,10 +40,9 @@ dependencies {
     implementation 'info.picocli:picocli:4.7.6'
     annotationProcessor 'info.picocli:picocli-codegen:4.7.6'
 
-    // JLine 3 — 交互式 CLI 行编辑、历史记录、Tab 补全
-    implementation 'org.jline:jline-reader:3.27.1'
-    implementation 'org.jline:jline-terminal:3.27.1'
-    implementation 'org.jline:jline-builtins:3.27.1'
+    // JLine 4 — 交互式 CLI 行编辑、历史记录、Tab 补全
+    // 4.2.1 默认包含 FFM provider（JDK 22+），同时保留 JNI/Jansi 降级路径
+    implementation 'org.jline:jline:4.2.1'
 
     // Jackson 用于 JSON 序列化
     implementation 'com.fasterxml.jackson.core:jackson-core:2.18.3'

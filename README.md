@@ -47,11 +47,13 @@ struct -i ".git" -i ".gradle" -i "build" -i ".idea" -i ".lazybones" \
 ## Run the Application
 
 ### CLI Frontend
+
 ```bash
 ./gradlew :alice-facade-cmd:run
 ```
 
 ### TUI Frontend (default)
+
 ```bash
 ./gradlew :alice-bootstrap:run
 ```
@@ -59,25 +61,31 @@ struct -i ".git" -i ".gradle" -i "build" -i ".idea" -i ".lazybones" \
 ## Build Distribution
 
 ### Packaged Distribution
+
 ```bash
 ./gradlew assembleDist
 ```
+
 Distribution archives are in `alice-bootstrap/build/distributions`.
 
 ### Unpacked Application
+
 ```bash
 ./gradlew installDist
 ```
+
 Application binaries are at `alice-bootstrap/build/install/alice-agent/bin/`.
 
 ### GraalVM Native Image
 
 Build native executable:
+
 ```bash
 ./gradlew :alice-bootstrap:nativeCompile
 ```
 
 Run native executable directly (fastest startup):
+
 ```bash
 ./gradlew :alice-bootstrap:nativeRun
 ```
