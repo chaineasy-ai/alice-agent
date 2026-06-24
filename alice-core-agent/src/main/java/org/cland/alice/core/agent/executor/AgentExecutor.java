@@ -249,8 +249,10 @@ public class AgentExecutor {
     logger.debug("[Perceive] input={}", input);
     context.transitionTo(AgentContext.Phase.PERCEIVING);
 
-    // WAL: 记录用户输入 + 用户输入 Checkpoint
+    // WAL: 记录 system prompt + 用户输入 + 用户输入 Checkpoint
     if (wal != null) {
+      String sysPrompt = org.cland.alice.core.agent.prompt.PromptManager.buildSystemPrompt();
+      wal.system(context.sessionId(), sysPrompt);
       wal.user(context.sessionId(), input);
       wal.checkpointOnUserInput(context.sessionId());
       wal.checkpointOnReActEnd(

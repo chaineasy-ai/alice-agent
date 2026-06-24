@@ -18,10 +18,22 @@ scope:
   - "alice-facade-tui"
   - "alice-facade-web"
 status: "active"
-updated: "2026-06-22"
+updated: "2026-06-24"
 ---
 
 # Changelog
+
+## 20260624
+
+### Fixes
+
+- **WAL 缺失 System Prompt 记录**: WAL 中只有 `user`、`assistant`、`tool` 三类消息，缺少 `role: "system"` 消息。Agent 的 System Prompt（来自 `core_loop.ftl` 模板的 `<system>` 块）被构建为完整 prompt 的一部分传给 LLM，但从未写入 WAL。恢复重放时无法追溯 Agent 被赋予的系统指令。
+  - `PromptManager.buildSystemPrompt()`: 新增方法，从 `core_loop.ftl` 渲染输出中提取 `<system>...</system>` 块内容并缓存（静态内容，无 FreeMarker 变量）
+  - `AgentExecutor.perceive()`: 在 `wal.user()` 之前调用 `wal.system()` 写入系统提示，确保 WAL 消息顺序为 `system → user → assistant → tool`
+
+### Smoke Tests
+
+- **PMTEV Case 3 验证 WAL System Prompt**: `test_smoke_case_3.py` 全部 2 个测试通过。新生成的 WAL 会话同时包含 `role: "system"`（messageId=1，系统指令）和 `role: "user"`（messageId=2，用户输入），消息链路追溯完整。
 
 ## 20260623
 

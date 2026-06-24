@@ -1,7 +1,11 @@
 package org.cland.alice.core.agent;
 
+import io.vertx.core.Future;
 import io.vertx.core.Vertx;
+import java.time.Instant;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -76,9 +80,8 @@ public class Agent {
   }
 
   public Agent(String agentId, AgentConfig config) {
-    this.agentId =
-        agentId != null ? agentId : java.util.UUID.randomUUID().toString().substring(0, 8);
-    this.sessionId = java.util.UUID.randomUUID().toString().substring(0, 8);
+    this.agentId = agentId != null ? agentId : UUID.randomUUID().toString().substring(0, 8);
+    this.sessionId = UUID.randomUUID().toString().substring(0, 8);
     this.config = config;
     this.vertx = Vertx.vertx();
     this.executor = new AgentExecutor(vertx, this);
@@ -287,7 +290,7 @@ public class Agent {
    * @param prompt 用户输入
    * @return 异步结果（io.vertx.core.Future）
    */
-  public io.vertx.core.Future<AgentContext> askAsync(String prompt) {
+  public Future<AgentContext> askAsync(String prompt) {
     AgentContext context = new AgentContext(config.maxIterations());
     context.put("prompt", prompt);
     return executor.execute(prompt, context);
@@ -329,6 +332,7 @@ public class Agent {
 
   /** 判断 PPAO 循环是否需要终止。 */
   public boolean shouldFinish(AgentContext context, StepResult result) {
+
     if (result instanceof StepResult.Finish) {
       return true;
     }
@@ -422,13 +426,13 @@ public class Agent {
     }
 
     // 1. 获取该 session 所有消息
-    java.util.List<RawMessage> allMessages = wal.getAllMessages(sessionId);
+    List<RawMessage> allMessages = wal.getAllMessages(sessionId);
     if (allMessages.isEmpty()) {
       return "没有历史消息需要压缩";
     }
 
     // 2. 选出可压缩的消息（排除 system + 已存在的 compact）
-    java.util.List<RawMessage> compressible =
+    List<RawMessage> compressible =
         allMessages.stream()
             .filter(m -> !"compact".equals(m.role()))
             .filter(m -> !"system".equals(m.role()))
@@ -483,7 +487,7 @@ public class Agent {
 
     // 6. 写时间戳到 longTermMemory
     if (memory != null) {
-      memory.putLongTerm("__last_compact_ts_" + sessionId, java.time.Instant.now().toString());
+      memory.putLongTerm("__last_compact_ts_" + sessionId, Instant.now().toString());
     }
 
     logger.info(

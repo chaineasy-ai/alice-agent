@@ -66,7 +66,48 @@ public final class PromptManager {
     }
   }
 
+  private static String systemPromptCache; // lazily extracted from core_loop.ftl
+
   private PromptManager() {}
+
+  // ========================================================================
+  // System Prompt (从 core_loop.ftl 提取)
+  // ========================================================================
+
+  /**
+   * 从 core_loop.ftl 模板中提取 {@code <system>...</system>} 块内容。
+   *
+   * <p>系统提示在模板中是静态的（不包含 FreeMarker 变量），因此只需提取一次并缓存。 返回的字符串可用作 WAL 中 {@code role: "system"} 消息的内容。
+   *
+   * @return 系统提示文本（不含 {@code <system>} 标签本身）
+   */
+  public static String buildSystemPrompt() {
+    if (systemPromptCache != null) {
+      return systemPromptCache;
+    }
+
+    // 将模板源码渲染一次（使用空数据），再从输出中提取 <system> 块
+    String rendered;
+    try (StringWriter out = new StringWriter()) {
+      CORE_LOOP.process(Map.of("userTask", ""), out);
+      rendered = out.toString();
+    } catch (TemplateException | IOException e) {
+      log.warn("[PromptManager] Failed to extract system prompt, falling back to default", e);
+      systemPromptCache = "You are Alice, an AI coding assistant.";
+      return systemPromptCache;
+    }
+
+    // 提取 <system>...</system> 块
+    int sysStart = rendered.indexOf("<system>");
+    int sysEnd = rendered.indexOf("</system>");
+    if (sysStart >= 0 && sysEnd > sysStart) {
+      systemPromptCache = rendered.substring(sysStart + 8, sysEnd).trim();
+    } else {
+      log.warn("[PromptManager] No <system> block found in core_loop.ftl");
+      systemPromptCache = "You are Alice, an AI coding assistant.";
+    }
+    return systemPromptCache;
+  }
 
   // ========================================================================
   // Core Loop Prompt (PPAO 宏观循环)
