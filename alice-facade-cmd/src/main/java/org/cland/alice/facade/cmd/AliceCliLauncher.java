@@ -104,13 +104,22 @@ public final class AliceCliLauncher {
       }
 
       // 4. 初始化 ModelProvider
-      initializeModelProvider();
+      String configDefaultModel = initializeModelProvider();
 
-      // 4. 创建渲染器
+      // 4a. 如果用户未通过 --model 指定，且 model.json 中配置了 default_model，则使用它
+      String effectiveModel =
+          (configDefaultModel != null && config.model().equals(RunConfig.DEFAULT_MODEL))
+              ? configDefaultModel
+              : config.model();
+      if (configDefaultModel != null) {
+        loadedDefaultModel = configDefaultModel;
+      }
+
+      // 4. 创建渲染器（将有效 model 回传给 config 上下文）
       OutputRenderer renderer = OutputRenderer.create(config);
 
       // 5. 执行任务
-      ExecutionCoordinator coordinator = new ExecutionCoordinator(config, renderer);
+      ExecutionCoordinator coordinator = new ExecutionCoordinator(config, renderer, effectiveModel);
       return coordinator.execute();
 
     } catch (ParseException e) {
@@ -454,9 +463,15 @@ public final class AliceCliLauncher {
 
     // 检查内建默认值
     switch (key) {
-      case "default.model" ->
+      case "default.model" -> {
+        if (loadedDefaultModel != null) {
+          System.out.println(
+              "default.model = " + loadedDefaultModel + " (from ~/.alice/model.json)");
+        } else {
           System.out.println(
               "default.model = " + AgentConfig.DEFAULT_MODEL + " (built-in default)");
+        }
+      }
       case "agent.max_iterations" ->
           System.out.println(
               "agent.max_iterations = "
@@ -509,6 +524,8 @@ public final class AliceCliLauncher {
     if (model == null) model = store.get("default_model");
     if (model != null) {
       System.out.println("default.model = " + model + " (from ~/.alice/config.json)");
+    } else if (loadedDefaultModel != null) {
+      System.out.println("default.model = " + loadedDefaultModel + " (from ~/.alice/model.json)");
     } else {
       printConfigValue("default.model", store);
     }
@@ -537,7 +554,16 @@ public final class AliceCliLauncher {
    *
    * <p>注册内置模型，并从环境变量中读取 API Key 注册外部供应商。
    */
-  private static void initializeModelProvider() {
+  /** 从 ~/.alice/model.json 加载的默认模型 ID，供 config 命令和 run 流程使用。 */
+  private static String loadedDefaultModel;
+
+  /**
+   * 初始化模型提供器。
+   *
+   * @return model.json 中配置的默认模型 ID，未设置则返回 {@code null}
+   */
+  private static String initializeModelProvider() {
+    String configDefaultModel = null;
     try {
       ModelProvider provider = ModelProvider.getInstance();
 
@@ -546,9 +572,13 @@ public final class AliceCliLauncher {
         ModelConfigLoader configLoader = new ModelConfigLoader();
         configLoader.load();
         configLoader.registerTo(provider);
+        configDefaultModel = configLoader.getDefaultModel();
         logger.info(
             "Loaded {} model provider(s) from ~/.alice/model.json",
             configLoader.getProviders().size());
+        if (configDefaultModel != null) {
+          logger.info("Default model from model.json: {}", configDefaultModel);
+        }
       } catch (Exception e) {
         logger.debug("No model config found, using env vars: {}", e.getMessage());
       }
@@ -590,5 +620,6 @@ public final class AliceCliLauncher {
     } catch (Exception e) {
       logger.warn("ModelProvider initialization failed (some features may be unavailable)", e);
     }
+    return configDefaultModel;
   }
 }

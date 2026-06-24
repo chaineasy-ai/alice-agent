@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
+    <!-- ✅ 压制 Logback 内部初始化状态消息（不打印到控制台） -->
+    <statusListener class="ch.qos.logback.core.status.NopStatusListener" />
     <!-- ✅ 强制 UTF-8 输出，永远不乱码 -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
@@ -10,9 +12,9 @@
 
     <!-- 文件日志（可选），按天滚动 -->
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>logs/alice-agent.log</file>
+        <file>${user.home}/.alice/logs/alice-agent.log</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>logs/alice-agent-%d{yyyy-MM-dd}.log</fileNamePattern>
+            <fileNamePattern>${user.home}/.alice/logs/alice-agent-%d{yyyy-MM-dd}.log</fileNamePattern>
             <maxHistory>30</maxHistory>
         </rollingPolicy>
         <encoder>
@@ -22,7 +24,6 @@
     </appender>
 
     <root level="INFO">
-        <appender-ref ref="CONSOLE" />
         <appender-ref ref="FILE" />
     </root>
 </configuration>

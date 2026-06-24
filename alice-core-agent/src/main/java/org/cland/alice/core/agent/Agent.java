@@ -248,13 +248,18 @@ public class Agent {
         .execute(prompt, context)
         .onSuccess(
             ctx -> {
-              String result = ctx.containsKey("result") ? ctx.get("result").toString() : null;
-              if (result == null) {
-                // 回退：直接调用 LLM
-                result = callLlmDirect(prompt, modelId);
+              try {
+                String result = ctx.containsKey("result") ? ctx.get("result").toString() : null;
+                if (result == null) {
+                  // 回退：直接调用 LLM
+                  result = callLlmDirect(prompt, modelId);
+                }
+                resultRef.set(result);
+              } catch (Exception e) {
+                errorRef.set(e);
+              } finally {
+                latch.countDown();
               }
-              resultRef.set(result);
-              latch.countDown();
             })
         .onFailure(
             err -> {

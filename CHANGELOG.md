@@ -31,6 +31,36 @@ updated: "2026-06-24"
   - `PromptManager.buildSystemPrompt()`: 新增方法，从 `core_loop.ftl` 渲染输出中提取 `<system>...</system>` 块内容并缓存（静态内容，无 FreeMarker 变量）
   - `AgentExecutor.perceive()`: 在 `wal.user()` 之前调用 `wal.system()` 写入系统提示，确保 WAL 消息顺序为 `system → user → assistant → tool`
 
+- **TUI 双重状态转换导致 IllegalStateException**: `submitTaskToAgent()` 同时调用 `eventBridge.onTaskError()/onTaskComplete()`（通过事件监听器触发 `state.transitionTo()`）和直接调用 `screenManager.state().transitionTo()`，导致异步竞争下出现 `ERROR → ERROR` 或 `IDLE → IDLE` 的非法状态转换。
+  - `AliceTuiLauncher.submitTaskToAgent()`: 移除 try 和 catch 块中的冗余 `screenManager.state().transitionTo()` 调用，状态转换完全由 `ScreenManager.setupEventListeners()` 中的事件监听器负责
+
+- **Agent.ask() 中 onSuccess 回调异常导致线程挂起**: 当 PPAO 执行器返回的上下文不含 `"result"` 键时，fallback `callLlmDirect()` 内抛出 `RuntimeException`。由于 `onFailure` 绑定的是原始 Future 而非 `onSuccess` 返回的新 Future，异常从未被捕获，`latch.countDown()` 永不调用，主线程在 await 处超时后抛出 `"Agent ask returned null result"`。
+  - `Agent.ask()`: `onSuccess` 回调体包裹 `try { ... } catch (Exception e) { errorRef.set(e); } finally { latch.countDown(); }`，确保 latch 始终释放、错误正确传播
+
+- **logback.xml 文件路径使用全角波浪线 + 目录名错误**: `logback.xml` 中文件路径使用 `～`（全角波浪线 U+FF5E）而非 `~` 或 `${user.home}`，Logback 不识别全角波浪线。同时目录 `los/` 疑似 `logs/` 的笔误。
+  - `alice-bootstrap/src/main/resources/logback.xml`: 路径改为 `${user.home}/.alice/logs/alice-agent.log`
+  - 新增 `<statusListener class="ch.qos.logback.core.status.NopStatusListener" />` 压制 Logback 内部初始化状态信息输出到控制台
+
+- **OPENAI_API_KEY 未设置时 System.err.println 误导性警告**: TUI 启动时 `System.err.println("Warning: OPENAI_API_KEY not set, LLM features will be unavailable.")` 打印到控制台且消息不准确——DeepSeek 等其他提供商仍可正常使用。
+  - `AliceTuiLauncher.launch()`: 改为 `logger.warn()` 输出到日志文件，消息更新为 "OpenAI models will be unavailable, but other providers may work."
+
+- **ToolCallParser System.err.println 控制台污染**: `AgentExecutor.java` 中 4 处 `System.err.println("[ToolCallParser] regex compile failed: ...")` 在每次 LLM 工具调用解析时打印到 stderr，干扰正常输出。
+  - `AgentExecutor.java`: 4 处全部改为 `logger.warn("[ToolCallParser] regex compile failed: {}", e.getMessage())`，路由到日志文件
+
+### Features
+
+- **~/.alice/model.json 默认模型配置**: `ModelConfigLoader` 新增对 `"default_model"` 顶级字段的解析支持。TUI 和 CLI 现在从 `~/.alice/model.json` 读取默认模型，不再硬编码 `"gpt-4o-mini"`。
+  - `ModelConfigLoader`: 新增 `defaultModel` 字段、`load()` 中解析 `"default_model"`、`getDefaultModel()` getter
+  - `AliceTuiLauncher.launch()`: 使用 `configLoader.getDefaultModel()` 创建 `AgentConfig`，无配置时回退 `"gpt-4o-mini"`
+  - `AliceCliLauncher`: `initializeModelProvider()` 返回默认模型 ID，新增 `loadedDefaultModel` 静态字段用于 `config` 子命令显示
+  - `ExecutionCoordinator`: 新增 `modelOverride` 构造参数，`execute()` 使用 `modelOverride ?? config.model()`
+  - `printConfigValue("default.model", ...)` 和 `printAllConfig()`: 显示来自 `model.json` 的默认模型及其来源
+
+- **默认 ~/.alice/model.json 配置文件** (`~/.alice/model.json`): 创建完整的模型配置文件，默认模型设为 `deepseek-v4-flash`（匹配当前 DEEPSEEK_API_KEY 环境变量）。
+  - 包含两个提供商：`openai`（3 模型）和 `deepseek`（2 模型）
+  - API 密钥通过 `${ENV_VAR}` 环境变量引用
+  - 权限 `600`（仅用户可读）
+
 ### Smoke Tests
 
 - **PMTEV Case 3 验证 WAL System Prompt**: `test_smoke_case_3.py` 全部 2 个测试通过。新生成的 WAL 会话同时包含 `role: "system"`（messageId=1，系统指令）和 `role: "user"`（messageId=2，用户输入），消息链路追溯完整。

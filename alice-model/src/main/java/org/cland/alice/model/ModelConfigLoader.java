@@ -33,6 +33,9 @@ public final class ModelConfigLoader {
 
   private final Path configPath;
 
+  /** 解析后的默认模型 ID */
+  private String defaultModel;
+
   /** 解析后的提供商配置列表 */
   private List<ProviderConfig> providers;
 
@@ -60,12 +63,19 @@ public final class ModelConfigLoader {
   public ModelConfigLoader load() throws IOException {
     if (!Files.exists(configPath)) {
       logger.warn("Model config file not found: {}", configPath.toAbsolutePath());
+      this.defaultModel = null;
       this.providers = List.of();
       return this;
     }
 
     logger.info("Loading model config from: {}", configPath.toAbsolutePath());
     this.rawJson = Files.readString(configPath);
+
+    // 解析默认模型（可选的顶级字段）
+    this.defaultModel = extractStringField(rawJson, "default_model");
+    if (this.defaultModel != null && !this.defaultModel.isBlank()) {
+      logger.info("Default model from config: {}", this.defaultModel);
+    }
 
     // 手动解析 JSON（纯环境无需 JSON 库依赖）
     this.providers = parseProviders(rawJson);
@@ -75,6 +85,11 @@ public final class ModelConfigLoader {
   }
 
   // ========== 查询 ==========
+
+  /** 获取配置中指定的默认模型 ID，未设置则返回 {@code null}。 */
+  public String getDefaultModel() {
+    return defaultModel;
+  }
 
   /** 获取所有加载成功的提供商配置。 */
   public List<ProviderConfig> getProviders() {

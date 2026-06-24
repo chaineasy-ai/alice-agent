@@ -1234,7 +1234,7 @@ public class AgentExecutor {
         paramsRaw = m.group(2).trim();
       }
     } catch (Exception e) {
-      System.err.println("[ToolCallParser] regex compile failed: " + e.getMessage());
+      logger.warn("[ToolCallParser] regex compile failed: {}", e.getMessage());
     }
     // Try <tool> format as fallback
     if (!matched) {
@@ -1249,7 +1249,7 @@ public class AgentExecutor {
           paramsRaw = m.group(2).trim();
         }
       } catch (Exception e) {
-        System.err.println("[ToolCallParser] regex compile failed: " + e.getMessage());
+        logger.warn("[ToolCallParser] regex compile failed: {}", e.getMessage());
       }
     }
     if (!matched) {
@@ -1351,7 +1351,7 @@ public class AgentExecutor {
                   "\\[TOOL_CALL:\\s*(\\w+)\\(([^)]*)\\)\\]", java.util.regex.Pattern.DOTALL);
           m = p.matcher(output);
         } catch (Exception e) {
-          System.err.println("[ToolCallParser] regex compile failed: " + e.getMessage());
+          logger.warn("[ToolCallParser] regex compile failed: {}", e.getMessage());
         }
         if (m != null) {
           int found = 0;
@@ -1375,7 +1375,7 @@ public class AgentExecutor {
                   "<tool>(\\w+)\\(([^)]*)\\)</tool>", java.util.regex.Pattern.DOTALL);
           m = p.matcher(output);
         } catch (Exception e) {
-          System.err.println("[ToolCallParser] regex compile failed: " + e.getMessage());
+          logger.warn("[ToolCallParser] regex compile failed: {}", e.getMessage());
         }
         if (m != null) {
           int found = 0;

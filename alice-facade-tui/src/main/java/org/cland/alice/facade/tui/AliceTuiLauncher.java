@@ -192,12 +192,10 @@ public class AliceTuiLauncher implements AutoCloseable {
           try {
             String result = agent.ask(task);
             eventBridge.onTaskComplete(result, "Agent 执行完成");
-            screenManager.state().transitionTo(TuiState.State.IDLE);
             screenManager.markContentDirty();
           } catch (Exception e) {
             logger.error("Task execution failed", e);
             eventBridge.onTaskError(e.getMessage());
-            screenManager.state().transitionTo(TuiState.State.ERROR);
             screenManager.markContentDirty();
           }
         });
@@ -454,9 +452,18 @@ public class AliceTuiLauncher implements AutoCloseable {
       ModelProvider.getInstance().registerBuiltinModels();
 
       // 6. 确定默认模型
+      String defaultModel = configLoader.getDefaultModel();
+      if (defaultModel == null || defaultModel.isBlank()) {
+        defaultModel = "gpt-4o-mini";
+        logger.info("No default_model in ~/.alice/model.json, using built-in: {}", defaultModel);
+      } else {
+        logger.info("Using default model from config: {}", defaultModel);
+      }
+
       String apiKey = System.getenv("OPENAI_API_KEY");
       if (apiKey == null || apiKey.isEmpty()) {
-        System.err.println("Warning: OPENAI_API_KEY not set, LLM features will be unavailable.");
+        logger.warn(
+            "OPENAI_API_KEY not set. OpenAI models will be unavailable, but other providers may work.");
       }
 
       String deepseekKey = System.getenv("DEEPSEEK_API_KEY");
@@ -472,7 +479,7 @@ public class AliceTuiLauncher implements AutoCloseable {
       }
 
       AgentConfig config =
-          AgentConfig.builder().defaultModelId("gpt-4o-mini").maxIterations(10).build();
+          AgentConfig.builder().defaultModelId(defaultModel).maxIterations(10).build();
 
       AliceTuiLauncher launcher = new AliceTuiLauncher(config);
       launcher.start();

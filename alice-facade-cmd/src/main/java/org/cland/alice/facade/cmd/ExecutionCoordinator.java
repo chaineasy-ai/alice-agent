@@ -33,6 +33,7 @@ public final class ExecutionCoordinator {
 
   private final RunConfig config;
   private final OutputRenderer renderer;
+  private final String modelOverride;
 
   /**
    * 创建执行协调器。
@@ -41,8 +42,21 @@ public final class ExecutionCoordinator {
    * @param renderer 输出渲染器
    */
   public ExecutionCoordinator(RunConfig config, OutputRenderer renderer) {
+    this(config, renderer, null);
+  }
+
+  /**
+   * 创建执行协调器，支持模型覆盖。
+   *
+   * @param config 运行配置
+   * @param renderer 输出渲染器
+   * @param modelOverride 覆盖默认模型 ID（来自 ~/.alice/model.json 的 default_model），为 null 时使用
+   *     RunConfig.model()
+   */
+  public ExecutionCoordinator(RunConfig config, OutputRenderer renderer, String modelOverride) {
     this.config = config;
     this.renderer = renderer;
+    this.modelOverride = modelOverride;
   }
 
   /**
@@ -77,9 +91,11 @@ public final class ExecutionCoordinator {
             AgentConfig.DEFAULT_MAX_ITERATIONS,
             e);
       }
+
+      String effectiveModel = modelOverride != null ? modelOverride : config.model();
       AgentConfig agentConfig =
           AgentConfig.builder()
-              .defaultModelId(config.model())
+              .defaultModelId(effectiveModel)
               .maxIterations(maxIterations)
               .debug(config.verbose())
               .build();
