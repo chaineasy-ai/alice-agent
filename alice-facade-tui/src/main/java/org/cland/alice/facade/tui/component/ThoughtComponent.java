@@ -59,19 +59,31 @@ public class ThoughtComponent extends Component {
     appendLine("[O Observe]: " + observation);
   }
 
-  /** 追加用户消息 */
+  /** 追加用户消息（支持多行内容，自动逐行加前缀） */
   public void addUserMessage(String content) {
-    appendLine("[User]: " + content);
+    if (content == null) return;
+    String[] lines = content.split("\n", -1);
+    for (String line : lines) {
+      appendLine("[User]: " + line);
+    }
   }
 
-  /** 追加系统消息 */
+  /** 追加系统消息（支持多行内容，自动逐行加前缀） */
   public void addSystemMessage(String content) {
-    appendLine("[System]: " + content);
+    if (content == null) return;
+    String[] lines = content.split("\n", -1);
+    for (String line : lines) {
+      appendLine("[System]: " + line);
+    }
   }
 
-  /** 追加 Agent 消息 */
+  /** 追加 Agent 消息（支持多行内容，自动逐行加前缀） */
   public void addAgentMessage(String content) {
-    appendLine("[Agent]: " + content);
+    if (content == null) return;
+    String[] lines = content.split("\n", -1);
+    for (String line : lines) {
+      appendLine("[Agent]: " + line);
+    }
   }
 
   public void clear() {

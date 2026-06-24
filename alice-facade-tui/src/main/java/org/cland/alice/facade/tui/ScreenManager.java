@@ -249,6 +249,7 @@ public class ScreenManager implements AutoCloseable {
             })
         .onExit(
             () -> {
+              running.set(false);
               if (onExit != null) onExit.run();
             })
         .onCommandOutput(
@@ -406,83 +407,80 @@ public class ScreenManager implements AutoCloseable {
    * <p>对应 Layout.md §1 视口与边界数学防御策略 + §7.2 Inline Completion Mode。
    */
   public void runInputLoop() {
-    try {
-      while (running.get()) {
-        // 确保上方滚动区是最新状态
-        if (contentDirty.get()) {
-          redrawScrollArea();
-          contentDirty.set(false);
-        }
+    while (running.get()) {
+      // 确保上方滚动区是最新状态
+      if (contentDirty.get()) {
+        redrawScrollArea();
+        contentDirty.set(false);
+      }
 
-        // 定位光标到输入区（原始 ANSI 序列），并清除下方残影
-        cursorLine(layout.inputRow());
-        terminal.writer().write("\033[J"); // 清除光标到屏幕底端
-        terminal.writer().flush();
+      // 定位光标到输入区（原始 ANSI 序列），并清除下方残影
+      cursorLine(layout.inputRow());
+      terminal.writer().write("\033[J"); // 清除光标到屏幕底端
+      terminal.writer().flush();
 
-        // 同步 JLine LineReader 内部光标位置：设置 LINE_OFFSET 为输入起始行
-        // LineReader 默认光标从当前终端位置开始，但内部可能缓存了上一次的偏移。
-        // 强制设置 LINE_OFFSET 告知 reader 输入起始行号（0-indexed）。
-        reader.setVariable(LineReader.LINE_OFFSET, layout.inputRow());
+      // 同步 JLine LineReader 内部光标位置：设置 LINE_OFFSET 为输入起始行
+      // LineReader 默认光标从当前终端位置开始，但内部可能缓存了上一次的偏移。
+      // 强制设置 LINE_OFFSET 告知 reader 输入起始行号（0-indexed）。
+      reader.setVariable(LineReader.LINE_OFFSET, layout.inputRow());
 
-        // 使用 JLine 3 LineReader 读取输入（支持 AUTO_MENU 补全弹窗）
-        // 补全菜单在输入行上方自然展开，最多 3 行（LIST_MAX=3），不干扰下方分割线和状态栏
-        String line;
-        try {
-          line = reader.readLine(layout.input().prompt());
-        } catch (EndOfFileException e) {
-          // Ctrl+D
-          break;
-        } catch (UserInterruptException e) {
-          // Ctrl+C
-          Thread.sleep(50);
-          continue;
-        }
+      // 使用 JLine 3 LineReader 读取输入（支持 AUTO_MENU 补全弹窗）
+      // 补全菜单在输入行上方自然展开，最多 3 行（LIST_MAX=3），不干扰下方分割线和状态栏
+      String line;
+      try {
+        line = reader.readLine(layout.input().prompt());
+      } catch (EndOfFileException e) {
+        // Ctrl+D
+        break;
+      } catch (UserInterruptException e) {
+        // Ctrl+C → exit
+        running.set(false);
+        if (onExit != null) onExit.run();
+        break;
+      }
 
-        if (line == null) break;
+      if (line == null) break;
 
-        String trimmed = line.trim();
-        if (trimmed.isEmpty()) continue;
+      String trimmed = line.trim();
+      if (trimmed.isEmpty()) continue;
 
-        // 添加到历史
-        inputHistory.addLast(trimmed);
-        historyIndex = inputHistory.size();
+      // 添加到历史
+      inputHistory.addLast(trimmed);
+      historyIndex = inputHistory.size();
 
-        // 同步 InputComponent 状态
-        layout.input().setText(trimmed);
+      // 同步 InputComponent 状态
+      layout.input().setText(trimmed);
 
-        // 检查斜杠命令
-        SlashCommand slashCmd = SlashCommand.parse(trimmed);
-        if (slashCmd != null) {
-          boolean handled = commandHandler.execute(slashCmd);
-          if (handled) {
-            contentDirty.set(true);
-            continue;
-          }
-        }
-
-        // 检查是否允许提交任务
-        if (state.isRunning()) {
-          layout
-              .thought()
-              .addSystemMessage(
-                  "Agent \u6B63\u5728\u6267\u884C\u4E2D\uFF0C\u8BF7\u7B49\u5F85\u5B8C\u6210\u6216\u6309 F5 \u505C\u6B62\u3002");
+      // 检查斜杠命令
+      SlashCommand slashCmd = SlashCommand.parse(trimmed);
+      if (slashCmd != null) {
+        boolean handled = commandHandler.execute(slashCmd);
+        if (handled) {
           contentDirty.set(true);
           continue;
         }
-
-        // 提交 Agent 任务
-        layout.thought().addUserMessage(trimmed);
-        state.transitionTo(TuiState.State.RUNNING);
-        contentDirty.set(true);
-
-        if (onTaskSubmit != null) {
-          onTaskSubmit.accept(trimmed);
-        }
-
-        eventBridge.onStartThinking(trimmed);
       }
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
+
+      // 检查是否允许提交任务
+      if (state.isRunning()) {
+        layout
+            .thought()
+            .addSystemMessage(
+                "Agent \u6B63\u5728\u6267\u884C\u4E2D\uFF0C\u8BF7\u7B49\u5F85\u5B8C\u6210\u6216\u6309 F5 \u505C\u6B62\u3002");
+        contentDirty.set(true);
+        continue;
+      }
+
+      // 提交 Agent 任务
+      layout.thought().addUserMessage(trimmed);
+      state.transitionTo(TuiState.State.RUNNING);
+      contentDirty.set(true);
+
+      if (onTaskSubmit != null) {
+        onTaskSubmit.accept(trimmed);
+      }
+
+      eventBridge.onStartThinking(trimmed);
     }
   }
 
