@@ -4,7 +4,7 @@ summary: "Dual-track (WAL + Checkpoint) design for industrial-grade agent memory
 read_when:
   - "implementing or debugging WAL/Checkpoint dual-track memory"
 scope:
-  - "alice-memory-vault"
+  - "alice-core-agent"
 status: "active"
 updated: "2026-06-23"
 ---
