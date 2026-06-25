@@ -8,6 +8,7 @@ import org.cland.alice.core.agent.AgentConfig;
 import org.cland.alice.core.agent.AgentContext;
 import org.cland.alice.core.agent.result.StepResult;
 import org.cland.alice.core.agent.wal.FileWalStore;
+import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
 import org.cland.alice.core.agent.wal.WalSession;
 import org.cland.alice.facade.cmd.config.AliceConfigStore;
 import org.cland.alice.facade.cmd.config.RunConfig;
@@ -122,19 +123,17 @@ public final class ExecutionCoordinator {
       // 3. 使用客户端传入的 sessionId（或自动生成）
       String sessionId = config.sessionId();
       if (sessionId == null || sessionId.isBlank()) {
-        sessionId = java.util.UUID.randomUUID().toString().substring(0, 8);
+        sessionId = SnowflakeIdGenerator.generateSessionId();
       }
 
-      // 3b. 创建 WAL（目录基于 sessionId 哈希，确保同一 session 复用目录）
-      String walDirName = Integer.toHexString(sessionId.hashCode() & 0xFFFF);
+      // 3b. 创建 WAL（目录使用完整的 sessionId，避免哈希碰撞）
       WalSession wal =
           new WalSession(
               new FileWalStore(
                   java.nio.file.Paths.get(
-                      System.getProperty("user.home"), ".alice", "wal", walDirName)));
-      Agent agent = new Agent(agentConfig).withWal(wal);
-      logger.debug(
-          "Agent created: {} session={} walDir={}", agent.agentId(), sessionId, walDirName);
+                      System.getProperty("user.home"), ".alice", "wal", sessionId)));
+      Agent agent = new Agent(null, sessionId, agentConfig).withWal(wal);
+      logger.debug("Agent created: {} session={} walDir={}", agent.agentId(), sessionId, sessionId);
 
       // 4. 注册内置工具（read_file, write_file, grep, run）到 ToolRegistry
       org.cland.alice.tool.gateway.ToolRegistry tr =
@@ -289,9 +288,8 @@ public final class ExecutionCoordinator {
     String snapshotId = config.resumeSnapshot();
 
     try {
-      String walDirName = Integer.toHexString(sessionId.hashCode() & 0xFFFF);
       java.nio.file.Path walPath =
-          java.nio.file.Paths.get(System.getProperty("user.home"), ".alice", "wal", walDirName);
+          java.nio.file.Paths.get(System.getProperty("user.home"), ".alice", "wal", sessionId);
 
       if (!java.nio.file.Files.isDirectory(walPath)) {
         System.err.println("Session '" + sessionId + "' not found in WAL storage.");

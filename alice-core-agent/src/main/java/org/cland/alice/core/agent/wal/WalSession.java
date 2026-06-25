@@ -9,18 +9,24 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * WAL 会话 — 将 WAL + Checkpoint + Recovery 集成到 Agent 记忆系统的门面类。
+ * WAL Session — facade integrating WAL + Checkpoint + Recovery into the Agent memory system.
  *
- * <p>封装 {@link WalStore}、{@link WalAppender}、{@link CheckpointManager}、 {@link
- * RecoveryEngine}、{@link PromptMelter} 五个组件， 提供统一的 WAL 双轨制操作入口。
+ * <p>Encapsulates {@link WalStore}, {@link WalAppender}, {@link CheckpointManager}, {@link
+ * RecoveryEngine}, and {@link PromptMelter} to provide a unified dual-track WAL operation entry
+ * point.
  *
- * <p>与现有 {@link AgentSession} 的关系：
+ * <p>Relationship with AgentSession:
  *
  * <ul>
- *   <li>WalSession 补充 AgentSession 的短期记忆，增加崩溃恢复能力
- *   <li>AgentSession.getShortTerm() 可通过 WAL 全量回放获得
- *   <li>AgentSession.persist() 可通过 WalAppender 实现
+ *   <li>WalSession supplements AgentSession's short-term memory with crash recovery
+ *   <li>AgentSession.getShortTerm() can be populated via WAL full replay
+ *   <li>AgentSession.persist() can be implemented via WalAppender
  * </ul>
+ *
+ * <p>Each {@code WalSession} instance maintains a {@link SnowflakeIdGenerator} that generates
+ * unique {@code spanId} values per message. A single {@code traceId} is generated per session
+ * instance to tie all messages in the same dialogue turn together. For sub-agent traces, callers
+ * should set {@code parentSpanId} explicitly via the metadata overload.
  */
 public final class WalSession {
 
@@ -31,8 +37,15 @@ public final class WalSession {
   private final CheckpointManager checkpointManager;
   private final RecoveryEngine recoveryEngine;
   private final PromptMelter promptMelter;
+  private final SftDataExporter sftExporter;
 
-  /** 当前恢复结果（重启后设置） */
+  /** Snowflake generator for per-message spanId. */
+  private final SnowflakeIdGenerator idGenerator;
+
+  /** Trace ID for the current dialogue turn, generated once per WalSession instance. */
+  private final String traceId;
+
+  /** Current recovery result (set after restart). */
   private RecoveryResult lastRecoveryResult;
 
   public WalSession() {
@@ -45,80 +58,191 @@ public final class WalSession {
     this.checkpointManager = new CheckpointManager(store, appender);
     this.recoveryEngine = new RecoveryEngine(store, checkpointManager);
     this.promptMelter = new PromptMelter(store);
+    this.sftExporter = new SftDataExporter(store);
+    this.idGenerator = SnowflakeIdGenerator.getInstance();
+    this.traceId = SnowflakeIdGenerator.generateSessionId();
     this.lastRecoveryResult = null;
   }
 
   // ============================================================
-  // WAL 追加操作 （替代 AgentSession.persist）
+  // WAL Append Operations (Metadata-Aware)
   // ============================================================
 
-  /** 追加 system 消息 */
+  /** Appends a system message with default spanType=system_prompt_init. */
   public long system(String sessionId, String content) {
-    return appender.appendSystem(sessionId, content);
+    return system(sessionId, content, autoMetadata(SpanType.SYSTEM_PROMPT_INIT, false));
   }
 
-  /** 追加 user 消息 */
+  /** Appends a system message with metadata. */
+  public long system(String sessionId, String content, Map<String, Object> metadata) {
+    return appender.appendSystem(sessionId, content, metadata);
+  }
+
+  /** Appends a user message with default spanType=user_input. */
   public long user(String sessionId, String content) {
-    return appender.appendUser(sessionId, content);
+    return user(sessionId, content, autoMetadata(SpanType.USER_INPUT, true));
   }
 
-  /** 追加 assistant 回复 */
+  /** Appends a user message with metadata. */
+  public long user(String sessionId, String content, Map<String, Object> metadata) {
+    return appender.appendUser(sessionId, content, metadata);
+  }
+
+  /** Appends an assistant reply without metadata (caller should set spanType explicitly). */
   public long assistant(String sessionId, String content) {
     return appender.appendAssistant(sessionId, content);
   }
 
-  /** 追加 assistant 工具调用 */
+  /** Appends an assistant reply with metadata. */
+  public long assistant(String sessionId, String content, Map<String, Object> metadata) {
+    return appender.appendAssistant(sessionId, content, metadata);
+  }
+
+  /** Appends a chain-of-thought reasoning message with spanType=llm_think, userVisible=false. */
+  public long think(String sessionId, String content) {
+    return appender.appendAssistant(sessionId, content, autoMetadata(SpanType.LLM_THINK, false));
+  }
+
+  /** Appends a final assistant response with spanType=llm_final_response, userVisible=true. */
+  public long finalAnswer(String sessionId, String content) {
+    return appender.appendAssistant(
+        sessionId, content, autoMetadata(SpanType.LLM_FINAL_RESPONSE, true));
+  }
+
+  /** Appends assistant tool calls with default spanType=tool_call, userVisible=false. */
   public long assistantToolCalls(String sessionId, List<ToolCall> toolCalls) {
-    return appender.appendAssistantToolCalls(sessionId, toolCalls);
+    return assistantToolCalls(sessionId, toolCalls, autoMetadata(SpanType.TOOL_CALL, false));
   }
 
-  /** 追加 tool 执行结果 */
+  /** Appends assistant tool calls with metadata. */
+  public long assistantToolCalls(
+      String sessionId, List<ToolCall> toolCalls, Map<String, Object> metadata) {
+    return appender.appendAssistantToolCalls(sessionId, toolCalls, metadata);
+  }
+
+  /** Appends a tool execution result with default spanType=tool_call_result. */
   public long toolResult(String sessionId, String toolCallId, String content) {
-    return appender.appendToolResult(sessionId, toolCallId, content);
+    return toolResult(
+        sessionId, toolCallId, content, autoMetadata(SpanType.TOOL_CALL_RESULT, true));
   }
 
-  /** 追加 compact 压缩摘要消息 */
+  /** Appends a tool execution result with metadata. */
+  public long toolResult(
+      String sessionId, String toolCallId, String content, Map<String, Object> metadata) {
+    return appender.appendToolResult(sessionId, toolCallId, content, metadata);
+  }
+
+  /** Appends a tool_register message with default spanType=tool_register, userVisible=false. */
+  public long toolRegister(String sessionId, String content) {
+    return appender.appendToolRegister(
+        sessionId, content, autoMetadata(SpanType.TOOL_REGISTER, false));
+  }
+
+  /** Appends a tool_register message with metadata. */
+  public long toolRegister(String sessionId, String content, Map<String, Object> metadata) {
+    return appender.appendToolRegister(sessionId, content, metadata);
+  }
+
+  /**
+   * Appends a compact summary message with proper metadata.
+   *
+   * <p>Per the WAL specification (§3.5), the compact record automatically sets:
+   *
+   * <ul>
+   *   <li>spanType = history_compact
+   *   <li>isUserVisible = false
+   * </ul>
+   *
+   * @param sessionId session identifier
+   * @param content compressed summary text
+   * @param traceId the triggering trace's traceId
+   * @param rootSpanId the root spanId of the trace that initiated compression
+   * @param additionalMetadata any additional metadata (may override defaults)
+   * @return assigned message ID
+   */
+  public long compact(
+      String sessionId,
+      String content,
+      String traceId,
+      String rootSpanId,
+      Map<String, Object> additionalMetadata) {
+    var metadata = new java.util.LinkedHashMap<String, Object>();
+    if (additionalMetadata != null) {
+      metadata.putAll(additionalMetadata);
+    }
+    // Apply spec-mandated metadata
+    metadata.putIfAbsent(MetadataKeys.SPAN_TYPE, SpanType.HISTORY_COMPACT.value());
+    metadata.putIfAbsent(MetadataKeys.IS_USER_VISIBLE, false);
+    metadata.putIfAbsent(MetadataKeys.TRACE_ID, traceId);
+    if (rootSpanId != null) {
+      metadata.putIfAbsent(MetadataKeys.PARENT_SPAN_ID, rootSpanId);
+    }
+    return appender.appendCompact(sessionId, content, Map.copyOf(metadata));
+  }
+
+  /** Appends a compact summary message (simple version, no metadata). */
   public long compact(String sessionId, String content) {
-    RawMessage msg = RawMessage.compact(0, sessionId, content);
-    long id = store.appendMessage(msg);
-    log.debug("Appended COMPACT message id={} session={}", id, sessionId);
-    return id;
+    return compact(sessionId, content, null, null, Map.of());
   }
 
   // ============================================================
-  // Checkpoint 操作
+  // Checkpoint Operations
   // ============================================================
 
-  /** 在 ReAct 循环结束时触发 Checkpoint */
+  /** Triggers a checkpoint at ReAct cycle end. */
   public long checkpointOnReActEnd(
       String sessionId, String stateNode, Map<String, Object> variables, String planSnapshot) {
     return checkpointManager.onReActCycleEnd(sessionId, stateNode, variables, planSnapshot);
   }
 
-  /** 收到用户输入时触发 Checkpoint */
+  /** Creates default metadata with spanType, isUserVisible, traceId, and spanId. */
+  private Map<String, Object> autoMetadata(SpanType spanType, boolean userVisible) {
+    var meta = new java.util.LinkedHashMap<String, Object>();
+    meta.put(MetadataKeys.SPAN_TYPE, spanType.value());
+    meta.put(MetadataKeys.IS_USER_VISIBLE, userVisible);
+    meta.put(MetadataKeys.TRACE_ID, traceId);
+    meta.put(MetadataKeys.SPAN_ID, Long.toHexString(idGenerator.nextId()));
+    return Map.copyOf(meta);
+  }
+
+  /** Creates default metadata with an optional parentSpanId for sub-agent traces. */
+  private Map<String, Object> autoMetadata(
+      SpanType spanType, boolean userVisible, String parentSpanId) {
+    var meta = new java.util.LinkedHashMap<String, Object>();
+    meta.put(MetadataKeys.SPAN_TYPE, spanType.value());
+    meta.put(MetadataKeys.IS_USER_VISIBLE, userVisible);
+    meta.put(MetadataKeys.TRACE_ID, traceId);
+    meta.put(MetadataKeys.SPAN_ID, Long.toHexString(idGenerator.nextId()));
+    if (parentSpanId != null) {
+      meta.put(MetadataKeys.PARENT_SPAN_ID, parentSpanId);
+    }
+    return Map.copyOf(meta);
+  }
+
+  /** Triggers a checkpoint on user input. */
   public long checkpointOnUserInput(String sessionId) {
     return checkpointManager.onUserInput(sessionId);
   }
 
-  /** 工具调用返回时触发 Checkpoint */
+  /** Triggers a checkpoint on tool return. */
   public long checkpointOnToolReturn(String sessionId, String toolName, boolean success) {
     return checkpointManager.onToolReturn(sessionId, toolName, success);
   }
 
-  /** 异常时触发 Checkpoint */
+  /** Triggers a checkpoint on error. */
   public long checkpointOnError(String sessionId, String errorNode, String errorMsg) {
     return checkpointManager.onError(sessionId, errorNode, errorMsg);
   }
 
   // ============================================================
-  // 恢复
+  // Recovery
   // ============================================================
 
   /**
-   * 执行恢复流程（重启后调用）。
+   * Executes the recovery process (call after restart).
    *
-   * @param sessionId 会话 ID
-   * @return 恢复结果
+   * @param sessionId session identifier
+   * @return recovery result
    */
   public RecoveryResult recover(String sessionId) {
     RecoveryResult result = recoveryEngine.recover(sessionId);
@@ -127,66 +251,101 @@ public final class WalSession {
     return result;
   }
 
-  /** 获取最近一次恢复结果。 */
+  /** Returns the last recovery result. */
   public Optional<RecoveryResult> lastRecoveryResult() {
     return Optional.ofNullable(lastRecoveryResult);
   }
 
   // ============================================================
-  // Prompt 熔炼
+  // Prompt Melting
   // ============================================================
 
   /**
-   * 熔炼三段式 Prompt。
+   * Melts the three-segment prompt.
    *
-   * @param sessionId 会话 ID
-   * @param staticTrunk 静态主干（System Prompt + SOP + Tool Schemas）
-   * @return 熔炼后的 Prompt
+   * @param sessionId session identifier
+   * @param staticTrunk static trunk (System Prompt + SOP + Tool Schemas)
+   * @return melted prompt
    */
   public PromptMelter.MeltedPrompt melt(String sessionId, String staticTrunk) {
     return promptMelter.melt(sessionId, staticTrunk);
   }
 
   // ============================================================
-  // 消息查询
+  // SFT Export
   // ============================================================
 
-  /** 获取会话所有消息。 */
+  /**
+   * Exports SFT training samples for a session.
+   *
+   * @param sessionId the session to export
+   * @param format 1 = Native Embedded Role, 2 = Top-Level Independent Field
+   * @param scenario "A" = Standard Dialogue, "B" = Tool &amp; CoT
+   * @return list of SFT samples
+   */
+  public List<SftDataExporter.SftSample> exportSft(String sessionId, int format, String scenario) {
+    return sftExporter.exportSession(sessionId, format, scenario);
+  }
+
+  // ============================================================
+  // Message Query
+  // ============================================================
+
+  /** Returns all messages for a session. */
   public List<RawMessage> getAllMessages(String sessionId) {
     return appender.getAllMessages(sessionId);
   }
 
-  /** 获取消息数量。 */
+  /** Returns the message count for a session. */
   public int messageCount(String sessionId) {
     return appender.messageCount(sessionId);
   }
 
-  /** 校验消息链路完整性。 */
+  /** Validates message chain integrity. */
   public WalAppender.LinkageValidation validateLinkage(String sessionId) {
     return appender.validateLinkage(sessionId);
   }
 
-  /** 获取最新 Checkpoint。 */
+  /** Returns the latest checkpoint. */
   public Optional<Checkpoint> getLatestCheckpoint(String sessionId) {
     return checkpointManager.getLatestCheckpoint(sessionId);
   }
 
   // ============================================================
-  // 生命周期
+  // Lifecycle
   // ============================================================
 
-  /** 清除指定会话的所有数据。 */
+  /** Clears all data for a session. */
   public void clearSession(String sessionId) {
     store.clearSession(sessionId);
     checkpointManager.resetState();
     log.debug("[WalSession] Cleared session={}", sessionId);
   }
 
-  /** 清除所有数据。 */
+  /** Clears all data. */
   public void clearAll() {
     store.clearAll();
     checkpointManager.resetState();
     lastRecoveryResult = null;
     log.debug("[WalSession] Cleared all sessions");
+  }
+
+  // ============================================================
+  // Accessors
+  // ============================================================
+
+  /** Returns the underlying WalStore. */
+  public WalStore store() {
+    return store;
+  }
+
+  /** Returns the WalAppender. */
+  public WalAppender appender() {
+    return appender;
+  }
+
+  /** Returns the CheckpointManager. */
+  public CheckpointManager checkpointManager() {
+    return checkpointManager;
   }
 }

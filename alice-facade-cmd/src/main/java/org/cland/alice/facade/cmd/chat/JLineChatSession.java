@@ -9,6 +9,7 @@ import org.cland.alice.agent.command.AgentCommand;
 import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
 import org.cland.alice.core.agent.wal.FileWalStore;
+import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
 import org.cland.alice.core.agent.wal.WalSession;
 import org.cland.alice.facade.cmd.AliceCliLauncher;
 import org.jline.builtins.Completers;
@@ -64,7 +65,7 @@ public class JLineChatSession implements AutoCloseable {
                     System.getProperty("user.home"),
                     ".alice",
                     "wal",
-                    UUID.randomUUID().toString().substring(0, 8))));
+                    SnowflakeIdGenerator.generateSessionId())));
     this.agent = new Agent(config).withWal(wal);
 
     // 3. 构建 LineReader
@@ -204,7 +205,7 @@ public class JLineChatSession implements AutoCloseable {
         }
 
         // 解析
-        String sessionId = UUID.randomUUID().toString().substring(0, 8);
+        String sessionId = SnowflakeIdGenerator.generateSessionId();
         AgentCommand cmd = AgentCommand.parse(input, sessionId, traceId());
 
         if (cmd != null) {

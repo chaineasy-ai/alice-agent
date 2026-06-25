@@ -3,6 +3,7 @@ package org.cland.alice.core.agent;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
 
 /**
  * Agent 运行时上下文，贯穿 PPAO 循环的整个生命周期。
@@ -52,7 +53,7 @@ public class AgentContext {
   // ========== 构造 ==========
 
   public AgentContext() {
-    this.sessionId = java.util.UUID.randomUUID().toString().substring(0, 8);
+    this.sessionId = SnowflakeIdGenerator.generateSessionId();
     this.iteration = new AtomicInteger(0);
     this.maxIterations = DEFAULT_MAX_ITERATIONS;
     this.attributes = new ConcurrentHashMap<>();
@@ -61,7 +62,7 @@ public class AgentContext {
   }
 
   public AgentContext(int maxIterations) {
-    this.sessionId = java.util.UUID.randomUUID().toString().substring(0, 8);
+    this.sessionId = SnowflakeIdGenerator.generateSessionId();
     this.iteration = new AtomicInteger(0);
     this.maxIterations = maxIterations;
     this.attributes = new ConcurrentHashMap<>();
@@ -73,6 +74,15 @@ public class AgentContext {
     this.sessionId = sessionId;
     this.iteration = new AtomicInteger(0);
     this.maxIterations = DEFAULT_MAX_ITERATIONS;
+    this.attributes = new ConcurrentHashMap<>();
+    this.thoughtChain = new StringBuilder();
+    this.currentPhase = Phase.START;
+  }
+
+  public AgentContext(String sessionId, int maxIterations) {
+    this.sessionId = sessionId;
+    this.iteration = new AtomicInteger(0);
+    this.maxIterations = maxIterations;
     this.attributes = new ConcurrentHashMap<>();
     this.thoughtChain = new StringBuilder();
     this.currentPhase = Phase.START;

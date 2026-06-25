@@ -20,6 +20,7 @@ import org.cland.alice.agent.subagent.SubAgentRecord;
 import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
 import org.cland.alice.core.agent.wal.FileWalStore;
+import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
 import org.cland.alice.core.agent.wal.WalSession;
 import org.cland.alice.facade.tui.bridge.EventBridge;
 import org.cland.alice.facade.tui.state.TuiState;
@@ -63,7 +64,7 @@ public class AliceTuiLauncher implements AutoCloseable {
   }
 
   public AliceTuiLauncher(AgentConfig config) throws IOException {
-    this.sessionId = UUID.randomUUID().toString().substring(0, 8);
+    this.sessionId = SnowflakeIdGenerator.generateSessionId();
 
     // 1. 创建 Agent 并注入 WAL
     WalSession wal =
@@ -89,7 +90,7 @@ public class AliceTuiLauncher implements AutoCloseable {
 
   /** 使用外部 Agent 实例构造 */
   public AliceTuiLauncher(Agent agent) throws IOException {
-    this.sessionId = UUID.randomUUID().toString().substring(0, 8);
+    this.sessionId = SnowflakeIdGenerator.generateSessionId();
     this.agent = agent;
     this.eventBridge = new EventBridge();
     this.screenManager = new ScreenManager(eventBridge);
@@ -372,7 +373,7 @@ public class AliceTuiLauncher implements AutoCloseable {
     CompletableFuture.runAsync(
         () -> {
           try {
-            String subSessionId = java.util.UUID.randomUUID().toString().substring(0, 8);
+            String subSessionId = SnowflakeIdGenerator.generateSessionId();
             SubAgentManager mgr = new SubAgentManager(subSessionId);
             SubAgentRecord record = mgr.spawnSubAgent(spawn.goal(), spawn.model());
             String msg = "子 Agent " + record.id() + " 已生成，目标: " + spawn.goal();

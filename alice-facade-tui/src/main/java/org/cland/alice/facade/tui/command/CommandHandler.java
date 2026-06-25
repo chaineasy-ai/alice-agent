@@ -12,6 +12,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import org.cland.alice.agent.command.AgentCommand;
 import org.cland.alice.agent.command.ControlCmd;
+import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
 import org.cland.alice.facade.tui.bridge.EventBridge;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,7 +57,7 @@ public class CommandHandler {
 
   public CommandHandler(EventBridge eventBridge) {
     this.eventBridge = eventBridge;
-    this.sessionId = UUID.randomUUID().toString().substring(0, 8);
+    this.sessionId = SnowflakeIdGenerator.generateSessionId();
   }
 
   /** 设置当前会话 ID */

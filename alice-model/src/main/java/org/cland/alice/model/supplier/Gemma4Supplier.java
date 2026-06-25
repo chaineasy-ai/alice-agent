@@ -35,12 +35,21 @@ public class Gemma4Supplier implements ModelSupplier {
 
   public Gemma4Supplier(String name, String baseUrl) {
     this.name = name;
-    this.baseUrl = baseUrl != null ? baseUrl : DEFAULT_BASE_URL;
+    this.baseUrl = normalizeChatUrl(baseUrl != null ? baseUrl : DEFAULT_BASE_URL);
     this.client =
         HttpClient.newBuilder()
             .version(HttpClient.Version.HTTP_2)
             .connectTimeout(Duration.ofSeconds(10))
             .build();
+  }
+
+  /** Normalize the base URL: append /chat/completions if the path doesn't end with it. */
+  private static String normalizeChatUrl(String url) {
+    if (url == null) return DEFAULT_BASE_URL;
+    String trimmed = url.trim();
+    if (trimmed.endsWith("/chat/completions")) return trimmed;
+    if (trimmed.endsWith("/")) return trimmed + "chat/completions";
+    return trimmed + "/chat/completions";
   }
 
   @Override

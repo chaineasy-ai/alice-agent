@@ -6,8 +6,11 @@ read_when:
 scope:
   - "alice-core-agent"
 status: "active"
-updated: "2026-06-23"
+updated: "2026-06-25"
 ---
+
+> **⚠️ Cross-reference:** The full formal specification for RawMessage schema, SFT training ETL, distributed constraints, and production rules lives in [`Agent WAL RawMessage Storage & SFT Training Data Export Technical Specification.md`](./Agent%20WAL%20RawMessage%20Storage%20%26%20SFT%20Training%20Data%20Export%20Technical%20Specification.md). This document focuses on the dual-track (WAL + Checkpoint) design rationale, safe-point topology, and crash recovery state machine.
+
 将传统数据库/流处理的高性能 **双轨制（WAL + Checkpoint）** 引入 AI Agent 的记忆系统，是目前解决 Agent 工业级落地最硬核的解法。
 
 在这一套全新设计的架构中：

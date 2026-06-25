@@ -57,7 +57,7 @@ org.cland.alice.core.agent
 │   ├── WalCompactor.java       # 后台异步压缩清理
 │   ├── Checkpoint.java         # 控制流快照数据模型
 │   ├── CheckpointManager.java  # 5 个安全边界触发器
-│   ├── RawMessage.java         # WAL 消息实体（OpenAI 兼容）
+│   ├── RawMessage.java         # WAL 消息实体（OpenAI 兼容，支持 6 种角色）
 │   ├── ToolCall.java           # 工具调用实体
 │   ├── PromptMelter.java       # 三段式上下文熔炼
 │   └── RecoveryEngine.java     # 崩溃恢复引擎
@@ -91,11 +91,16 @@ internal/acp/                   # ACP 协议内部实现
 
 WAL 子系统从 `v20260626` 起位于本模块的 `wal/` 包（原为 `alice-memory-vault` 模块），是 Agent 的工业级持久化基石：
 
-- **WAL** — 只追加的 JSONL 日志流，记录每条原始消息（system/user/assistant/tool/compact）
+- **WAL** — 只追加的 JSONL 日志流，记录每条原始消息（支持 6 种角色：system/user/assistant/tool/compact/tool_register）
 - **Checkpoint** — 控制流快照，在 5 个安全边界触发，含变量快照与计划快照
 - **RecoveryEngine** — 崩溃后加载最新 Checkpoint + 脏 WAL 差量重放
 - **PromptMelter** — 将 WAL + Checkpoint 双轨数据熔炼为 LLM 提示词
-- 数据存储路径：`~/.alice/wal/<sessionIdHash>/`
+- **消息角色** — `system` / `user` / `assistant` / `tool` / `compact` / `tool_register`
+- **SpanType** — 所有消息通过 metadata.spanType 标记语义类别：`user_input` / `system_prompt_init` / `history_compact` / `llm_think` / `llm_final_response` / `tool_call` / `tool_call_result` / `tool_register` / `sub_agent_container` / `llm_sub_response`
+- **会话 ID** — 使用 Snowflake 算法生成（`SnowflakeIdGenerator.generateSessionId()`），WAL 存储路径为 `~/.alice/wal/{sessionId}/`
+- **SFT 训练数据** — WAL 原生支持两种导出场景：
+  - Scenario A：纯对话（过滤推理中间过程，保留最终回复）
+  - Scenario B：工具调用 + 多 Agent CoT（保留全部消息，含 tool_register 动态工具变更）
 
 ### 依赖关系
 

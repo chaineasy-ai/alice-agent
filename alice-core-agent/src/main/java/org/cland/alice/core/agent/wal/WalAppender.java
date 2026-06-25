@@ -1,16 +1,22 @@
 package org.cland.alice.core.agent.wal;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * WAL Appender — 预写日志写入器。
+ * WAL Appender — Write-Ahead Log writer.
  *
- * <p>负责 Agent 运行时顺序 Append RawMessage 到 WAL 存储。 提供流式追加、批量刷盘、消息 ID 分配等能力。
+ * <p>Responsible for sequentially appending RawMessage records to the WAL store during Agent
+ * runtime. Provides streaming append, batch flush, and message ID allocation capabilities.
  *
- * <p>每个 session 内保证消息 ID 严格单调递增。 写入完成后立即可读（Read-Your-Writes）。
+ * <p>Message IDs are guaranteed to be strictly monotonically increasing within each session. Writes
+ * are immediately readable (Read-Your-Writes).
+ *
+ * <p>Per the WAL specification (§3.3), streaming partial fragments must never be persisted — only
+ * fully assembled complete payloads are appended.
  */
 public final class WalAppender {
 
@@ -23,75 +29,103 @@ public final class WalAppender {
   }
 
   // ============================================================
-  // 单条追加
+  // Single Append (Metadata-Aware)
   // ============================================================
 
   /**
-   * 追加一条 system 消息。
+   * Appends a system message with metadata.
    *
-   * @param sessionId 会话 ID
-   * @param content 系统消息内容
-   * @return 分配的消息 ID
+   * @param sessionId session identifier
+   * @param content system message content
+   * @param metadata extended metadata (trace, span, etc.)
+   * @return assigned message ID
    */
-  public long appendSystem(String sessionId, String content) {
-    RawMessage msg = RawMessage.system(0, sessionId, content);
+  public long appendSystem(String sessionId, String content, Map<String, Object> metadata) {
+    RawMessage msg = RawMessage.system(0, sessionId, content, metadata);
     long id = store.appendMessage(msg);
     log.debug("Appended SYSTEM message id={} session={}", id, sessionId);
     return id;
   }
 
+  /** Appends a system message (no metadata). */
+  public long appendSystem(String sessionId, String content) {
+    return appendSystem(sessionId, content, Map.of());
+  }
+
   /**
-   * 追加一条 user 消息（纯文本）。
+   * Appends a user message with metadata.
    *
-   * @param sessionId 会话 ID
-   * @param content 用户输入
-   * @return 分配的消息 ID
+   * @param sessionId session identifier
+   * @param content user input
+   * @param metadata extended metadata (must include traceId, spanType=user_input,
+   *     isUserVisible=true)
+   * @return assigned message ID
    */
-  public long appendUser(String sessionId, String content) {
-    RawMessage msg = RawMessage.user(0, sessionId, content);
+  public long appendUser(String sessionId, String content, Map<String, Object> metadata) {
+    RawMessage msg = RawMessage.user(0, sessionId, content, metadata);
     long id = store.appendMessage(msg);
     log.debug("Appended USER message id={} session={}", id, sessionId);
     return id;
   }
 
+  /** Appends a user message (no metadata). */
+  public long appendUser(String sessionId, String content) {
+    return appendUser(sessionId, content, Map.of());
+  }
+
   /**
-   * 追加一条 user 消息（带名称）。
+   * Appends a user message with name and metadata.
    *
-   * @param sessionId 会话 ID
-   * @param content 用户输入
-   * @param name 用户标识名
-   * @return 分配的消息 ID
+   * @param sessionId session identifier
+   * @param content user input
+   * @param name user identifier name
+   * @param metadata extended metadata
+   * @return assigned message ID
    */
-  public long appendUser(String sessionId, String content, String name) {
-    RawMessage msg = RawMessage.userWithName(0, sessionId, content, name);
+  public long appendUser(
+      String sessionId, String content, String name, Map<String, Object> metadata) {
+    RawMessage msg = RawMessage.userWithName(0, sessionId, content, name, metadata);
     long id = store.appendMessage(msg);
     log.debug("Appended USER message id={} session={} name={}", id, sessionId, name);
     return id;
   }
 
+  /** Appends a user message with name (no metadata). */
+  public long appendUser(String sessionId, String content, String name) {
+    return appendUser(sessionId, content, name, Map.of());
+  }
+
   /**
-   * 追加一条 assistant 消息（纯文本回复）。
+   * Appends an assistant message (plaintext reply) with metadata.
    *
-   * @param sessionId 会话 ID
-   * @param content 助理回复内容
-   * @return 分配的消息 ID
+   * @param sessionId session identifier
+   * @param content assistant reply content
+   * @param metadata extended metadata (spanType, isUserVisible, etc.)
+   * @return assigned message ID
    */
-  public long appendAssistant(String sessionId, String content) {
-    RawMessage msg = RawMessage.assistant(0, sessionId, content);
+  public long appendAssistant(String sessionId, String content, Map<String, Object> metadata) {
+    RawMessage msg = RawMessage.assistant(0, sessionId, content, metadata);
     long id = store.appendMessage(msg);
     log.debug("Appended ASSISTANT message id={} session={}", id, sessionId);
     return id;
   }
 
+  /** Appends an assistant message (no metadata). */
+  public long appendAssistant(String sessionId, String content) {
+    return appendAssistant(sessionId, content, Map.of());
+  }
+
   /**
-   * 追加一条 assistant 消息（工具调用指令）。
+   * Appends an assistant message (tool call instructions) with metadata.
    *
-   * @param sessionId 会话 ID
-   * @param toolCalls 工具调用列表
-   * @return 分配的消息 ID
+   * @param sessionId session identifier
+   * @param toolCalls tool call list
+   * @param metadata extended metadata (traceId, spanId, spanType, isUserVisible, etc.)
+   * @return assigned message ID
    */
-  public long appendAssistantToolCalls(String sessionId, List<ToolCall> toolCalls) {
-    RawMessage msg = RawMessage.assistantWithToolCalls(0, sessionId, toolCalls);
+  public long appendAssistantToolCalls(
+      String sessionId, List<ToolCall> toolCalls, Map<String, Object> metadata) {
+    RawMessage msg = RawMessage.assistantWithToolCalls(0, sessionId, toolCalls, metadata);
     long id = store.appendMessage(msg);
     log.debug(
         "Appended ASSISTANT(tool_calls) message id={} session={} calls={}",
@@ -101,30 +135,80 @@ public final class WalAppender {
     return id;
   }
 
+  /** Appends an assistant message (tool calls, no metadata). */
+  public long appendAssistantToolCalls(String sessionId, List<ToolCall> toolCalls) {
+    return appendAssistantToolCalls(sessionId, toolCalls, Map.of());
+  }
+
   /**
-   * 追加一条 tool 消息（工具执行结果）。
+   * Appends a tool result message with metadata.
    *
-   * @param sessionId 会话 ID
-   * @param toolCallId 配对的工具调用 ID
-   * @param content 工具执行结果内容
-   * @return 分配的消息 ID
+   * @param sessionId session identifier
+   * @param toolCallId paired tool call ID
+   * @param content tool execution result content
+   * @param metadata extended metadata (traceId, spanType=tool_call, isUserVisible, etc.)
+   * @return assigned message ID
    */
-  public long appendToolResult(String sessionId, String toolCallId, String content) {
-    RawMessage msg = RawMessage.toolResult(0, sessionId, toolCallId, content);
+  public long appendToolResult(
+      String sessionId, String toolCallId, String content, Map<String, Object> metadata) {
+    RawMessage msg = RawMessage.toolResult(0, sessionId, toolCallId, content, metadata);
     long id = store.appendMessage(msg);
     log.debug("Appended TOOL message id={} session={} toolCallId={}", id, sessionId, toolCallId);
     return id;
   }
 
+  /** Appends a tool result message (no metadata). */
+  public long appendToolResult(String sessionId, String toolCallId, String content) {
+    return appendToolResult(sessionId, toolCallId, content, Map.of());
+  }
+
+  /**
+   * Appends a compact summary message with metadata.
+   *
+   * <p>Per the WAL specification (§3.5), each compact record must have:
+   *
+   * <ul>
+   *   <li>{@code spanType=history_compact}
+   *   <li>{@code isUserVisible=false}
+   *   <li>{@code parentSpanId} set to the root spanId of the triggering trace
+   * </ul>
+   *
+   * @param sessionId session identifier
+   * @param content compressed summary text
+   * @param metadata extended metadata (must include parentSpanId, traceId)
+   * @return assigned message ID
+   */
+  public long appendCompact(String sessionId, String content, Map<String, Object> metadata) {
+    RawMessage msg = RawMessage.compact(0, sessionId, content, metadata);
+    long id = store.appendMessage(msg);
+    log.debug("Appended COMPACT message id={} session={}", id, sessionId);
+    return id;
+  }
+
+  /**
+   * Appends a tool_register message with metadata.
+   *
+   * @param sessionId session identifier
+   * @param content serialized tool definitions JSON
+   * @param metadata extended metadata (spanType=tool_register, etc.)
+   * @return assigned message ID
+   */
+  public long appendToolRegister(String sessionId, String content, Map<String, Object> metadata) {
+    RawMessage msg = RawMessage.toolRegister(0, sessionId, content, metadata);
+    long id = store.appendMessage(msg);
+    log.debug("Appended TOOL_REGISTER message id={} session={}", id, sessionId);
+    return id;
+  }
+
   // ============================================================
-  // 批量追加
+  // Batch Append
   // ============================================================
 
   /**
-   * 批量追加多条消息。
+   * Appends multiple messages in batch.
    *
-   * @param messages 待追加的消息列表
-   * @return 最后一条消息的 ID
+   * @param messages messages to append
+   * @return last message ID
    */
   public long appendBatch(List<RawMessage> messages) {
     if (messages == null || messages.isEmpty()) return -1;
@@ -134,33 +218,34 @@ public final class WalAppender {
   }
 
   // ============================================================
-  // 读取
+  // Read Operations
   // ============================================================
 
-  /** 获取某个 session 的所有消息。 */
+  /** Returns all messages for a session. */
   public List<RawMessage> getAllMessages(String sessionId) {
     return store.getAllMessages(sessionId);
   }
 
-  /** 获取某个 session 中指定 ID 之后的消息（差量读取）。 */
+  /** Returns messages after a given ID (delta read). */
   public List<RawMessage> getMessagesAfter(String sessionId, long afterId) {
     return store.getMessagesAfter(sessionId, afterId, 0);
   }
 
-  /** 获取某个 session 的消息数量。 */
+  /** Returns the message count for a session. */
   public int messageCount(String sessionId) {
     return store.messageCount(sessionId);
   }
 
   // ============================================================
-  // 消息链路校验
+  // Message Chain Validation
   // ============================================================
 
   /**
-   * 校验某个 session 的消息链路完整性。 检查每个 assistant.tool_calls 是否有对应的 tool 响应。
+   * Validates message chain integrity for a session. Checks that every assistant.tool_calls has a
+   * corresponding tool response.
    *
-   * @param sessionId 会话 ID
-   * @return 校验结果，描述缺失配对
+   * @param sessionId session identifier
+   * @return validation result describing missing pairings
    */
   public LinkageValidation validateLinkage(String sessionId) {
     var msgs = store.getAllMessages(sessionId);
@@ -182,7 +267,7 @@ public final class WalAppender {
     return new LinkageValidation(msgs.size(), missing.size(), missing);
   }
 
-  /** 消息链路校验结果。 */
+  /** Message chain validation result. */
   public record LinkageValidation(
       int totalMessages, int missingToolCallResponses, List<String> missingToolCallIds) {
 

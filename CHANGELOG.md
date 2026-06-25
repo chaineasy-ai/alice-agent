@@ -18,7 +18,7 @@ scope:
   - "alice-facade-tui"
   - "alice-facade-web"
 status: "active"
-updated: "2026-06-25"
+updated: "2026-06-26"
 ---
 
 # Changelog
@@ -38,18 +38,34 @@ updated: "2026-06-25"
 ### Features
 
 - **TUI `/resume` 会话恢复命令**: 在 TUI 模式下实现完整的会话列表查看与选择恢复功能。
-  - `SlashCommand`: 注册 `/resume` 为 `Type.CONFIG` 斜杠命令，支持无参数（列出可选会话）和带参数（直接恢复指定会话）
-  - `CommandHandler.handleConfig()`: 新增 `/resume` 分支 — 无参数时调用 `handleResumeList()` 扫描 `~/.alice/wal/*/` 下所有 `.wal.jsonl` 文件，按编号/会话ID/checkpoint状态/文件大小格式化输出；有参数时解析 `--session-id`/`-s`/`--snapshot` 参数，支持数字索引（`/resume 2` 选中第 2 个会话）
-  - `CommandHandler.handleResumeList()`: 遍历 WAL 子目录，收集所有可恢复会话，显示会话列表（含 📌 checkpoint 标记和文件大小）
-  - `CommandHandler.resolveSessionByIndex()`: 将 1-based 数字索引映射为实际 sessionId
-  - `AliceTuiLauncher.handleResume()`: 异步执行恢复 — 构建 `WalSession(FileWalStore)` → 调用 `RecoveryEngine.recover()` → 展示恢复摘要（会话 ID、消息数、快照、状态）
-  - `AliceTuiLauncher.dispatchAgentCommand()`: 新增 `ResumeSessionCmd` 分发分支
+- **`tool_register` 角色 & 动态工具变更追踪**: 新增 `tool_register` 作为 WAL 第六种消息角色，用于记录对话中途工具集变更。
+  - `RawMessage.VALID_ROLES` 新增 `"tool_register"`，添加 `toolRegister()` 工厂方法
+  - `WalAppender` 新增 `appendToolRegister()` 方法
+  - `WalSession` 新增 `toolRegister()` 便捷方法，自动注入 `spanType=tool_register`, `isUserVisible=false`
+  - `AgentExecutor.perceive()` 在 `wal.system()` 后自动调用 `wal.toolRegister()` 记录当前工具集
+  - 工具定义以紧凑 JSON 存储在 `content` 字段中（`[{"type":"function","function":{...}}]`）
+  - `SpanType` 新增 `TOOL_REGISTER`、`TOOL_CALL_RESULT` 枚举常量
+- **WAL 全量消息元数据追踪**: 每条 WAL 消息现在自动携带完整追踪标识。
+  - `WalSession.autoMetadata()` 自动生成 `traceId`（每 session 实例唯一）和 `spanId`（每消息唯一，Snowflake 算法）
+  - `SnowflakeIdGenerator.getInstance()` 单例供全局使用
+  - `parentSpanId` 支持（通过 `autoMetadata(SpanType, boolean, String)` 重载），为子 Agent 嵌套追踪准备
+  - `isUserVisible` 用于 SFT 训练过滤（Scenario A 仅保留 `userVisible=true` 的 final response）
+- **`SpanType` 从常量类重构为 Java Enum**: `public final class SpanType` → `public enum SpanType`，移除 `fromString()`/`isValid()`/`requireValid()` 等反向兼容方法
+- **WAL 存储路径从哈希改为完整 Snowflake ID**: `~/.alice/wal/{hashCode & 0xFFFF}/` → `~/.alice/wal/{sessionId}/`，人类可读、零碰撞
 
 ### Fixes
 
+- **系统提示不再含工具描述文本**: `core_loop.ftl` 删除 `[TOOL_CALL: ...]` 文本格式工具列表，改为引用 `tool_register` 消息中的 JSON 工具定义
 - **CLI e2e 测试回归验证**: `test_cli_categories.py` 41 测试（34 通过，7 已知失败）和 `test_resume.py` 6 测试全部通过，无回归
+- **`WalSession.think()` / `finalAnswer()` 替换 `assistant()`**: 之前所有 LLM 输出（thought + final answer）都用 `wal.assistant()` 导致 spanType 无法区分。现在 `AgentExecutor.dispatchLlmInference()` 根据是否含 `toolCalls` 选择 `think()` / `finalAnswer()`
+- **`wal.toolResult()` 现在注入 `spanType=tool_call_result`**: 之前 tool 消息无 spanType 元数据，SFT 训练无法区分 tool result 与其他消息
+- **WAL 内容无 `\r\n` 污染**: `ObjectMapper.writeValueAsString()` 紧凑序列化替代 `writerWithDefaultPrettyPrinter()`，消除 Windows 平台 `\r\n` 嵌入 JSON 字符串值的问题
 
 ## 20260624
+
+### Fixes
+
+- **WAL 缺失 System Prompt 记录**: WAL 中只有 `user`、`assistant`、`tool` 三类消息，缺少 `role: "system"` 消息。
 
 ### Fixes
 

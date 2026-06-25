@@ -8,6 +8,7 @@ import org.cland.alice.agent.command.ControlCmd;
 import org.cland.alice.agent.subagent.SubAgentManager;
 import org.cland.alice.agent.subagent.SubAgentRecord;
 import org.cland.alice.core.agent.AgentConfig;
+import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
 import org.cland.alice.facade.cmd.chat.JLineChatSession;
 import org.cland.alice.facade.cmd.config.AliceConfigStore;
 import org.cland.alice.facade.cmd.config.CommandParser;
@@ -153,7 +154,7 @@ public final class AliceCliLauncher {
    * @return 退出码
    */
   public static int dispatchCommand(String input) {
-    String sessionId = UUID.randomUUID().toString().substring(0, 8);
+    String sessionId = SnowflakeIdGenerator.generateSessionId();
     String traceId = UUID.randomUUID().toString().substring(0, 12);
 
     AgentCommand cmd = AgentCommand.parse(input, sessionId, traceId);
@@ -180,7 +181,7 @@ public final class AliceCliLauncher {
     }
 
     String sessionId =
-        cmd.sessionId() != null ? cmd.sessionId() : UUID.randomUUID().toString().substring(0, 8);
+        cmd.sessionId() != null ? cmd.sessionId() : SnowflakeIdGenerator.generateSessionId();
 
     logger.info(
         "Dispatching AgentCommand: {} (session={})", cmd.getClass().getSimpleName(), sessionId);
@@ -254,7 +255,7 @@ public final class AliceCliLauncher {
       case org.cland.alice.agent.command.SpawnSubAgentCmd spawn -> {
         System.out.println("Spawning sub-agent: " + spawn.goal());
         // 创建 SubAgentManager 并生成子 Agent
-        String subSessionId = UUID.randomUUID().toString().substring(0, 8);
+        String subSessionId = SnowflakeIdGenerator.generateSessionId();
         SubAgentManager mgr = new SubAgentManager(subSessionId);
         SubAgentRecord record = mgr.spawnSubAgent(spawn.goal(), spawn.model());
         System.out.println("Sub-agent " + record.id() + " spawned with goal: " + spawn.goal());

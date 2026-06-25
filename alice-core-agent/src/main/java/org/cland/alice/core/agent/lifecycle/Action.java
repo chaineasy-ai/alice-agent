@@ -3,6 +3,7 @@ package org.cland.alice.core.agent.lifecycle;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
 
 /**
  * Agent 动作定义，对应设计文档中的 Action Intent。
@@ -46,9 +47,7 @@ public final class Action {
     this.parameters = builder.parameters != null ? Map.copyOf(builder.parameters) : Map.of();
     this.thought = builder.thought;
     this.actionId =
-        builder.actionId != null
-            ? builder.actionId
-            : java.util.UUID.randomUUID().toString().substring(0, 8);
+        builder.actionId != null ? builder.actionId : SnowflakeIdGenerator.generateSessionId();
   }
 
   public static Builder builder() {

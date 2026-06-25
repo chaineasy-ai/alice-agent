@@ -15,6 +15,7 @@ import org.cland.alice.core.agent.lifecycle.Action;
 import org.cland.alice.core.agent.memory.AgentSession;
 import org.cland.alice.core.agent.result.StepResult;
 import org.cland.alice.core.agent.wal.RawMessage;
+import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
 import org.cland.alice.core.agent.wal.WalSession;
 import org.cland.alice.core.planner.PlannerService;
 import org.cland.alice.env.adapter.EnvEvent;
@@ -79,12 +80,16 @@ public class Agent {
     this(null, config);
   }
 
-  public Agent(String agentId, AgentConfig config) {
+  public Agent(String agentId, String sessionId, AgentConfig config) {
     this.agentId = agentId != null ? agentId : UUID.randomUUID().toString().substring(0, 8);
-    this.sessionId = UUID.randomUUID().toString().substring(0, 8);
+    this.sessionId = sessionId != null ? sessionId : SnowflakeIdGenerator.generateSessionId();
     this.config = config;
     this.vertx = Vertx.vertx();
     this.executor = new AgentExecutor(vertx, this);
+  }
+
+  public Agent(String agentId, AgentConfig config) {
+    this(agentId, null, config);
   }
 
   // ========== 属性 ==========
@@ -296,7 +301,7 @@ public class Agent {
    * @return 异步结果（io.vertx.core.Future）
    */
   public Future<AgentContext> askAsync(String prompt) {
-    AgentContext context = new AgentContext(config.maxIterations());
+    AgentContext context = new AgentContext(this.sessionId, config.maxIterations());
     context.put("prompt", prompt);
     return executor.execute(prompt, context);
   }

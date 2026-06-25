@@ -14,6 +14,7 @@ import org.cland.alice.core.agent.lifecycle.Observation;
 import org.cland.alice.core.agent.prompt.PromptManager;
 import org.cland.alice.core.agent.result.StepResult;
 import org.cland.alice.core.agent.wal.Checkpoint;
+import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
 import org.cland.alice.core.agent.wal.WalSession;
 import org.cland.alice.core.planner.Plan;
 import org.cland.alice.model.Call;
@@ -125,7 +126,7 @@ public class AgentExecutor {
     String sid =
         (sessionId != null && !sessionId.isBlank())
             ? sessionId
-            : java.util.UUID.randomUUID().toString().substring(0, 8);
+            : SnowflakeIdGenerator.generateSessionId();
     AgentContext context = new AgentContext(sid);
     return executeLoop(input, context);
   }
@@ -249,10 +250,39 @@ public class AgentExecutor {
     logger.debug("[Perceive] input={}", input);
     context.transitionTo(AgentContext.Phase.PERCEIVING);
 
-    // WAL: 记录 system prompt + 用户输入 + 用户输入 Checkpoint
+    // WAL: 记录 system prompt + tool_register + 用户输入 + 用户输入 Checkpoint
     if (wal != null) {
       String sysPrompt = org.cland.alice.core.agent.prompt.PromptManager.buildSystemPrompt();
       wal.system(context.sessionId(), sysPrompt);
+
+      // 记录 tool_register: 将当前工具集写入 WAL
+      if (agent.toolRegistry() != null) {
+        try {
+          var allTools = agent.toolRegistry().allTools();
+          if (!allTools.isEmpty()) {
+            var tools =
+                allTools.stream()
+                    .<java.util.Map<String, Object>>map(
+                        meta -> {
+                          var function = new java.util.LinkedHashMap<String, Object>();
+                          function.put("name", meta.name());
+                          function.put("description", meta.description());
+                          function.put("parameters", meta.inputSchema());
+                          var tool = new java.util.LinkedHashMap<String, Object>();
+                          tool.put("type", "function");
+                          tool.put("function", function);
+                          return tool;
+                        })
+                    .collect(java.util.stream.Collectors.toList());
+            String toolsJson =
+                new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(tools);
+            wal.toolRegister(context.sessionId(), toolsJson);
+          }
+        } catch (Exception e) {
+          logger.warn("[Perceive] Failed to record tool_register", e);
+        }
+      }
+
       wal.user(context.sessionId(), input);
       wal.checkpointOnUserInput(context.sessionId());
       wal.checkpointOnReActEnd(
@@ -714,10 +744,9 @@ public class AgentExecutor {
                   // WAL: 记录 assistant 回复（含 reasoning/原始输出，跳过空消息）
                   if (wal != null) {
                     String walContent = content;
+                    boolean hasToolCalls = toolCalls != null && !toolCalls.isEmpty();
                     // 当 content 为空且有 tool_calls 时，从原始元数据中提取 reasoning_content
-                    if ((walContent == null || walContent.isEmpty())
-                        && toolCalls != null
-                        && !toolCalls.isEmpty()) {
+                    if ((walContent == null || walContent.isEmpty()) && hasToolCalls) {
                       Object raw = response.metadata().get("raw");
                       if (raw != null) {
                         String rawStr = raw.toString();
@@ -743,7 +772,13 @@ public class AgentExecutor {
                     }
                     // 跳过完全空的 assistant 消息
                     if (walContent != null && !walContent.isEmpty()) {
-                      wal.assistant(ctx.sessionId(), walContent);
+                      if (hasToolCalls) {
+                        // 有 tool calls 时，此内容为推理思考
+                        wal.think(ctx.sessionId(), walContent);
+                      } else {
+                        // 无 tool calls 时，此内容为最终回复
+                        wal.finalAnswer(ctx.sessionId(), walContent);
+                      }
                     }
                   }
 
@@ -752,7 +787,7 @@ public class AgentExecutor {
                 } else {
                   // WAL: 记录失败的 LLM 回复
                   if (wal != null) {
-                    wal.assistant(ctx.sessionId(), "[LLM Error: " + call.status() + "]");
+                    wal.finalAnswer(ctx.sessionId(), "[LLM Error: " + call.status() + "]");
                   }
 
                   return new StepResult.Failure("LLM call failed: " + call.status());

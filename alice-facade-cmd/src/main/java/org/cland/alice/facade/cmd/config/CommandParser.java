@@ -3,6 +3,7 @@ package org.cland.alice.facade.cmd.config;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import org.cland.alice.agent.command.AgentCommand;
+import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
@@ -50,7 +51,7 @@ public class CommandParser {
   }
 
   public CommandParser() {
-    this.sessionId = UUID.randomUUID().toString().substring(0, 8);
+    this.sessionId = SnowflakeIdGenerator.generateSessionId();
   }
 
   /** 设置会话 ID（用于 AgentCommand 追踪）。 */
