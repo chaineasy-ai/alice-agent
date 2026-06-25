@@ -126,6 +126,10 @@ public class CommandParser {
         return subAgent.toRunConfig();
       }
 
+      if (sub instanceof ResumeCommand resume) {
+        return resume.toRunConfig();
+      }
+
       cmdLine.usage(System.err);
       throw new ParseException(2, "Unknown subcommand");
 
@@ -170,6 +174,7 @@ public class CommandParser {
         ToolsCommand.class,
         ConfigCommand.class,
         RoutineCommand.class,
+        ResumeCommand.class,
         SubAgentCommand.class
       })
   private static class CliRoot implements Callable<Integer> {
@@ -380,6 +385,64 @@ public class CommandParser {
       String expr = (cronExpression != null) ? cronExpression : "";
       String traceId = UUID.randomUUID().toString().substring(0, 12);
       return AgentCommand.parse("/routine " + expr, sessionId, traceId);
+    }
+  }
+
+  // ========================================================================
+  // "resume" 子命令
+  // ========================================================================
+
+  @Command(
+      name = "resume",
+      description = "Resume a historical session from persistent WAL/snapshot storage",
+      mixinStandardHelpOptions = true)
+  private static class ResumeCommand implements Callable<Integer> {
+
+    @Option(
+        names = {"--session-id", "-s"},
+        description = "Session ID to resume")
+    private String sessionId;
+
+    @Option(
+        names = {"--snapshot"},
+        description = "Snapshot ID to restore from (optional)")
+    private String snapshot;
+
+    @Option(
+        names = {"--list", "-l"},
+        description = "List available sessions for resume")
+    private boolean listSessions;
+
+    @Override
+    public Integer call() {
+      return 0;
+    }
+
+    /** 将 CLI 参数转换为 RunConfig */
+    RunConfig toRunConfig() {
+      RunConfig.Builder builder = RunConfig.builder().task("resume").resumeMode(true);
+
+      if (sessionId != null && !sessionId.isBlank()) {
+        builder.sessionId(sessionId);
+      }
+      if (snapshot != null && !snapshot.isBlank()) {
+        builder.resumeSnapshot(snapshot);
+      }
+      if (listSessions) {
+        builder.resumeList(true);
+      }
+
+      return builder.build();
+    }
+
+    /** 将 CLI 参数转换为 AgentCommand（ResumeSessionCmd） */
+    AgentCommand toAgentCommand(String sessionId) {
+      String traceId = java.util.UUID.randomUUID().toString().substring(0, 12);
+      if (this.sessionId != null && !this.sessionId.isBlank()) {
+        return new org.cland.alice.agent.command.ControlCmd.ResumeSessionCmd(
+            this.sessionId, traceId, snapshot);
+      }
+      return new org.cland.alice.agent.command.ControlCmd.ResumeSessionCmd(sessionId, traceId);
     }
   }
 

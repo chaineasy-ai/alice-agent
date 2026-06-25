@@ -67,6 +67,8 @@ public record SlashCommand(String command, String args, Type type, String descri
       case "/sub-agent" ->
           new SlashCommand(
               cmd, args, Type.CONFIG, "子 Agent 管理：spawn/connect/list/cancel/results/send/prompt");
+      case "/resume" ->
+          new SlashCommand(cmd, args, Type.CONFIG, "继续历史会话：从 WAL 存储中恢复会话，无参数时列出可选会话列表");
       default -> null;
     };
   }
@@ -114,6 +116,7 @@ public record SlashCommand(String command, String args, Type type, String descri
             /tools       查看工具：列出 Agent 可用工具集
             /routine <cron>  注册定时任务：注册 Cron 表达式到调度器
             /sub-agent <sub> 子 Agent 管理：spawn/connect/list/cancel/results/send/prompt
+            /resume [id|--session-id <id>]  继续历史会话：无参数时列出可选会话列表
             ────────────────────────────────────────────────────────
             """;
   }

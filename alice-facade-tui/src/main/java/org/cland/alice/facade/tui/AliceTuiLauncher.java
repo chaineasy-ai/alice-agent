@@ -170,6 +170,7 @@ public class AliceTuiLauncher implements AutoCloseable {
       case ControlCmd.ViewContextCmd view -> handleViewContext(view);
       case ControlCmd.CompactContextCmd compact -> handleCompactContext(compact);
       case ControlCmd.FeedbackCmd feedback -> handleFeedback(feedback);
+      case ControlCmd.ResumeSessionCmd resume -> handleResume(resume);
       case ControlCmd.InterruptCmd exit -> handleInterrupt(exit);
       case AlignmentCmd.SwitchModelCmd model -> handleModelSwitch(model);
       case SpawnSubAgentCmd spawn -> handleSpawnSubAgent(spawn);
@@ -297,6 +298,55 @@ public class AliceTuiLauncher implements AutoCloseable {
       eventBridge.onChatMessage(
           "System", "反馈已记录: " + feedback.message() + "（待 Agent 暴露 HumanInTheLoop 接口）");
     }
+  }
+
+  private void handleResume(ControlCmd.ResumeSessionCmd resume) {
+    logger.info(
+        "Resume session requested: {} (snapshot={})", resume.sessionId(), resume.snapshotId());
+    eventBridge.onChatMessage("System", "正在恢复会话: " + resume.sessionId());
+
+    CompletableFuture.runAsync(
+        () -> {
+          try {
+            // 构建 WAL 路径（与 ExecutionCoordinator 一致：sessionId 哈希作为子目录名）
+            String walDirName = Integer.toHexString(resume.sessionId().hashCode() & 0xFFFF);
+            var walDir =
+                java.nio.file.Paths.get(
+                    System.getProperty("user.home"), ".alice", "wal", walDirName);
+
+            if (!java.nio.file.Files.isDirectory(walDir)) {
+              eventBridge.onChatMessage(
+                  "System", "会话 '" + resume.sessionId() + "' 未找到。\n使用 /resume 查看可用会话列表。");
+              return;
+            }
+
+            // 恢复会话
+            var wal =
+                new org.cland.alice.memory.wal.WalSession(
+                    new org.cland.alice.memory.wal.FileWalStore(walDir));
+            var recoveryResult = wal.recover(resume.sessionId());
+
+            // 构建恢复摘要
+            var sb = new StringBuilder();
+            sb.append("── 会话恢复完成 ──\n");
+            sb.append("  会话: ").append(resume.sessionId()).append("\n");
+            sb.append("  消息数: ").append(wal.messageCount(resume.sessionId())).append("\n");
+            if (resume.snapshotId() != null) {
+              sb.append("  快照: ").append(resume.snapshotId()).append("\n");
+            }
+            sb.append("  状态: ").append(recoveryResult.summary()).append("\n");
+            sb.append("────────────────────\n");
+            sb.append("会话已恢复，可以继续对话。");
+
+            eventBridge.onChatMessage("System", sb.toString());
+            screenManager.markContentDirty();
+
+          } catch (Exception e) {
+            logger.error("Failed to resume session {}", resume.sessionId(), e);
+            eventBridge.onTaskError("恢复会话失败: " + e.getMessage());
+            screenManager.markContentDirty();
+          }
+        });
   }
 
   private void handleModelSwitch(AlignmentCmd.SwitchModelCmd model) {

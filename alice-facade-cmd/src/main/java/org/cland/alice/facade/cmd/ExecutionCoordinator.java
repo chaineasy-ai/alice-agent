@@ -114,6 +114,11 @@ public final class ExecutionCoordinator {
         return 0;
       }
 
+      // 2b. Resume 模式 — 从 WAL 恢复历史会话
+      if (config.resumeMode()) {
+        return executeResume(config, agentConfig);
+      }
+
       // 3. 使用客户端传入的 sessionId（或自动生成）
       String sessionId = config.sessionId();
       if (sessionId == null || sessionId.isBlank()) {
@@ -255,5 +260,66 @@ public final class ExecutionCoordinator {
       logger.debug("No stdin data available");
     }
     return null;
+  }
+
+  // ========================================================================
+  // Resume 恢复执行
+  // ========================================================================
+
+  /**
+   * 从 WAL 持久化存储中恢复历史会话。
+   *
+   * <p>流程：
+   *
+   * <ol>
+   *   <li>根据 sessionId 定位 WAL 目录
+   *   <li>创建 WalSession 并执行 RecoveryEngine.recover()
+   *   <li>如果指定了 snapshot，从特定快照恢复
+   *   <li>重建 Agent 上下文并输出恢复摘要
+   * </ol>
+   */
+  private int executeResume(RunConfig config, AgentConfig agentConfig) {
+    String sessionId = config.sessionId();
+    if (sessionId == null || sessionId.isBlank()) {
+      System.err.println(
+          "No session-id provided for resume. Use --session-id <id> or --list to see available sessions.");
+      return 1;
+    }
+
+    String snapshotId = config.resumeSnapshot();
+
+    try {
+      String walDirName = Integer.toHexString(sessionId.hashCode() & 0xFFFF);
+      java.nio.file.Path walPath =
+          java.nio.file.Paths.get(System.getProperty("user.home"), ".alice", "wal", walDirName);
+
+      if (!java.nio.file.Files.isDirectory(walPath)) {
+        System.err.println("Session '" + sessionId + "' not found in WAL storage.");
+        System.err.println("Use 'alice resume --list' to see available sessions.");
+        return 1;
+      }
+
+      var wal = new WalSession(new FileWalStore(walPath));
+      var recoveryResult = wal.recover(sessionId);
+      logger.info("[Resume] Recovery result for {}: {}", sessionId, recoveryResult.summary());
+
+      // 构建恢复摘要
+      System.out.println("=== Session Restored ===");
+      System.out.println("  Session:   " + sessionId);
+      System.out.println("  Messages:  " + wal.messageCount(sessionId));
+      if (snapshotId != null) {
+        System.out.println("  Snapshot:  " + snapshotId);
+      }
+      System.out.println("  Status:    " + recoveryResult.summary());
+      System.out.println();
+      System.out.println("Session restored successfully. Ready to continue conversation.");
+
+      return 0;
+
+    } catch (Exception e) {
+      logger.error("Failed to resume session {}", sessionId, e);
+      System.err.println("Failed to resume session: " + e.getMessage());
+      return 1;
+    }
   }
 }

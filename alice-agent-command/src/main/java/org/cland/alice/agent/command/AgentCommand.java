@@ -94,6 +94,7 @@ public sealed interface AgentCommand
       case "/clear" -> new ControlCmd.ClearContextCmd(sessionId, traceId);
       case "/context" -> new ControlCmd.ViewContextCmd(sessionId, traceId);
       case "/compact" -> new ControlCmd.CompactContextCmd(sessionId, traceId);
+      case "/resume" -> parseResume(args, sessionId, traceId);
 
       // ── Routine-Time ──────────────────────────────────────────
       case "/routine" -> new RoutineTimeCmd.RegisterRoutineCmd(args, sessionId, traceId);
@@ -188,6 +189,26 @@ public sealed interface AgentCommand
       }
       default -> null;
     };
+  }
+
+  /**
+   * 解析 {@code /resume} 子命令。
+   *
+   * <p>格式：{@code /resume <sessionId>} 或 {@code /resume --session-id=<id> [--snapshot=<snapId>]}
+   */
+  private static AgentCommand parseResume(String args, String sessionId, String traceId) {
+    if (args == null || args.isBlank()) {
+      // 没有参数也可执行，列出可用会话
+      return new ControlCmd.ResumeSessionCmd(sessionId, traceId);
+    }
+    // 尝试提取 --session-id= 或 --session-id 参数
+    String sid = extractNamedArg(args, "--session-id");
+    String snapId = extractNamedArg(args, "--snapshot");
+    if (sid == null || sid.isBlank()) {
+      // 如果参数没有命名前缀，直接作为 sessionId 使用
+      return new ControlCmd.ResumeSessionCmd(args.trim(), traceId);
+    }
+    return new ControlCmd.ResumeSessionCmd(sid, traceId, snapId);
   }
 
   /**

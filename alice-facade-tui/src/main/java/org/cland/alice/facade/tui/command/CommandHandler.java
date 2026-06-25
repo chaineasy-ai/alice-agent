@@ -6,10 +6,12 @@ import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import org.cland.alice.agent.command.AgentCommand;
+import org.cland.alice.agent.command.ControlCmd;
 import org.cland.alice.facade.tui.bridge.EventBridge;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -338,7 +340,150 @@ public class CommandHandler {
       return true;
     }
 
+    if (cmd.is("/resume")) {
+      if (cmd.hasArgs()) {
+        String sid = cmd.args().trim();
+        // 检查是否以 --session-id= 或 -s= 开头
+        if (sid.startsWith("--session-id=")) {
+          sid = sid.substring("--session-id=".length()).trim();
+        } else if (sid.startsWith("-s=")) {
+          sid = sid.substring("-s=".length()).trim();
+        }
+        // 检查是否有 --snapshot 参数
+        String snapshotId = null;
+        int snapIdx = sid.indexOf("--snapshot");
+        if (snapIdx >= 0) {
+          String afterSnap = sid.substring(snapIdx + "--snapshot".length()).trim();
+          sid = sid.substring(0, snapIdx).trim();
+          if (afterSnap.startsWith("=")) {
+            snapshotId = afterSnap.substring(1).trim();
+          } else if (afterSnap.startsWith(" ")) {
+            snapshotId = afterSnap.substring(1).trim();
+          }
+        }
+        if (!sid.isEmpty()) {
+          // 尝试解析为数字索引（用户可能输入了编号）
+          try {
+            int index = Integer.parseInt(sid);
+            // 从 WAL 获取会话列表，通过索引查找
+            var resolved = resolveSessionByIndex(index);
+            if (resolved != null) {
+              sid = resolved;
+            } else {
+              eventBridge.onChatMessage("System", "编号 " + index + " 超出范围。使用 /resume 查看可用会话列表。");
+              return true;
+            }
+          } catch (NumberFormatException e) {
+            // 不是数字，直接作为 sessionId 使用
+          }
+          eventBridge.onChatMessage("System", "恢复会话: " + sid);
+          AgentCommand ac = new ControlCmd.ResumeSessionCmd(sid, traceId(), snapshotId);
+          dispatchToAgent(ac);
+        } else {
+          eventBridge.onChatMessage("System", "用法: /resume <session-id> 或 /resume");
+        }
+      } else {
+        // 无参数 → 扫描 WAL 会话列表，让用户选择
+        handleResumeList();
+      }
+      return true;
+    }
+
     return false;
+  }
+
+  /**
+   * 扫描 ~/.alice/wal 目录，列出所有可恢复的会话供用户选择。
+   *
+   * <p>遍历各子目录下的 .wal.jsonl 文件，显示会话 ID 和 checkpoint 状态， 提示用户输入会话 ID 进行恢复。
+   */
+  private void handleResumeList() {
+    try {
+      var walDir = java.nio.file.Paths.get(System.getProperty("user.home"), ".alice", "wal");
+      if (!java.nio.file.Files.isDirectory(walDir)) {
+        eventBridge.onChatMessage("System", "未找到 WAL 存储目录: " + walDir);
+        eventBridge.onChatMessage("System", "没有可恢复的会话。请先执行一些任务以创建会话。");
+        return;
+      }
+
+      // 收集所有子目录（每个 sessionId 哈希值对应一个子目录）
+      var sessions = new ArrayList<SessionInfo>();
+      try (var stream = Files.newDirectoryStream(walDir)) {
+        for (var subDir : stream) {
+          if (!Files.isDirectory(subDir)) continue;
+          // 在该子目录下查找 .wal.jsonl 文件
+          try (var files = Files.newDirectoryStream(subDir, "*.wal.jsonl")) {
+            for (var walFile : files) {
+              String fileName = walFile.getFileName().toString();
+              String sessionId = fileName.substring(0, fileName.length() - ".wal.jsonl".length());
+              var cpFile = subDir.resolve(sessionId + ".checkpoint.json");
+              boolean hasCheckpoint = Files.exists(cpFile);
+              long fileSize = Files.size(walFile);
+              sessions.add(new SessionInfo(sessionId, hasCheckpoint, fileSize));
+            }
+          }
+        }
+      }
+
+      if (sessions.isEmpty()) {
+        eventBridge.onChatMessage("System", "没有可恢复的会话。请先执行一些任务以创建会话。");
+        return;
+      }
+
+      // 构建会话列表输出
+      var sb = new StringBuilder();
+      sb.append("── 可恢复的会话列表 ────────────────────────\n");
+      for (int i = 0; i < sessions.size(); i++) {
+        var s = sessions.get(i);
+        String sizeStr = s.fileSize > 1024 ? (s.fileSize / 1024) + "KB" : s.fileSize + "B";
+        sb.append(
+            String.format(
+                "  [%d] %s  %s  %s\n", i + 1, s.sessionId, s.hasCheckpoint ? "📌" : "  ", sizeStr));
+      }
+      sb.append("──────────────────────────────────────────────\n");
+      sb.append("输入 /resume <会话ID> 或 /resume [编号] 恢复指定会话。");
+      eventBridge.onChatMessage("System", sb.toString());
+
+    } catch (Exception e) {
+      logger.error("Failed to list sessions for resume", e);
+      eventBridge.onTaskError("列出会话失败: " + e.getMessage());
+    }
+  }
+
+  /** 会话信息记录 */
+  private record SessionInfo(String sessionId, boolean hasCheckpoint, long fileSize) {}
+
+  /**
+   * 根据编号（1-based）从 WAL 查找对应的 sessionId。
+   *
+   * @param index 用户输入的编号（1-based）
+   * @return 对应的 sessionId，未找到时返回 null
+   */
+  private String resolveSessionByIndex(int index) {
+    try {
+      var walDir = java.nio.file.Paths.get(System.getProperty("user.home"), ".alice", "wal");
+      if (!Files.isDirectory(walDir)) return null;
+
+      var sessions = new ArrayList<String>();
+      try (var stream = Files.newDirectoryStream(walDir)) {
+        for (var subDir : stream) {
+          if (!Files.isDirectory(subDir)) continue;
+          try (var files = Files.newDirectoryStream(subDir, "*.wal.jsonl")) {
+            for (var walFile : files) {
+              String fileName = walFile.getFileName().toString();
+              String sessionId = fileName.substring(0, fileName.length() - ".wal.jsonl".length());
+              sessions.add(sessionId);
+            }
+          }
+        }
+      }
+
+      if (index < 1 || index > sessions.size()) return null;
+      return sessions.get(index - 1);
+    } catch (Exception e) {
+      logger.error("Failed to resolve session by index", e);
+      return null;
+    }
   }
 
   /**

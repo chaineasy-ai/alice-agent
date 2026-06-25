@@ -55,6 +55,7 @@ classDiagram
     ControlCmd <|-- ClearContextCmd : /clear (清除上下文)
     ControlCmd <|-- ViewContextCmd : /context (查看上下文)
     ControlCmd <|-- CompactContextCmd : /compact (压缩上下文)
+    ControlCmd <|-- ResumeSessionCmd : /resume (继续历史会话)
 
     %% 5. 常规调度驱动 (Routine-Time) - 基于时间的自主触发 [NEW]
     class RoutineTimeCmd {
@@ -77,7 +78,7 @@ classDiagram
 | 执行 (Execution) | `--exec` | `/exec` | 原生驱动 | 直接执行 `ls`、`git`、`nvidia-smi` 等底层指令。 |
 | 对齐 (Alignment) | `--model` | `/model` | 引擎驱动 | 切换 LLM 后，同步刷新 **V (Verification)** 模块审计敏感度。 |
 | 控制 (Control) | `--clear` | `/clear` | 上下文管理 | 清空会话短期记忆（保留系统提示词/规则），重置 Token 计数器。 |
-| 控制 (Control) | `--context` | `/context` | 上下文管理 | 从内存拉取当前滑动窗口全部消息及 Token 占用数据，格式化输出。 |
+| 控制 (Control) | `--resume` | `/resume` | 会话恢复 | 从持久化存储中加载指定历史会话（WAL/Snapshot），重建上下文窗口、短期记忆与关联的快照/分支状态。 |
 | 控制 (Control) | `--compact` | `/compact` | 上下文管理 | 历史对话写入 WAL，提炼为摘要快照，释放上下文窗口。 |
 | 控制 (Control) | `--feedback` | `/feedback` | HITL 驱动 | 响应内核 `AskHumanCmd`，解除任务挂起状态。 |
 | 调度 (Routine-Time) | `--routine` | `/routine` | 计划任务管理 | 动态新增/修改 Cron 表达式、周期任务（如服务器定时巡检、日报推送）。 |
@@ -216,4 +217,51 @@ sequenceDiagram
     Facade-->>User: "反馈已提交"
 
     Note over User,Executor: ─── Agent 继续 PPAO 循环 ───
+```
+
+## 7. 时序图：会话恢复流 (/resume)
+从持久化存储中加载历史会话，重建上下文窗口与短期记忆；支持指定 `--session-id` 或由调度器自动键恢复。
+
+```mermaid
+sequenceDiagram
+    participant User as User (TUI/CLI)
+    participant Facade as Facade (TUI/CLI)
+    participant Handler as CommandHandler
+    participant Agent as Agent (Kernel)
+    participant Vault as MemoryVault
+    participant Router as MemoryRouter
+    participant Planner as P (Planner)
+
+    User->>Facade: /resume [--session-id=<id>] [--snapshot=<snapId>]
+
+    alt session-id 为空
+        Facade->>Facade: 列出最近 N 个可恢复会话
+        Facade-->>User: 会话列表（ID + 摘要 + 时间戳）
+        User->>Facade: 选择会话 ID
+    end
+
+    Facade->>Handler: parse("/resume") → ResumeSessionCmd
+    Handler->>Agent: dispatch(ResumeSessionCmd)
+
+    rect rgb(245, 240, 255)
+        Note over Agent, Vault: ① 从持久化存储恢复
+        Agent->>Vault: loadSession(sessionId)
+        Vault-->>Agent: 历史上下文 (WAL + 短期记忆 + 快照)
+    end
+
+    rect rgb(245, 245, 220)
+        Note over Agent, Router: ② 重建短期记忆
+        Agent->>Router: reconstructShortTerm(sessionId)
+        Router->>Router: 重算滑动窗口 Token 占用
+        Router-->>Agent: shortTermContext
+    end
+
+    rect rgb(220, 245, 220)
+        Note over Agent, Planner: ③ 刷新 Planner 认知
+        Agent->>Planner: refreshSystemKnowledge()
+        Planner->>Planner: 重新加载规则/技能/上下文
+    end
+
+    Agent-->>Facade: session restored (token=x, messages=y)
+    Facade-->>User: Markdown 摘要 (会话已恢复)
 ```

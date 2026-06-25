@@ -103,6 +103,15 @@ public final class AliceCliLauncher {
         return handleConfig(config);
       }
 
+      // 3a. Resume 命令 — 走 Agent 执行（通过 ExecutionCoordinator）
+      if (config.resumeMode()) {
+        // resume 命令可能带 --list 标志，直接列表展示
+        if (config.resumeList()) {
+          return handleResumeList(config);
+        }
+        // 否则进入 Agent 执行流程
+      }
+
       // 4. 初始化 ModelProvider
       String configDefaultModel = initializeModelProvider();
 
@@ -235,6 +244,13 @@ public final class AliceCliLauncher {
         System.out.println("Registering routine: " + routine.cronExpression());
         yield EXIT_SUCCESS;
       }
+      case org.cland.alice.agent.command.ControlCmd.ResumeSessionCmd resume -> {
+        System.out.println("Resuming session: " + resume.sessionId());
+        if (resume.snapshotId() != null) {
+          System.out.println("  Snapshot: " + resume.snapshotId());
+        }
+        yield EXIT_SUCCESS;
+      }
       case org.cland.alice.agent.command.SpawnSubAgentCmd spawn -> {
         System.out.println("Spawning sub-agent: " + spawn.goal());
         // 创建 SubAgentManager 并生成子 Agent
@@ -322,6 +338,55 @@ public final class AliceCliLauncher {
       return EXIT_SUCCESS;
     } catch (Exception e) {
       System.err.println("Error listing tools: " + e.getMessage());
+      return EXIT_RUNTIME_ERROR;
+    }
+  }
+
+  // ========================================================================
+  // Resume 会话列表
+  // ========================================================================
+
+  /** 处理 {@code alice resume --list} 子命令，列出 WAL 中可恢复的会话。 */
+  private static int handleResumeList(RunConfig config) {
+    try {
+      // 扫描 ~/.alice/wal 目录下的会话
+      var walDir = java.nio.file.Paths.get(System.getProperty("user.home"), ".alice", "wal");
+      if (!java.nio.file.Files.isDirectory(walDir)) {
+        System.out.println("No WAL storage found at: " + walDir);
+        System.out.println("No sessions available.");
+        return EXIT_SUCCESS;
+      }
+
+      var sessions = new java.util.ArrayList<String>();
+      try (var stream = java.nio.file.Files.newDirectoryStream(walDir, "*.wal.jsonl")) {
+        for (var path : stream) {
+          String fileName = path.getFileName().toString();
+          String sessionId = fileName.substring(0, fileName.length() - ".wal.jsonl".length());
+          sessions.add(sessionId);
+        }
+      }
+
+      if (sessions.isEmpty()) {
+        System.out.println("No sessions available.");
+        return EXIT_SUCCESS;
+      }
+
+      System.out.println("Available sessions (" + sessions.size() + "):");
+      System.out.println();
+      for (var sid : sessions) {
+        var cpFile = walDir.resolve(sid + ".checkpoint.json");
+        String info = "  📁 " + sid;
+        if (java.nio.file.Files.exists(cpFile)) {
+          info += " (checkpoint available)";
+        }
+        System.out.println(info);
+      }
+      System.out.println();
+      System.out.println("Use 'alice resume --session-id <id>' to restore a session.");
+
+      return EXIT_SUCCESS;
+    } catch (Exception e) {
+      System.err.println("Error listing sessions: " + e.getMessage());
       return EXIT_RUNTIME_ERROR;
     }
   }

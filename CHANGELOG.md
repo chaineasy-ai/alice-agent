@@ -18,10 +18,26 @@ scope:
   - "alice-facade-tui"
   - "alice-facade-web"
 status: "active"
-updated: "2026-06-24"
+updated: "2026-06-25"
 ---
 
 # Changelog
+
+## 20260625
+
+### Features
+
+- **TUI `/resume` 会话恢复命令**: 在 TUI 模式下实现完整的会话列表查看与选择恢复功能。
+  - `SlashCommand`: 注册 `/resume` 为 `Type.CONFIG` 斜杠命令，支持无参数（列出可选会话）和带参数（直接恢复指定会话）
+  - `CommandHandler.handleConfig()`: 新增 `/resume` 分支 — 无参数时调用 `handleResumeList()` 扫描 `~/.alice/wal/*/` 下所有 `.wal.jsonl` 文件，按编号/会话ID/checkpoint状态/文件大小格式化输出；有参数时解析 `--session-id`/`-s`/`--snapshot` 参数，支持数字索引（`/resume 2` 选中第 2 个会话）
+  - `CommandHandler.handleResumeList()`: 遍历 WAL 子目录，收集所有可恢复会话，显示会话列表（含 📌 checkpoint 标记和文件大小）
+  - `CommandHandler.resolveSessionByIndex()`: 将 1-based 数字索引映射为实际 sessionId
+  - `AliceTuiLauncher.handleResume()`: 异步执行恢复 — 构建 `WalSession(FileWalStore)` → 调用 `RecoveryEngine.recover()` → 展示恢复摘要（会话 ID、消息数、快照、状态）
+  - `AliceTuiLauncher.dispatchAgentCommand()`: 新增 `ResumeSessionCmd` 分发分支
+
+### Fixes
+
+- **CLI e2e 测试回归验证**: `test_cli_categories.py` 41 测试（34 通过，7 已知失败）和 `test_resume.py` 6 测试全部通过，无回归
 
 ## 20260624
 

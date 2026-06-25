@@ -35,6 +35,9 @@ import java.util.Objects;
  *     String configAction;     // config 动作 (get/set/show)
  *     String configKey;        // config 键名
  *     String configValue;      // config 值 (仅 set 时)
+ *     boolean resumeMode;      // resume 模式
+ *     String resumeSnapshot;   // resume 快照 ID（可选）
+ *     boolean resumeList;      // 列出可恢复会话
  *   }
  * </pre>
  */
@@ -71,6 +74,9 @@ public final class RunConfig {
   private final String configAction;
   private final String configKey;
   private final String configValue;
+  private final boolean resumeMode;
+  private final String resumeSnapshot;
+  private final boolean resumeList;
 
   private RunConfig(Builder builder) {
     this.task = Objects.requireNonNull(builder.task, "task must not be null");
@@ -99,6 +105,9 @@ public final class RunConfig {
     this.configAction = builder.configAction;
     this.configKey = builder.configKey;
     this.configValue = builder.configValue;
+    this.resumeMode = builder.resumeMode;
+    this.resumeSnapshot = builder.resumeSnapshot;
+    this.resumeList = builder.resumeList;
   }
 
   // ========== Getters ==========
@@ -228,6 +237,21 @@ public final class RunConfig {
     return configValue;
   }
 
+  /** 是否启用 resume 模式 */
+  public boolean resumeMode() {
+    return resumeMode;
+  }
+
+  /** resume 快照 ID（可选） */
+  public String resumeSnapshot() {
+    return resumeSnapshot;
+  }
+
+  /** 是否列出可恢复会话 */
+  public boolean resumeList() {
+    return resumeList;
+  }
+
   // ========== Builder ==========
 
   public static Builder builder() {
@@ -260,6 +284,9 @@ public final class RunConfig {
     private String configAction;
     private String configKey;
     private String configValue;
+    private boolean resumeMode;
+    private String resumeSnapshot;
+    private boolean resumeList;
 
     private Builder() {}
 
@@ -396,6 +423,21 @@ public final class RunConfig {
       return this;
     }
 
+    public Builder resumeMode(boolean resumeMode) {
+      this.resumeMode = resumeMode;
+      return this;
+    }
+
+    public Builder resumeSnapshot(String resumeSnapshot) {
+      this.resumeSnapshot = resumeSnapshot;
+      return this;
+    }
+
+    public Builder resumeList(boolean resumeList) {
+      this.resumeList = resumeList;
+      return this;
+    }
+
     public RunConfig build() {
       return new RunConfig(this);
     }
@@ -467,6 +509,15 @@ public final class RunConfig {
     }
     if (configValue != null) {
       sb.append(", configValue='").append(configValue).append("'");
+    }
+    if (resumeMode) {
+      sb.append(", resumeMode=true");
+    }
+    if (resumeSnapshot != null) {
+      sb.append(", resumeSnapshot='").append(resumeSnapshot).append("'");
+    }
+    if (resumeList) {
+      sb.append(", resumeList=true");
     }
     sb.append("}");
     return sb.toString();

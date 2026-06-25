@@ -2,12 +2,13 @@
  * Alice Agent — Control Commands（控制与反馈）
  *
  * 对应 docs/app/AgentCommand.md 中的 ControlCmd 分支：
- *   ResetSessionCmd  — /new       （重置会话）
- *   FeedbackCmd      — /feedback  （人类在环响应）
- *   InterruptCmd     — Ctrl+C     （强制终止）
- *   ClearContextCmd  — /clear     （清除上下文）
- *   ViewContextCmd   — /context   （查看上下文）
- *   CompactContextCmd — /compact  （压缩上下文）
+ *   ResetSessionCmd   — /new       （重置会话）
+ *   FeedbackCmd       — /feedback  （人类在环响应）
+ *   InterruptCmd      — Ctrl+C     （强制终止）
+ *   ClearContextCmd   — /clear     （清除上下文）
+ *   ViewContextCmd    — /context   （查看上下文）
+ *   CompactContextCmd — /compact   （压缩上下文）
+ *   ResumeSessionCmd  — /resume    （继续历史会话）
  */
 package org.cland.alice.agent.command;
 
@@ -18,7 +19,8 @@ import java.util.Objects;
  * 控制与反馈指令 — 生命周期、HITL（Human-In-The-Loop）与上下文管理。
  *
  * <p>继承自 {@link AgentCommand}，密封许可给 {@link ResetSessionCmd}、{@link FeedbackCmd}、 {@link
- * InterruptCmd}、{@link ClearContextCmd}、{@link ViewContextCmd}、{@link CompactContextCmd}。
+ * InterruptCmd}、{@link ClearContextCmd}、{@link ViewContextCmd}、{@link CompactContextCmd}、{@link
+ * ResumeSessionCmd}。
  */
 public sealed interface ControlCmd extends AgentCommand {
 
@@ -189,6 +191,44 @@ public sealed interface ControlCmd extends AgentCommand {
     @Override
     public String reason() {
       return "compact-context";
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // /resume — 继续历史会话
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * 继续历史会话指令 {@code /resume}。
+   *
+   * <p>从持久化存储（WAL/Snapshot）中加载指定历史会话，重建上下文窗口、短期记忆与关联的快照/分支状态。
+   *
+   * @param sessionId 会话 ID
+   * @param traceId 链路追踪 ID
+   * @param snapshotId 快照 ID（可选，指定后从特定快照恢复）
+   * @param timestamp 指令发起时间戳
+   */
+  record ResumeSessionCmd(String sessionId, String traceId, String snapshotId, Instant timestamp)
+      implements ControlCmd {
+
+    public ResumeSessionCmd {
+      Objects.requireNonNull(sessionId, "sessionId must not be null");
+      Objects.requireNonNull(traceId, "traceId must not be null");
+    }
+
+    public ResumeSessionCmd(String sessionId, String traceId) {
+      this(sessionId, traceId, null, Instant.now());
+    }
+
+    public ResumeSessionCmd(String sessionId, String traceId, String snapshotId) {
+      this(sessionId, traceId, snapshotId, Instant.now());
+    }
+
+    @Override
+    public String reason() {
+      String r = "resume-session: " + sessionId;
+      if (snapshotId != null) r += " snapshot=" + snapshotId;
+      return r;
     }
   }
 }
