@@ -9,7 +9,7 @@
  *   - 重建索引：重启后恢复
  *   - 工具调用 round-trip：ToolCall.Function 序列化/反序列化
  */
-package org.cland.alice.memory.wal
+package org.cland.alice.core.agent.wal
 
 import spock.lang.Specification
 import spock.lang.Title

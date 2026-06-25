@@ -6,6 +6,9 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.cland.alice.core.agent.wal.Checkpoint;
+import org.cland.alice.core.agent.wal.FileWalStore;
+import org.cland.alice.core.agent.wal.RawMessage;
 import org.cland.alice.memory.agent.Context;
 import org.cland.alice.memory.controller.VaultController;
 import org.cland.alice.memory.core.Experience;
@@ -14,9 +17,6 @@ import org.cland.alice.memory.core.MemorySet;
 import org.cland.alice.memory.core.SOP;
 import org.cland.alice.memory.core.Step;
 import org.cland.alice.memory.vault.*;
-import org.cland.alice.memory.wal.Checkpoint;
-import org.cland.alice.memory.wal.FileWalStore;
-import org.cland.alice.memory.wal.RawMessage;
 
 /**
  * Hole Test — alice-memory-vault module public API boundary probes.

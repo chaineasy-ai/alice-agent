@@ -1,4 +1,4 @@
-package org.cland.alice.memory.wal
+package org.cland.alice.core.agent.wal
 
 import spock.lang.Specification
 import spock.lang.Subject

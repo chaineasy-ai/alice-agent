@@ -23,7 +23,17 @@ updated: "2026-06-25"
 
 # Changelog
 
-## 20260625
+## 20260626
+
+### BREAKING
+
+- **WAL 包从 `alice-memory-vault` 迁移至 `alice-core-agent`**: `org.cland.alice.memory.wal` 包整体移至 `org.cland.alice.core.agent.wal`，解决 WAL 作为核心生命周期组件却位于外围模块的架构倒挂问题。
+  - 迁移 12 个 WAL 源文件（`WalSession`/`WalStore`/`FileWalStore`/`InMemoryWalStore`/`WalAppender`/`WalCompactor`/`Checkpoint`/`CheckpointManager`/`RawMessage`/`ToolCall`/`RecoveryEngine`/`PromptMelter`）及 10 个 Spock 测试规范
+  - `alice-core-agent` 模块新增 `exports org.cland.alice.core.agent.wal`，移除 `requires alice.agent.alice.memory.vault.main`
+  - 依赖方向反转：`alice-memory-vault` 新增 `requires alice.agent.alice.core.agent.main`
+  - 同步迁移 `AgentSession` 至 `org.cland.alice.core.agent.memory` 包，消除双向循环依赖
+  - 更新全部 8 个外部消费模块的 import 语句（`alice-facade-cmd`/`alice-facade-tui`/`alice-memory-vault` dreaming 与 vault 包）
+  - 所有模块编译通过（85 tasks），全部单元测试通过
 
 ### Features
 

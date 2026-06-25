@@ -1,4 +1,4 @@
-package org.cland.alice.memory.agent;
+package org.cland.alice.core.agent.memory;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;

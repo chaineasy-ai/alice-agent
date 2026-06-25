@@ -12,7 +12,7 @@
  *   - 未确认的消息（last_applied_message_id 之后）永远不会被删除
  *   - 压缩操作是幂等的
  */
-package org.cland.alice.memory.wal;
+package org.cland.alice.core.agent.wal;
 
 import java.util.List;
 import java.util.Objects;

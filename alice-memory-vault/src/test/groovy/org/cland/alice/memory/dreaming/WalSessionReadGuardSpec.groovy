@@ -1,7 +1,7 @@
 package org.cland.alice.memory.dreaming
 
-import org.cland.alice.memory.wal.InMemoryWalStore
-import org.cland.alice.memory.wal.RawMessage
+import org.cland.alice.core.agent.wal.InMemoryWalStore
+import org.cland.alice.core.agent.wal.RawMessage
 import spock.lang.Specification
 
 class WalSessionReadGuardSpec extends Specification {

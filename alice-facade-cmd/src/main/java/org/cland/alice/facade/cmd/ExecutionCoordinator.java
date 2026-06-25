@@ -7,11 +7,11 @@ import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
 import org.cland.alice.core.agent.AgentContext;
 import org.cland.alice.core.agent.result.StepResult;
+import org.cland.alice.core.agent.wal.FileWalStore;
+import org.cland.alice.core.agent.wal.WalSession;
 import org.cland.alice.facade.cmd.config.AliceConfigStore;
 import org.cland.alice.facade.cmd.config.RunConfig;
 import org.cland.alice.facade.cmd.render.OutputRenderer;
-import org.cland.alice.memory.wal.FileWalStore;
-import org.cland.alice.memory.wal.WalSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

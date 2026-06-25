@@ -3,9 +3,9 @@ package org.cland.alice.memory.dreaming;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import org.cland.alice.memory.wal.Checkpoint;
-import org.cland.alice.memory.wal.RawMessage;
-import org.cland.alice.memory.wal.WalStore;
+import org.cland.alice.core.agent.wal.Checkpoint;
+import org.cland.alice.core.agent.wal.RawMessage;
+import org.cland.alice.core.agent.wal.WalStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

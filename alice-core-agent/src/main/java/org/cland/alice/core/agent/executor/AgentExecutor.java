@@ -13,9 +13,9 @@ import org.cland.alice.core.agent.lifecycle.Action;
 import org.cland.alice.core.agent.lifecycle.Observation;
 import org.cland.alice.core.agent.prompt.PromptManager;
 import org.cland.alice.core.agent.result.StepResult;
+import org.cland.alice.core.agent.wal.Checkpoint;
+import org.cland.alice.core.agent.wal.WalSession;
 import org.cland.alice.core.planner.Plan;
-import org.cland.alice.memory.wal.Checkpoint;
-import org.cland.alice.memory.wal.WalSession;
 import org.cland.alice.model.Call;
 import org.cland.alice.model.ModelProvider;
 import org.cland.alice.tool.gateway.engine.ExecutionEngine;
@@ -798,7 +798,7 @@ public class AgentExecutor {
       wal.assistantToolCalls(
           ctx.sessionId(),
           java.util.List.of(
-              org.cland.alice.memory.wal.ToolCall.of(
+              org.cland.alice.core.agent.wal.ToolCall.of(
                   action.actionId(), action.target(), action.parameters())));
     }
 

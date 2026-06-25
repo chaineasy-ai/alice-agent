@@ -1,4 +1,4 @@
-package org.cland.alice.memory.wal;
+package org.cland.alice.core.agent.wal;
 
 import java.util.ArrayList;
 import java.util.List;

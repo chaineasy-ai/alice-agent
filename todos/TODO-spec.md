@@ -18,7 +18,7 @@ scope:
   - "alice-facade-cmd"
   - "alice-facade-tui"
 status: "active"
-updated: "2026-06-14"
+updated: "2026-06-26"
 ---
 # TODO-spec: Alice Agent 项目任务规范看板
 
@@ -118,11 +118,11 @@ updated: "2026-06-14"
 
 ## 三、记忆与持久化层 (Memory & Persistence)
 
-### □ 3.1 alice-memory-vault — 记忆库
-- [/] 工作记忆 (Working Memory) [priority:: high] [verify:: AWL&CheckPoint.md]
+### □ 3.1 alice-memory-vault → alice-core-agent — 记忆库
+- [x] 工作记忆 (Working Memory) [priority:: high] [verify:: AWL&CheckPoint.md]
     - [x] 短期上下文存储
-    - [/] 工作记忆序列化 (Checkpoint) [priority:: high]
-    - [x] WAL + Checkpoint 双轨制实现 [verify:: AgentExecutor 集成完成，309 个测试通过]
+    - [x] 工作记忆序列化 (Checkpoint) [priority:: high]
+    - [x] WAL + Checkpoint 双轨制实现 [verify:: 12 源文件 + 10 测试迁移至 alice-core-agent]
     - [ ] 检查点自动保存间隔策略 [priority:: low]
 - [x] 长期记忆 (Long-term Memory) [priority:: medium]
     - [x] JVectorSemanticVault — 基于 JVector 4.x 的嵌入式向量搜索引擎 [verify:: JVectorSemanticVaultSpec 18 tests]
@@ -216,13 +216,15 @@ updated: "2026-06-14"
 
 | 状态 | 计数 | 说明 |
 |------|------|------|
-| `- [x]` 已完成 | 41 | 已实现并验证通过 |
-| `- [/]` 执行中 | 3 | 正在开发实现中 |
+| `- [x]` 已完成 | 42 | 已实现并验证通过 |
+| `- [/]` 执行中 | 2 | 正在开发实现中 |
 | `- [ ]` 待执行 | 39 | 未开始 |
 | `- [!]` 失败/阻塞 | 0 | 当前无阻塞项 |
 | **总计** | **83** | — |
 
-> 最后更新：2026-06-15
+> 最后更新：2026-06-26
+> ✅ WAL 包从 alice-memory-vault 迁移至 alice-core-agent（12 源文件 + 10 测试，依赖方向反转）
+> ✅ AgentSession 同步迁移至 alice-core-agent.memory 消除循环依赖
 > ✅ TODO-memory-vault 全部完成（90/90，309 tests）
 > ✅ JVectorSemanticVault — JVector 4.x 嵌入式向量搜索引擎（18 tests）
 > ✅ 核心框架层 → 记忆与持久化层全线贯通

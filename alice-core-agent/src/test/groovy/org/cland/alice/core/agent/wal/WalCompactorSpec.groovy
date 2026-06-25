@@ -10,7 +10,7 @@
  *   - 后台调度启动/停止
  *   - 幂等安全性：不会删除未确认的消息
  */
-package org.cland.alice.memory.wal
+package org.cland.alice.core.agent.wal
 
 import spock.lang.Specification
 import spock.lang.Title

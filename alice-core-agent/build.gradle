@@ -29,7 +29,6 @@ dependencies {
     implementation project(':alice-core-planner')
     implementation project(':alice-guardrail')
     implementation project(':alice-tool-gateway')
-    implementation project(':alice-memory-vault')
     implementation project(':alice-env-adapter')
 
     // vert.x
@@ -44,9 +43,10 @@ dependencies {
     // FreeMarker：模板引擎，用于 PromptManager 构建 prompt
     implementation 'org.freemarker:freemarker:2.3.34'
 
-    // Jackson（用于解析 LLM Function Calling 返回的 JSON arguments）
+    // Jackson（用于解析 LLM Function Calling 返回的 JSON arguments，以及 WAL FileWalStore JSON 序列化）
     implementation 'com.fasterxml.jackson.core:jackson-core:2.18.3'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.3'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.18.3'
 
     // Groovy：升级到适配 Java 25 的最新稳定版（4.0.30 修复高版本 Java 兼容问题）
     testImplementation 'org.apache.groovy:groovy:4.0.30'

@@ -7,7 +7,7 @@
  * 使用 Jackson 进行 JSON 序列化/反序列化。
  * 适合开发/单机部署。生产环境可替换为 PostgresWalStore。
  */
-package org.cland.alice.memory.wal;
+package org.cland.alice.core.agent.wal;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;

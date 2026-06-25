@@ -19,6 +19,9 @@ repositories {
 }
 
 dependencies {
+    // 本地子模块依赖（WAL + AgentSession 现位于 alice-core-agent）
+    implementation project(':alice-core-agent')
+
     // === SLF4J + Logback (replaces System.getLogger) ===
     implementation 'org.slf4j:slf4j-api:2.0.16'
     implementation 'ch.qos.logback:logback-classic:1.5.16'

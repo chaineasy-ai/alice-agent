@@ -8,7 +8,7 @@
  *
  * 不涉及真实的 LLM 调用，使用 InMemoryWalStore 模拟崩溃恢复流程。
  */
-package org.cland.alice.memory.wal
+package org.cland.alice.core.agent.wal
 
 import spock.lang.Specification
 import spock.lang.Title

@@ -15,9 +15,9 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
+import org.cland.alice.core.agent.wal.RawMessage;
+import org.cland.alice.core.agent.wal.WalSession;
 import org.cland.alice.memory.core.Step;
-import org.cland.alice.memory.wal.RawMessage;
-import org.cland.alice.memory.wal.WalSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

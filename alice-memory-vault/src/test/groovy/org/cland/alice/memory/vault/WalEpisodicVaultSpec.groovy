@@ -14,9 +14,9 @@ import spock.lang.Specification
 import spock.lang.Title
 
 import org.cland.alice.memory.core.Step
-import org.cland.alice.memory.wal.InMemoryWalStore
-import org.cland.alice.memory.wal.ToolCall
-import org.cland.alice.memory.wal.WalSession
+import org.cland.alice.core.agent.wal.InMemoryWalStore
+import org.cland.alice.core.agent.wal.ToolCall
+import org.cland.alice.core.agent.wal.WalSession
 
 @Title("WalEpisodicVault — 基于 WAL 的情景记忆")
 class WalEpisodicVaultSpec extends Specification {

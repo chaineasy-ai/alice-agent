@@ -19,10 +19,10 @@ import org.cland.alice.agent.subagent.SubAgentManager;
 import org.cland.alice.agent.subagent.SubAgentRecord;
 import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
+import org.cland.alice.core.agent.wal.FileWalStore;
+import org.cland.alice.core.agent.wal.WalSession;
 import org.cland.alice.facade.tui.bridge.EventBridge;
 import org.cland.alice.facade.tui.state.TuiState;
-import org.cland.alice.memory.wal.FileWalStore;
-import org.cland.alice.memory.wal.WalSession;
 import org.cland.alice.model.ModelConfigLoader;
 import org.cland.alice.model.ModelProvider;
 import org.slf4j.Logger;
@@ -322,8 +322,8 @@ public class AliceTuiLauncher implements AutoCloseable {
 
             // 恢复会话
             var wal =
-                new org.cland.alice.memory.wal.WalSession(
-                    new org.cland.alice.memory.wal.FileWalStore(walDir));
+                new org.cland.alice.core.agent.wal.WalSession(
+                    new org.cland.alice.core.agent.wal.FileWalStore(walDir));
             var recoveryResult = wal.recover(resume.sessionId());
 
             // 构建恢复摘要

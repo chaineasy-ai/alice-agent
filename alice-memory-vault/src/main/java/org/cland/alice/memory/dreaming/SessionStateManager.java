@@ -3,7 +3,7 @@ package org.cland.alice.memory.dreaming;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import org.cland.alice.memory.wal.WalStore;
+import org.cland.alice.core.agent.wal.WalStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

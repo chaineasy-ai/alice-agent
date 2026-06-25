@@ -4,16 +4,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import org.cland.alice.memory.wal.RawMessage;
-import org.cland.alice.memory.wal.WalStore;
+import org.cland.alice.core.agent.wal.RawMessage;
+import org.cland.alice.core.agent.wal.WalStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * 离线 PromptMelter（梦境熔炼） — 在 Dreaming 流程中将原始 WAL 日志浓缩为结构化情景摘要。
  *
- * <p>与 {@code org.cland.alice.memory.wal.PromptMelter}（在线上下文组装）不同， 本组件仅用于 {@link DreamingEngine}
- * 的离线处理管道，专注于日志降噪、去重和时间归一化。
+ * <p>与 {@code org.cland.alice.core.agent.wal.PromptMelter}（在线上下文组装）不同， 本组件仅用于 {@link
+ * DreamingEngine} 的离线处理管道，专注于日志降噪、去重和时间归一化。
  */
 public final class PromptMelter {
 

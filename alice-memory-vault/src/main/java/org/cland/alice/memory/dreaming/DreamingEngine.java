@@ -12,6 +12,8 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import org.cland.alice.core.agent.wal.RawMessage;
+import org.cland.alice.core.agent.wal.WalStore;
 import org.cland.alice.memory.core.Knowledge;
 import org.cland.alice.memory.core.Step;
 import org.cland.alice.memory.dreaming.DreamingSession.DreamingOutcome;
@@ -19,8 +21,6 @@ import org.cland.alice.memory.dreaming.PromptMelter.EpisodicSummary;
 import org.cland.alice.memory.vault.EpisodicVault;
 import org.cland.alice.memory.vault.ProceduralVault;
 import org.cland.alice.memory.vault.SemanticVault;
-import org.cland.alice.memory.wal.RawMessage;
-import org.cland.alice.memory.wal.WalStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

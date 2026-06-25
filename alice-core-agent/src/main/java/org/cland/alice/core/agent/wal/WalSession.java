@@ -1,11 +1,10 @@
-package org.cland.alice.memory.wal;
+package org.cland.alice.core.agent.wal;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import org.cland.alice.memory.agent.AgentSession;
-import org.cland.alice.memory.wal.RecoveryEngine.RecoveryResult;
+import org.cland.alice.core.agent.wal.RecoveryEngine.RecoveryResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

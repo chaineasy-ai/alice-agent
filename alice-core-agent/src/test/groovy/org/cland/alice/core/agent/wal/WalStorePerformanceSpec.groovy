@@ -12,7 +12,7 @@
  *   - 运行在 CI 或开发机上，结果受硬件、磁盘、负载影响
  *   - 如果测试失败，检查是否环境过载，不一定是代码回归
  */
-package org.cland.alice.memory.wal
+package org.cland.alice.core.agent.wal
 
 import spock.lang.Specification
 import spock.lang.Title

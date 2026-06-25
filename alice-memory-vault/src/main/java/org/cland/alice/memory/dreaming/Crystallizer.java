@@ -6,9 +6,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.cland.alice.core.agent.wal.RawMessage;
 import org.cland.alice.memory.core.SOP;
 import org.cland.alice.memory.vault.ProceduralVault;
-import org.cland.alice.memory.wal.RawMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

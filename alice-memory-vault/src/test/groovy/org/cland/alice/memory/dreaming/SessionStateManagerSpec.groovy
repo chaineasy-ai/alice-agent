@@ -1,6 +1,6 @@
 package org.cland.alice.memory.dreaming
 
-import org.cland.alice.memory.wal.InMemoryWalStore
+import org.cland.alice.core.agent.wal.InMemoryWalStore
 import spock.lang.Specification
 
 class SessionStateManagerSpec extends Specification {
