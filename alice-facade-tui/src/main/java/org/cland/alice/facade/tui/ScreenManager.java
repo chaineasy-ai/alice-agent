@@ -7,6 +7,7 @@ import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import org.cland.alice.agent.command.AgentCommand;
 import org.cland.alice.facade.tui.bridge.EventBridge;
 import org.cland.alice.facade.tui.bridge.TuiEvent;
 import org.cland.alice.facade.tui.command.CommandHandler;
@@ -538,6 +539,11 @@ public class ScreenManager implements AutoCloseable {
 
   public ScreenManager onModelSwitch(Consumer<String> callback) {
     this.onModelSwitch = callback;
+    return this;
+  }
+
+  public ScreenManager onAgentCommand(Consumer<AgentCommand> callback) {
+    this.commandHandler.onAgentCommand(callback);
     return this;
   }
 

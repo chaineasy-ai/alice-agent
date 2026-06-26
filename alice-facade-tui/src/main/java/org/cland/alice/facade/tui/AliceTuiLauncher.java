@@ -1,6 +1,7 @@
 package org.cland.alice.facade.tui;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import org.cland.alice.agent.command.AgentCommand;
@@ -20,6 +21,7 @@ import org.cland.alice.agent.subagent.SubAgentRecord;
 import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
 import org.cland.alice.core.agent.wal.FileWalStore;
+import org.cland.alice.core.agent.wal.RawMessage;
 import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
 import org.cland.alice.core.agent.wal.WalSession;
 import org.cland.alice.facade.tui.bridge.EventBridge;
@@ -108,7 +110,8 @@ public class AliceTuiLauncher implements AutoCloseable {
         .onModelSwitch(
             modelId -> {
               logger.info("Model switch requested: {}", modelId);
-            });
+            })
+        .onAgentCommand(this::dispatchAgentCommand);
 
     // 连接 Agent 事件到 EventBridge
     hookAgentEvents();
@@ -304,20 +307,17 @@ public class AliceTuiLauncher implements AutoCloseable {
   private void handleResume(ControlCmd.ResumeSessionCmd resume) {
     logger.info(
         "Resume session requested: {} (snapshot={})", resume.sessionId(), resume.snapshotId());
-    eventBridge.onChatMessage("System", "正在恢复会话: " + resume.sessionId());
 
     CompletableFuture.runAsync(
         () -> {
           try {
-            // 构建 WAL 路径（与 ExecutionCoordinator 一致：sessionId 哈希作为子目录名）
-            String walDirName = Integer.toHexString(resume.sessionId().hashCode() & 0xFFFF);
-            var walDir =
-                java.nio.file.Paths.get(
-                    System.getProperty("user.home"), ".alice", "wal", walDirName);
+            var sessId = resume.sessionId();
 
-            if (!java.nio.file.Files.isDirectory(walDir)) {
-              eventBridge.onChatMessage(
-                  "System", "会话 '" + resume.sessionId() + "' 未找到。\n使用 /resume 查看可用会话列表。");
+            // 定位 WAL 目录：优先直接使用 sessionId 作为子目录名（新风格），
+            // 未找到时扫描所有子目录（兼容旧 style hash 子目录）。
+            var walDir = resolveWalDir(sessId);
+            if (walDir == null) {
+              eventBridge.onChatMessage("System", "会话 '" + sessId + "' 未找到。\n使用 /resume 查看可用会话列表。");
               return;
             }
 
@@ -327,11 +327,83 @@ public class AliceTuiLauncher implements AutoCloseable {
                     new org.cland.alice.core.agent.wal.FileWalStore(walDir));
             var recoveryResult = wal.recover(resume.sessionId());
 
-            // 构建恢复摘要
+            // 1. 绑定 WalSession 到 Agent，使后续消息继续追加到该会话的 WAL
+            agent.withWal(wal);
+
+            // 2. 加载所有原始消息并展示到聊天界面
+            List<RawMessage> allMessages = wal.getAllMessages(resume.sessionId());
+            int displayedCount = 0;
+            for (RawMessage msg : allMessages) {
+              // 跳过内部消息（system 提示词、tool_register 注册信息）和不可见消息
+              if ("system".equals(msg.role())
+                  || "tool_register".equals(msg.role())
+                  || !msg.isUserVisible()) {
+                logger.debug(
+                    "[Resume] skip role={} id={} visible={}",
+                    msg.role(),
+                    msg.messageId(),
+                    msg.isUserVisible());
+                continue;
+              }
+              displayedCount++;
+
+              String roleLabel =
+                  switch (msg.role()) {
+                    case "user" -> "User";
+                    case "assistant" -> {
+                      String spanType = msg.spanType();
+                      if ("llm_think".equals(spanType)) {
+                        yield "(thought)";
+                      } else if ("llm_final_response".equals(spanType)) {
+                        yield "Assistant";
+                      } else if (msg.toolCalls() != null && !msg.toolCalls().isEmpty()) {
+                        yield "[Tools]";
+                      } else {
+                        yield "Assistant";
+                      }
+                    }
+                    case "tool" -> "[Tool Result]";
+                    case "compact" -> "[Summary]";
+                    default -> msg.role();
+                  };
+
+              String content = msg.content() != null ? msg.content() : "";
+
+              // 对于 tool_calls 类型的 assistant 消息，显示工具调用信息
+              if (msg.toolCalls() != null && !msg.toolCalls().isEmpty()) {
+                StringBuilder tcSb = new StringBuilder();
+                tcSb.append("调用工具: ");
+                for (var tc : msg.toolCalls()) {
+                  tcSb.append(tc.function().name());
+                  if (tc.function().arguments() != null && !tc.function().arguments().isBlank()) {
+                    String args = tc.function().arguments();
+                    if (args.length() > 120) {
+                      args = args.substring(0, 120) + "...";
+                    }
+                    tcSb.append("(").append(args).append(")");
+                  }
+                  tcSb.append(", ");
+                }
+                if (tcSb.length() > 2) tcSb.setLength(tcSb.length() - 2);
+                content = tcSb.toString();
+              }
+
+              if (!content.isEmpty()) {
+                logger.debug(
+                    "[Resume] display role={} label={} contentLen={}",
+                    msg.role(),
+                    roleLabel,
+                    content.length());
+                eventBridge.onChatMessage(roleLabel, content);
+              }
+            }
+
+            // 3. 构建恢复摘要
             var sb = new StringBuilder();
             sb.append("── 会话恢复完成 ──\n");
             sb.append("  会话: ").append(resume.sessionId()).append("\n");
-            sb.append("  消息数: ").append(wal.messageCount(resume.sessionId())).append("\n");
+            sb.append("  消息数: ").append(allMessages.size()).append("\n");
+            sb.append("  已展示: ").append(displayedCount).append(" 条\n");
             if (resume.snapshotId() != null) {
               sb.append("  快照: ").append(resume.snapshotId()).append("\n");
             }
@@ -348,6 +420,40 @@ public class AliceTuiLauncher implements AutoCloseable {
             screenManager.markContentDirty();
           }
         });
+  }
+
+  /**
+   * 定位会话的 WAL 目录。
+   *
+   * <p>优先尝试直接使用 {@code sessionId} 作为子目录名（新风格 — snowflake 完整 ID）， 未找到时扫描 {@code ~/.alice/wal/}
+   * 下所有子目录（兼容旧 style hash 子目录）。
+   *
+   * @param sessionId 待查找的会话 ID
+   * @return WAL 目录路径，未找到时返回 {@code null}
+   */
+  private java.nio.file.Path resolveWalDir(String sessionId) {
+    var baseDir = java.nio.file.Paths.get(System.getProperty("user.home"), ".alice", "wal");
+    if (!java.nio.file.Files.isDirectory(baseDir)) return null;
+
+    // 1. 尝试直接路径（新风格）
+    var direct = baseDir.resolve(sessionId);
+    if (java.nio.file.Files.isDirectory(direct)) {
+      var walFile = direct.resolve(sessionId + ".wal.jsonl");
+      if (java.nio.file.Files.exists(walFile)) return direct;
+    }
+
+    // 2. 扫描所有子目录（兼容旧 style hash 子目录）
+    try (var stream = java.nio.file.Files.newDirectoryStream(baseDir)) {
+      for (var subDir : stream) {
+        if (!java.nio.file.Files.isDirectory(subDir)) continue;
+        var walFile = subDir.resolve(sessionId + ".wal.jsonl");
+        if (java.nio.file.Files.exists(walFile)) return subDir;
+      }
+    } catch (java.io.IOException e) {
+      logger.warn("Failed to scan WAL directories for session {}: {}", sessionId, e.getMessage());
+    }
+
+    return null;
   }
 
   private void handleModelSwitch(AlignmentCmd.SwitchModelCmd model) {

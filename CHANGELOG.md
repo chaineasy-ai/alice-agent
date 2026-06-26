@@ -60,6 +60,17 @@ updated: "2026-06-26"
 - **`WalSession.think()` / `finalAnswer()` 替换 `assistant()`**: 之前所有 LLM 输出（thought + final answer）都用 `wal.assistant()` 导致 spanType 无法区分。现在 `AgentExecutor.dispatchLlmInference()` 根据是否含 `toolCalls` 选择 `think()` / `finalAnswer()`
 - **`wal.toolResult()` 现在注入 `spanType=tool_call_result`**: 之前 tool 消息无 spanType 元数据，SFT 训练无法区分 tool result 与其他消息
 - **WAL 内容无 `\r\n` 污染**: `ObjectMapper.writeValueAsString()` 紧凑序列化替代 `writerWithDefaultPrettyPrinter()`，消除 Windows 平台 `\r\n` 嵌入 JSON 字符串值的问题
+- **TUI `/resume` 分发路由断裂 — CommandHandler.onAgentCommand 未注册**: `CommandHandler` 内部 `dispatchToAgent()` 发现 `onAgentCommand` 回调为 null，所有 `ResumeSessionCmd` 被静默丢弃，`AliceTuiLauncher.handleResume()` 永不触发。
+  - `ScreenManager`: 新增 `onAgentCommand(Consumer<AgentCommand>)` 公开方法，委托给 `commandHandler.onAgentCommand()`
+  - `AliceTuiLauncher.setupCallbacks()`: 新增 `.onAgentCommand(this::dispatchAgentCommand)`，补全 `CommandHandler → AliceTuiLauncher` 的分发链路
+- **TUI `/resume` 历史消息未加载到聊天窗口**: `handleResume()` 仅显示恢复摘要，未加载和展示 WAL 中的原始会话消息。
+  - `AliceTuiLauncher.handleResume()`: 恢复后调用 `wal.getAllMessages(sessionId)` 读取全量消息
+  - 过滤 `system`/`tool_register` 角色和 `isUserVisible=false` 的内部消息，仅展示实际对话
+  - 按角色映射为 `User`/`Assistant`/`[Tools]`/`[Tool Result]`/`[Summary]` 标签，通过 `eventBridge.onChatMessage()` 逐条显示
+  - 绑定 `agent.withWal(wal)` 使后续消息继续追加到恢复的会话 WAL
+- **TUI `/resume` WAL 目录解析路径不匹配**: `handleResume()` 使用 `Integer.toHexString(sessionId.hashCode() & 0xFFFF)` 哈希子目录，与初始 Agent 构造使用的 `~/.alice/wal/{sessionId}/`（完整 Snowflake ID）不一致，导致旧风格会话无法找到。
+  - `AliceTuiLauncher.resolveWalDir(sessionId)`: 新增双策略定位方法 — 优先尝试 `sessionId` 直接路径，未命中时扫描所有子目录（兼容旧 hash 子目录）
+  - 操作详情改用 `logger.debug()` 记录，减少终端输出污染
 
 ## 20260624
 
