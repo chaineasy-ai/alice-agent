@@ -58,14 +58,29 @@ public class EventBridge implements AutoCloseable {
     if (closed) return;
     eventThread.submit(
         () -> {
-          for (Consumer<TuiEvent> listener : listeners) {
-            try {
-              listener.accept(event);
-            } catch (Exception e) {
-              logger.warn("Event listener threw exception", e);
-            }
-          }
+          dispatchToListeners(event);
         });
+  }
+
+  /**
+   * 同步发送事件到所有监听器（在调用线程上立即执行）。
+   *
+   * <p>UI 关键事件（如 ChatMessage）需要在调用者继续执行前完成监听器处理， 否则后续的 {@code redrawScrollArea()} 无法看到最新状态。
+   */
+  public void emitSync(TuiEvent event) {
+    if (closed) return;
+    dispatchToListeners(event);
+  }
+
+  /** 将事件分发给所有已注册的监听器 */
+  private void dispatchToListeners(TuiEvent event) {
+    for (Consumer<TuiEvent> listener : listeners) {
+      try {
+        listener.accept(event);
+      } catch (Exception e) {
+        logger.warn("Event listener threw exception", e);
+      }
+    }
   }
 
   /**
@@ -118,9 +133,13 @@ public class EventBridge implements AutoCloseable {
     emit(new TuiEvent.TaskError(errorMessage));
   }
 
-  /** 添加聊天消息 */
+  /**
+   * 添加聊天消息（同步发送）。
+   *
+   * <p>聊天消息需要在调用者继续执行前立即更新 UI 状态， 因此使用 {@link #emitSync(TuiEvent)} 确保监听器在调用线程上同步执行。
+   */
   public void onChatMessage(String sender, String content) {
-    emit(new TuiEvent.ChatMessage(sender, content));
+    emitSync(new TuiEvent.ChatMessage(sender, content));
   }
 
   /** Token 使用更新 */

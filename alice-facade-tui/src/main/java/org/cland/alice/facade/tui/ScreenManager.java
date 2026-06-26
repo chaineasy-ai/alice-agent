@@ -46,13 +46,20 @@ public class ScreenManager implements AutoCloseable {
   /** 渲染帧间隔（毫秒） */
   private static final long FRAME_INTERVAL_MS = 100;
 
-  /** 补全菜单最大展示行数 —— 锁定渲染边界，杜绝菜单展开时整体界面位移 */
-  private static final int COMPLETION_LIST_MAX = 3;
+  /** 补全菜单最大展示行数 —— 斜杠命令较多，设为 5 行 */
+  private static final int COMPLETION_LIST_MAX = 5;
 
   /** ANSI 转义序列（光标定位使用 terminal.puts，清屏操作使用原始 ANSI） */
   private static final String ANSI_CLEAR_SCREEN = "\033[2J\033[H";
 
   private static final String ANSI_CLEAR_LINE = "\033[K";
+
+  /**
+   * ANSI 光标定位模板：{@code \033[<row>;1H}，其中 {@code row} 为 1-indexed。
+   *
+   * <p>用于后台渲染线程，避免使用 {@code terminal.puts()} 干扰 JLine 的内部光标状态。
+   */
+  private static final String ANSI_CURSOR_LINE = "\033[%d;1H";
 
   private final Terminal terminal;
   private final LineReader reader;
@@ -64,6 +71,12 @@ public class ScreenManager implements AutoCloseable {
 
   private final AtomicBoolean running;
   private final Thread renderThread;
+
+  /**
+   * 终端输出锁：用于同步主线程（输入循环）与后台渲染线程对 {@code terminal.writer()} 的写入。 防止 {@link #redrawScrollArea()} 的原始
+   * ANSI 写入与 JLine 的 {@code readLine()} 内部光标定位产生竞态，导致输入提示符出现在错误行或底部状态栏被覆盖。
+   */
+  private final Object terminalLock = new Object();
 
   /** 输入历史 */
   private final Deque<String> inputHistory;
@@ -85,6 +98,36 @@ public class ScreenManager implements AutoCloseable {
   /** 内容变更标记——渲染线程检测到此标记后重绘上方滚动区 */
   private final AtomicBoolean contentDirty;
 
+  /**
+   * 恢复被 JLine 补全菜单覆盖的底部区域（下分割线 + 状态栏）。
+   *
+   * <p>JLine 的 AUTO_MENU 补全列表在输入行下方渲染，当用户键入 "/" 时， 补全项会覆盖 separator2 和 footer 行。readLine 返回后 JLine
+   * 不会恢复这些内容， 因此每次读取后都需要显式重绘。
+   */
+  private void restoreLowerArea() {
+    synchronized (terminalLock) {
+      java.io.Writer writer = terminal.writer();
+      try {
+        // 下分割线
+        cursorLineRaw(layout.separator2Row());
+        writer.write(layout.separatorLine());
+        writer.write(ANSI_CLEAR_LINE);
+
+        // 底部状态栏
+        List<String> footerLines = layout.footer().render();
+        for (int i = 0; i < footerLines.size(); i++) {
+          cursorLineRaw(layout.footerRow() + i);
+          writer.write(footerLines.get(i));
+          writer.write(ANSI_CLEAR_LINE);
+        }
+
+        writer.flush();
+      } catch (IOException e) {
+        logger.warn("Failed to restore lower area after JLine completion menu", e);
+      }
+    }
+  }
+
   /** 模型补全列表 */
   private static final List<String> MODEL_CANDIDATES =
       List.of(
@@ -92,6 +135,25 @@ public class ScreenManager implements AutoCloseable {
           "deepseek-v4-reasoning \u2022 deep",
           "gpt-4o-mini",
           "claude-3.5-sonnet");
+
+  /** 斜杠命令补全列表（由 {@link SlashCommand} 提取） */
+  private static final List<String> SLASH_COMMAND_CANDIDATES =
+      List.of(
+          "/new",
+          "/clear",
+          "/context",
+          "/compact",
+          "/feedback",
+          "/exit",
+          "/help",
+          "/prompt",
+          "/history",
+          "/exec",
+          "/model",
+          "/tools",
+          "/routine",
+          "/sub-agent",
+          "/resume");
 
   // ========== 构造 ==========
 
@@ -110,16 +172,20 @@ public class ScreenManager implements AutoCloseable {
     //    如果仍失败，会 fallback 到 dumb terminal（此时 output 会退化，但不会崩溃）。
     this.terminal = createTerminal();
 
-    // 2. 创建模型补全器（供 /model 命令使用）
-    StringsCompleter modelCompleter = new StringsCompleter(MODEL_CANDIDATES);
+    // 2. 创建命令补全器（斜杠命令 + 模型名，按优先级聚合）
+    var allCandidates = new java.util.ArrayList<String>();
+    allCandidates.addAll(SLASH_COMMAND_CANDIDATES);
+    allCandidates.addAll(MODEL_CANDIDATES);
+    StringsCompleter cmdCompleter = new StringsCompleter(allCandidates);
 
     // 3. 创建 LineReader（支持 AUTO_MENU 向上弹窗）
-    //    强制 LIST_MAX=3：补全菜单最多渲染 3 行，超出滚动——从根源锁死渲染边界
-    //    对应 Layout.md §1 视口与边界数学防御策略
+    //    LIST_MAX=5：斜杠命令较多，展示 5 行
+    //    LINE_OFFSET 在每次 readLine 前动态设置为输入行位置，
+    //    使 JLine 感知到下方空间不足（仅 2 行），从而自动将补全列表渲染到输入行上方。
     this.reader =
         LineReaderBuilder.builder()
             .terminal(this.terminal)
-            .completer(modelCompleter)
+            .completer(cmdCompleter)
             .option(LineReader.Option.AUTO_MENU, true)
             .variable(LineReader.LIST_MAX, COMPLETION_LIST_MAX)
             .build();
@@ -299,10 +365,28 @@ public class ScreenManager implements AutoCloseable {
    *
    * <p>使用 JLine 的 {@code terminal.puts(Capability.cursor_address)} 进行跨平台光标定位， 确保 JLine
    * 内部光标状态与终端物理光标位置保持同步（修复 Windows 上光标偏左/偏移问题）。
+   *
+   * <p>仅在 {@link #fullRedraw()}（输入循环开始前）和 {@link #runInputLoop()} 中使用。 后台渲染线程请使用 {@link
+   * #cursorLineRaw(int)} 以避免干扰 JLine 的输入光标追踪。
    */
   private void cursorLine(int row) {
     terminal.puts(org.jline.utils.InfoCmp.Capability.cursor_address, row, 0);
     terminal.flush();
+  }
+
+  /**
+   * 使用原始 ANSI 转义码将光标移动到指定行（0-indexed），列固定为 1。
+   *
+   * <p>不经过 {@code terminal.puts()}，因此不会更新 JLine 的内部光标状态。 专用于 {@link #redrawScrollArea()}
+   * 等从后台渲染线程调用的场景， 避免与主线程中 {@code reader.readLine()} 的 JLine 光标追踪发生冲突。
+   */
+  private void cursorLineRaw(int row) {
+    java.io.Writer writer = terminal.writer();
+    try {
+      writer.write(String.format(ANSI_CURSOR_LINE, row + 1));
+    } catch (IOException e) {
+      // 静默失败，下次重绘会覆盖
+    }
   }
 
   /**
@@ -368,45 +452,71 @@ public class ScreenManager implements AutoCloseable {
   }
 
   /**
-   * 仅重绘上方滚动区（Header + 滚动内容 + 上分割线）。
+   * 重绘所有静态区域（Header + 滚动内容 + 上下分割线 + 底部状态栏）。
    *
-   * <p>不触碰输入行和状态栏，避免闪烁。分割线使用 ANSI 暗色渲染。
+   * <p>不触碰输入行（由 LineReader 管理），避免闪烁。分割线使用 ANSI 暗色渲染。
+   *
+   * <p>底部状态栏（Footer）在此重绘，确保 {@code runInputLoop()} 中的 {@code \033[2K} 或其他清屏操作不会导致状态栏永久消失。
    */
   private void redrawScrollArea() {
-    java.io.Writer writer = terminal.writer();
+    synchronized (terminalLock) {
+      java.io.Writer writer = terminal.writer();
 
-    try {
-      // 1. Header（自带暗色延伸分隔线）
-      List<String> headerLines = layout.header().render();
-      for (int i = 0; i < headerLines.size(); i++) {
-        cursorLine(layout.header().row() + i);
-        writer.write(headerLines.get(i));
-        writer.write(ANSI_CLEAR_LINE);
-      }
+      try {
+        // 使用 cursorLineRaw()（原始 ANSI）而非 cursorLine()（JLine puts），
+        // 避免后台渲染线程干扰 JLine 在 reader.readLine() 中的内部光标状态。
 
-      // 2. 滚动区内容（逐行重绘）
-      List<String> thoughtLines = layout.thought().render();
-      int contentRows = layout.contentHeight();
-      for (int i = 0; i < contentRows; i++) {
-        cursorLine(layout.contentStartRow() + i);
-        if (i < thoughtLines.size()) {
-          writer.write(thoughtLines.get(i));
+        // 1. Header（自带暗色延伸分隔线）
+        List<String> headerLines = layout.header().render();
+        for (int i = 0; i < headerLines.size(); i++) {
+          cursorLineRaw(layout.header().row() + i);
+          writer.write(headerLines.get(i));
+          writer.write(ANSI_CLEAR_LINE);
         }
+
+        // 2. 滚动区内容（逐行重绘）
+        List<String> thoughtLines = layout.thought().render();
+        int contentRows = layout.contentHeight();
+        for (int i = 0; i < contentRows; i++) {
+          cursorLineRaw(layout.contentStartRow() + i);
+          if (i < thoughtLines.size()) {
+            writer.write(thoughtLines.get(i));
+          }
+          writer.write(ANSI_CLEAR_LINE);
+        }
+
+        // 3. 上分割线 (content 下方)
+        cursorLineRaw(layout.separator1Row());
+        writer.write(layout.separatorLine());
         writer.write(ANSI_CLEAR_LINE);
+
+        // 4. 下分割线 (input 下方)
+        cursorLineRaw(layout.separator2Row());
+        writer.write(layout.separatorLine());
+        writer.write(ANSI_CLEAR_LINE);
+
+        // 5. 底部状态栏（ANSI 256 色）
+        List<String> footerLines = layout.footer().render();
+        for (int i = 0; i < footerLines.size(); i++) {
+          cursorLineRaw(layout.footerRow() + i);
+          writer.write(footerLines.get(i));
+          writer.write(ANSI_CLEAR_LINE);
+        }
+
+        writer.flush();
+      } catch (IOException e) {
+        logger.error("Scroll area redraw failed", e);
       }
-
-      // 3. 上分割线 (content 下方)
-      cursorLine(layout.separator1Row());
-      writer.write(layout.separatorLine());
-      writer.write(ANSI_CLEAR_LINE);
-
-      writer.flush();
-    } catch (IOException e) {
-      logger.error("Scroll area redraw failed", e);
     }
   }
 
-  /** 渲染循环：定期检查 contentDirty，增量重绘上方滚动区 */
+  /**
+   * 渲染循环：仅在 contentDirty 时重绘静态区域。
+   *
+   * <p>不在无内容变更时写入终端。任何非主线程的原始 ANSI 写入 （包括 {@link #restoreLowerArea()}）都会与 JLine 的 {@code
+   * readLine()} 竞争终端输出流，导致输入响应延迟或光标位置错乱。 底部区域的恢复仅由主线程在 {@code readLine()} 返回后 通过 {@link
+   * #restoreLowerArea()} 完成。
+   */
   private void renderLoop() {
     while (running.get()) {
       try {
@@ -447,19 +557,28 @@ public class ScreenManager implements AutoCloseable {
         contentDirty.set(false);
       }
 
-      // 使用 JLine 的 terminal.puts() 进行光标定位，而不是原始 ANSI 序列。
-      // cursor_address 需要参数：行（0-indexed），列（0-indexed）
-      // 注意：JLine 的 cursor_address 在 Jansi/Windows 实现中能正确同步内部光标状态
-      terminal.puts(cursorAddr, layout.inputRow(), 0);
-      // 清除从当前光标到屏幕底端的区域（使用 JLine 能力或 ANSI 回退）
-      terminal.writer().write("\033[J");
-      terminal.writer().flush();
+      // 在 terminalLock 下完成光标定位和清行，确保与后台渲染线程的
+      // redrawScrollArea() 不交错，防止物理光标在 readLine 前被意外移动。
+      synchronized (terminalLock) {
+        // 使用 JLine 的 terminal.puts() 进行光标定位，而不是原始 ANSI 序列。
+        // cursor_address 需要参数：行（0-indexed），列（0-indexed）
+        // 注意：JLine 的 cursor_address 在 Jansi/Windows 实现中能正确同步内部光标状态
+        terminal.puts(cursorAddr, layout.inputRow(), 0);
+        // 清除当前行内容（仅限输入行，避免清除下方分割线和状态栏）。
+        // 使用 \033[2K 清除整行而非 \033[J（清除到屏幕底端），
+        // 确保底部状态栏（Footer）和下方分割线不被误擦除。
+        terminal.writer().write("\033[2K");
+        terminal.writer().flush();
+      }
 
       // 使用 JLine LineReader 读取输入（支持 AUTO_MENU 补全弹窗）
-      // 补全菜单在输入行上方自然展开，最多 3 行（LIST_MAX=3），不干扰下方分割线和状态栏
-      // 注意：LINE_OFFSET 在 JLine 4 中用于告知 reader 输入区域相对于屏幕顶端的偏移行数。
-      // 在 Windows/Jansi 上，LINE_OFFSET 可能无法被正确识别，因此我们额外使用 cursor_address
-      // 来确保物理光标位置正确。
+      // LINE_OFFSET 必须设为 layout.inputRow()，JLine 通过此偏移量
+      // 确定输入提示符在屏幕上的绘制起始行。若不设置或设为 0，
+      // JLine 会将输入区绘制到屏幕顶端（row 0），覆盖 Header。
+      // 注意：LINE_OFFSET 影响的是输入区的绘制位置（redisplay），
+      // 与补全菜单位置无关——补全菜单位置由 JLine Display 类使用
+      // 终端实际光标行号计算。光标位于 inputRow（H-3），下方仅 2 行，
+      // 而 LIST_MAX=5 > 2，因此 JLine 会自动将补全列表渲染在输入行上方。
       reader.setVariable(LineReader.LINE_OFFSET, layout.inputRow());
 
       String line;
@@ -474,6 +593,11 @@ public class ScreenManager implements AutoCloseable {
         if (onExit != null) onExit.run();
         break;
       }
+
+      // JLine 补全菜单可能在输入行下方渲染，覆盖了分割线和状态栏。
+      // readLine 返回后，JLine 会擦除补全菜单本身，但不会恢复被覆盖的原始内容。
+      // 这里无条件恢复下分割线和底部状态栏。
+      restoreLowerArea();
 
       if (line == null) break;
 

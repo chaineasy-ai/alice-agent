@@ -71,6 +71,22 @@ updated: "2026-06-26"
 - **TUI `/resume` WAL 目录解析路径不匹配**: `handleResume()` 使用 `Integer.toHexString(sessionId.hashCode() & 0xFFFF)` 哈希子目录，与初始 Agent 构造使用的 `~/.alice/wal/{sessionId}/`（完整 Snowflake ID）不一致，导致旧风格会话无法找到。
   - `AliceTuiLauncher.resolveWalDir(sessionId)`: 新增双策略定位方法 — 优先尝试 `sessionId` 直接路径，未命中时扫描所有子目录（兼容旧 hash 子目录）
   - 操作详情改用 `logger.debug()` 记录，减少终端输出污染
+- **TUI 底部状态栏（Footer）永久消失 — `runInputLoop()` 的 `\033[J` 擦除 + 渲染循环不恢复**:
+  - `ScreenManager.runInputLoop()`: `\033[J`（清屏到终端底端）在每次输入前擦除下方分割线和状态栏。改为 `\033[2K`（仅清除当前行），避免误擦除底部区域
+  - `ScreenManager.redrawScrollArea()`: 新增下分割线和状态栏的重绘逻辑，确保 `contentDirty` 时底部区域与其他静态区域一同刷新
+- **TUI 异步事件竞态（`/resume` 需输入两次才生效）— EventBridge 事件异步投递导致 UI 更新滞后**:
+  - `EventBridge`: 新增 `emitSync()` 方法，在调用线程上同步分发事件到监听器
+  - `EventBridge.onChatMessage()`: 改用 `emitSync()`（同步投递），确保 UI 关键消息在 `runInputLoop()` 下一次 `redrawScrollArea()` 前完成布局更新
+- **TUI 渲染线程 `terminal.puts()` 干扰 JLine 光标追踪 — 输入提示符错行、状态栏覆盖**:
+  - `ScreenManager`: 新增 `cursorLineRaw()` 方法，使用原始 ANSI `\033[row;1H` 定位光标，绕过 `terminal.puts()` 避免后台线程更新 JLine 内部光标状态
+  - `ScreenManager.redrawScrollArea()`: 全部 `cursorLine()` 替换为 `cursorLineRaw()`，消除渲染循环与 `readLine()` 的光标追踪竞态
+- **TUI `/` 补全菜单覆盖底部区域 — JLine AUTO_MENU 列表渲染在输入行下方**:
+  - `ScreenManager`: 新增 `restoreLowerArea()` 方法，在每次 `reader.readLine()` 返回后无条件重绘下分割线和状态栏
+  - `ScreenManager.runInputLoop()`: 每次读取后调用 `restoreLowerArea()`，恢复被 JLine 补全菜单覆盖的内容
+- **TUI 输入重影 / 渲染线程与主线程终端输出竞态 — 物理光标在 `readLine()` 前被后台线程移动**:
+  - `ScreenManager`: 新增 `terminalLock` 对象，`synchronized` 保护所有对 `terminal.writer()` 的写入（`redrawScrollArea()`、`restoreLowerArea()`、`runInputLoop()` 中的光标定位）
+  - `ScreenManager.renderLoop()`: 移除无内容变更时的主动终端写入（`restoreLowerArea()`），仅当 `contentDirty` 时执行 `redrawScrollArea()`
+  - 同步确保 `runInputLoop()` 的 `terminal.puts()` → `readLine()` 序列不被渲染线程的原始 ANSI 写入交错
 
 ## 20260624
 
