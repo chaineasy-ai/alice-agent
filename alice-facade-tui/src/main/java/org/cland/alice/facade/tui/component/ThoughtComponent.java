@@ -182,6 +182,25 @@ public class ThoughtComponent extends Component {
     markDirty();
   }
 
+  /**
+   * 当组件高度变化时调整滚动偏移量。
+   *
+   * <p>终端 resize 变大时，应向上揭示更多之前被隐藏的内容； 终端缩小时，保持底部锚定。 由 {@link TuiLayout#recalculate} 在调用 {@code
+   * setBounds} 后触发。
+   *
+   * @param oldHeight 变化前的高度
+   */
+  public void onResize(int oldHeight) {
+    if (oldHeight <= 0) return;
+    int delta = height - oldHeight;
+    if (delta == 0) return;
+    // 终端变大 (delta > 0)：减少 scrollOffset 以揭示上方隐藏内容
+    // 终端变小 (delta < 0)：增加 scrollOffset 以保持底部锚定
+    int newOffset = scrollOffset - delta;
+    scrollOffset = Math.clamp(newOffset, 0, Math.max(0, logLines.size() - height));
+    markDirty();
+  }
+
   // ========== 滚动 ==========
 
   public void scrollUp() {

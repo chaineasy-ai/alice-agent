@@ -95,8 +95,11 @@ public class TuiLayout {
 
     // 2. 上方滚动区: 直接从 Header 下一行开始
     contentStartRow = currentRow;
+    int oldContentHeight = contentHeight;
     contentHeight = this.terminalHeight - FIXED_ROWS;
     thought.setBounds(contentStartRow, 0, this.terminalWidth, contentHeight);
+    // 终端 resize 后调整滚动偏移：变大时揭示上方隐藏内容，缩小时保持底部锚定
+    thought.onResize(oldContentHeight);
     currentRow = contentStartRow + contentHeight;
 
     // 3. 上分割线 (content 和 input 之间)

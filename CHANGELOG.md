@@ -138,6 +138,15 @@ updated: "2026-06-26"
   - `ScreenManager`: 新增 `terminalLock` 对象，`synchronized` 保护所有对 `terminal.writer()` 的写入（`redrawScrollArea()`、`restoreLowerArea()`、`runInputLoop()` 中的光标定位）
   - `ScreenManager.renderLoop()`: 移除无内容变更时的主动终端写入（`restoreLowerArea()`），仅当 `contentDirty` 时执行 `redrawScrollArea()`
   - 同步确保 `runInputLoop()` 的 `terminal.puts()` → `readLine()` 序列不被渲染线程的原始 ANSI 写入交错
+- **TUI 终端 resize 不触发重绘 — Footer 不在底部 / Input 残留在中间**: 终端 resize 时 WINCH 信号可能因 JLine 4 + JDK 25 信号兼容性问题无法抵达，且 `terminal.getWidth()` 返回缓存值导致轮询无效。同时 resize 未通过 EventBridge 事件系统分发，处理逻辑分散在 WINCH handler 中。
+  - `TuiEvent`: 新增 `TerminalResize(int width, int height)` 事件类型 — resize 成为一等 TUI 事件
+  - `EventBridge`: 新增 `onTerminalResize(w, h)` 方法，使用 `emitSync()` 同步投递（与 `ChatMessage` 同级）
+  - `ScreenManager`: WINCH handler 和轮询均通过 `eventBridge.onTerminalResize()` 分发；新增 `TerminalResize` 事件监听器统一处理 `layout.recalculate()` + `LINE_OFFSET` 更新 + `needsFullClear`/`contentDirty` 标记
+  - `ScreenManager.renderLoop()`: 新增轮询保底检测（每 500ms 比较尺寸，INFO 级日志），作为 WINCH 不可达时的 fallback
+  - `ScreenManager.redrawScrollArea()`: 当 `needsFullClear` 为 true 时先全屏清除再按新布局重绘各区域，杜绝旧位置像素残留
+  - `AliceTuiLauncher`: JLine 终端 provider 顺序从 `exec,ffm,jni,dumb` 改为 `ffm,exec,jni,dumb`（FFM 提供原生 tty 信号处理）
+  - `ThoughtComponent`: 新增 `onResize(oldHeight)` 方法 — 终端变大时减少 `scrollOffset` 揭示上方隐藏内容，变小时保持底部锚定
+  - `TuiLayout.recalculate()`: 调用 `thought.onResize(oldContentHeight)` 调整滚动视口
 
 ## 20260624
 

@@ -150,6 +150,25 @@ public abstract sealed class TuiEvent {
     }
   }
 
+  /** 终端尺寸变更（来自 WINCH 信号或轮询检测） */
+  public static final class TerminalResize extends TuiEvent {
+    private final int width;
+    private final int height;
+
+    public TerminalResize(int width, int height) {
+      this.width = width;
+      this.height = height;
+    }
+
+    public int width() {
+      return width;
+    }
+
+    public int height() {
+      return height;
+    }
+  }
+
   /** Token 使用统计更新 */
   public static final class TokenUpdate extends TuiEvent {
     private final int tokenCount;

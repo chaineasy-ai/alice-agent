@@ -147,6 +147,11 @@ public class EventBridge implements AutoCloseable {
     emit(new TuiEvent.TokenUpdate(tokenCount, status));
   }
 
+  /** 终端尺寸变更（同步发送，需立即更新 UI） */
+  public void onTerminalResize(int width, int height) {
+    emitSync(new TuiEvent.TerminalResize(width, height));
+  }
+
   /** 桥接 EnvEvent */
   public void onEnvEvent(EnvEvent envEvent) {
     emit(new TuiEvent.EnvBridgeEvent(envEvent));

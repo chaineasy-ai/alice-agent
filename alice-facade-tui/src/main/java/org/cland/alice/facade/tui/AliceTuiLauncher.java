@@ -631,12 +631,12 @@ public class AliceTuiLauncher implements AutoCloseable {
     //    在 GraalVM 上 FFM provider 会失败，此时应优先使用 exec provider。
     //
     //    策略：
-    //    - GraalVM + Windows + Git Bash: exec,ffm,jni,dumb
-    //    - GraalVM + Windows (CMD/PowerShell): exec,ffm,jni,dumb
-    //      (FFM 在 GraalVM 上不可用，先试 exec)
-    //    - OpenJDK + Windows + Git Bash: exec,ffm,jni,dumb
+    //    - GraalVM + Windows + Git Bash: ffm,exec,jni,dumb
+    //    - GraalVM + Windows (CMD/PowerShell): ffm,exec,jni,dumb
+    //      (GraalVM 上 FFM 不可用，自动回退到 exec)
+    //    - OpenJDK + Windows + Git Bash: ffm,exec,jni,dumb
     //    - OpenJDK + Windows (CMD/PowerShell): ffm,jni,exec,dumb
-    //    - Linux/macOS: exec,ffm,jni,dumb
+    //    - Linux/macOS: ffm,exec,jni,dumb（FFM 优先，提供原生 tty 信号处理）
     boolean isGraalVm = System.getProperty("java.vm.name", "").toLowerCase().contains("graal");
     String osName = System.getProperty("os.name").toLowerCase();
     String termProgram = System.getenv("TERM_PROGRAM");
@@ -648,8 +648,9 @@ public class AliceTuiLauncher implements AutoCloseable {
       // OpenJDK + Windows 原生控制台（CMD/PowerShell）：FFM provider 优先
       System.setProperty("org.jline.terminal.providers", "ffm,jni,exec,dumb");
     } else {
-      // Git Bash / GraalVM / Linux / macOS：exec provider 优先（pty 环境），FFM 次之
-      System.setProperty("org.jline.terminal.providers", "exec,ffm,jni,dumb");
+      // Git Bash / GraalVM / Linux / macOS：ffm provider 优先（JDK 25 + --enable-native-access），
+      // exec 次之（GraalVM 或 FFM 不可用时回退）。
+      System.setProperty("org.jline.terminal.providers", "ffm,exec,jni,dumb");
     }
 
     // 3. 如果在 Windows 下，启用原生控制台虚拟终端模式

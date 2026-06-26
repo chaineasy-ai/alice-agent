@@ -46,6 +46,14 @@ public class ScreenManager implements AutoCloseable {
   /** 渲染帧间隔（毫秒） */
   private static final long FRAME_INTERVAL_MS = 100;
 
+  /**
+   * 终端尺寸轮询间隔（帧数）。
+   *
+   * <p>每 {@value #SIZE_POLL_INTERVAL_FRAMES} 个渲染帧（即 {@value #SIZE_POLL_INTERVAL_FRAMES} × {@value
+   * #FRAME_INTERVAL_MS} ms） 轮询一次终端尺寸， 作为 WINCH 信号不可用或未抵达时的保底 resize 检测机制。
+   */
+  private static final int SIZE_POLL_INTERVAL_FRAMES = 5; // 500ms
+
   /** 补全菜单最大展示行数 —— v2.3 边界防御：锁定 3 行，溢出自动内部滚动，杜绝底部状态栏被顶出 */
   private static final int COMPLETION_LIST_MAX = 3;
 
@@ -97,6 +105,22 @@ public class ScreenManager implements AutoCloseable {
 
   /** 内容变更标记——渲染线程检测到此标记后重绘上方滚动区 */
   private final AtomicBoolean contentDirty;
+
+  /**
+   * 终端尺寸变更标记。
+   *
+   * <p>当终端 WINCH 触发时置为 {@code true}，渲染线程在下次重绘前会先全屏清除旧内容， 再按新布局绘制所有区域，确保 footer 不会残留在旧位置。
+   */
+  private final AtomicBoolean needsFullClear;
+
+  /** 上次记录的终端宽度，用于轮询检测 resize */
+  private volatile int lastPollWidth;
+
+  /** 上次记录的终端高度，用于轮询检测 resize */
+  private volatile int lastPollHeight;
+
+  /** 渲染帧计数器，用于定时轮询终端尺寸 */
+  private int frameCount;
 
   /**
    * 恢复被 JLine 补全菜单覆盖的底部区域（下分割线 + 状态栏）。
@@ -206,6 +230,10 @@ public class ScreenManager implements AutoCloseable {
     this.inputHistory = new ArrayDeque<>();
     this.historyIndex = 0;
     this.contentDirty = new AtomicBoolean(true);
+    this.needsFullClear = new AtomicBoolean(false);
+    this.lastPollWidth = this.terminal.getWidth();
+    this.lastPollHeight = this.terminal.getHeight();
+    this.frameCount = 0;
 
     // 5. 注册事件监听
     setupEventListeners();
@@ -213,12 +241,15 @@ public class ScreenManager implements AutoCloseable {
     // 6. 注册命令回调
     setupCommandCallbacks();
 
-    // 7. 终端 resize 监听（JLine 3 方式：Signal.WINCH）
+    // 7. 终端 resize 监听（JLine Signal.WINCH → EventBridge 事件系统）
     this.terminal.handle(
         Terminal.Signal.WINCH,
         signal -> {
-          layout.recalculate(this.terminal.getWidth(), this.terminal.getHeight());
-          contentDirty.set(true);
+          int w = terminal.getWidth();
+          int h = terminal.getHeight();
+          logger.debug("WINCH signal received: {}x{}", w, h);
+          // 通过 EventBridge 事件系统统一分发 resize 事件
+          eventBridge.onTerminalResize(w, h);
         });
 
     // 初始布局计算
@@ -318,6 +349,17 @@ public class ScreenManager implements AutoCloseable {
               contentDirty.set(true);
             }
             case TuiEvent.TokenUpdate e -> {
+              contentDirty.set(true);
+            }
+            case TuiEvent.TerminalResize e -> {
+              int w = e.width();
+              int h = e.height();
+              logger.info("TerminalResize event: {}x{}", w, h);
+              layout.recalculate(w, h);
+              reader.setVariable(LineReader.LINE_OFFSET, layout.inputRow());
+              lastPollWidth = w;
+              lastPollHeight = h;
+              needsFullClear.set(true);
               contentDirty.set(true);
             }
             default -> {}
@@ -464,6 +506,12 @@ public class ScreenManager implements AutoCloseable {
       java.io.Writer writer = terminal.writer();
 
       try {
+        // 终端尺寸变更后必须先全屏清除旧内容，否则旧位置的 header/footer
+        // 残留像素会与新布局位置重叠，导致 footer 不在底部等视觉错乱。
+        if (needsFullClear.compareAndSet(true, false)) {
+          writer.write(ANSI_CLEAR_SCREEN);
+        }
+
         // 使用 cursorLineRaw()（原始 ANSI）而非 cursorLine()（JLine puts），
         // 避免后台渲染线程干扰 JLine 在 reader.readLine() 中的内部光标状态。
 
@@ -521,9 +569,24 @@ public class ScreenManager implements AutoCloseable {
   private void renderLoop() {
     while (running.get()) {
       try {
+        // 1. 常规内容脏标记检查
         if (contentDirty.compareAndSet(true, false)) {
           redrawScrollArea();
         }
+
+        // 2. 轮询终端尺寸（保底 resize 检测，WINCH 信号可能在某些 JVM/JLine 版本/平台上不可靠）
+        frameCount++;
+        if (frameCount % SIZE_POLL_INTERVAL_FRAMES == 0) {
+          int w = terminal.getWidth();
+          int h = terminal.getHeight();
+          if (w != lastPollWidth || h != lastPollHeight) {
+            logger.info(
+                "Size poll detected resize: {}x{} -> {}x{}", lastPollWidth, lastPollHeight, w, h);
+            // 通过 EventBridge 事件系统统一分发 resize 事件
+            eventBridge.onTerminalResize(w, h);
+          }
+        }
+
         Thread.sleep(FRAME_INTERVAL_MS);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
@@ -552,7 +615,9 @@ public class ScreenManager implements AutoCloseable {
         org.jline.utils.InfoCmp.Capability.cursor_address;
 
     while (running.get()) {
-      // 确保上方滚动区是最新状态
+      // 终端尺寸变更后 redrawScrollArea() 内部会先全屏清除再重绘所有静态区域。
+      // 输入行由 JLine reader 管理：WINCH handler 已更新 LINE_OFFSET，
+      // reader 内部会在下次 redisplay 时将其定位到正确的新行号。
       if (contentDirty.get()) {
         redrawScrollArea();
         contentDirty.set(false);
