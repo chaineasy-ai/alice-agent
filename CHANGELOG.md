@@ -27,6 +27,17 @@ updated: "2026-06-26"
 
 ### BREAKING
 
+- **TUI 三层布局 v2.3 净化重构 (`alice-facade-tui`)**: 基于 `docs/alice-facade-tui/Layout.md` v2.3 全面重写 TUI 渲染管线，落地等宽实体背景色块、零噪音输入视口、底部 TAO 实体仪表盘。
+  - **`TaoTag` 色块枚举 (新增)**: `THOUGHT`(暗灰底 239)、`ACTION`(橙黄底 214)、`OBSERVE`(绿底 35) — ANSI 256 色背景全填充矩形色块，替代传统 `[T Thought]` 文本前缀
+  - **`HeaderComponent` 净化**: 移除 `sessionLabel` 字段/`setSessionLabel()` — 删除会话 ID 冗余文本；分割线动态自适应终端宽度延伸至视口最右侧；版本标识更新至 v0.60.0
+  - **`ThoughtComponent` 色块化**: `addThought()`/`addAction()`/`addObservation()` 输出 TaoTag ANSI 背景色块；`addUserMessage()`/`addSystemMessage()`/`addAgentMessage()` 移除了 `User:`/`System:`/`Agent:` 角色文本前缀，直接展示内容
+  - **`InputComponent` 零提示符**: 默认 `prompt` 从 `" > "` 变更为 `""`(空字符串)，移除 `>` / `$` 传统提示符噪音
+  - **`FooterComponent` 实体仪表盘**: 从前景色(`38;5;XXXm`)切换为背景色块(`48;5;XXXm`) — 费用(橙黄 208)、速率(绿 35)、模型(暗灰 239) 三个物理隔离独立色块；工具信息使用暗色 `── 🔌` 文本前缀
+  - **`ScreenManager` 边界防御**: `COMPLETION_LIST_MAX` 从 5 降至 3(Layout.md §1 补全菜单最大 3 行，溢出自动内部滚动，杜绝底部状态栏被顶出)
+  - **`StartThinking` 重复内容消除**: 用户输入已通过 `addUserMessage()` 展示，`StartThinking` 事件不再添加 `"思考中:"` 前缀的重复行，仅触发渲染刷新
+  - **`resolveLines()` 增强**: `addUserMessage()`/`addSystemMessage()`/`addAgentMessage()` 使用新 `resolveLines()` 方法，处理 `\n` 转义序列 + 受损 `n` 启发式修复(句末标点后的裸 `n`/小写字母后的 `n+大写字母`/结构字符前的 `n`)为实际换行
+  - **`[FINISH]` 协议标记隐藏**: `addAgentMessage()` 自动正则剥除 `\[FINISH\]` 内部协议标记；标记剥除后若无实际内容则不添加空行
+
 - **WAL 包从 `alice-memory-vault` 迁移至 `alice-core-agent`**: `org.cland.alice.memory.wal` 包整体移至 `org.cland.alice.core.agent.wal`，解决 WAL 作为核心生命周期组件却位于外围模块的架构倒挂问题。
   - 迁移 12 个 WAL 源文件（`WalSession`/`WalStore`/`FileWalStore`/`InMemoryWalStore`/`WalAppender`/`WalCompactor`/`Checkpoint`/`CheckpointManager`/`RawMessage`/`ToolCall`/`RecoveryEngine`/`PromptMelter`）及 10 个 Spock 测试规范
   - `alice-core-agent` 模块新增 `exports org.cland.alice.core.agent.wal`，移除 `requires alice.agent.alice.memory.vault.main`

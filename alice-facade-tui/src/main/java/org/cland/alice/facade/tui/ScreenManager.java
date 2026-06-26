@@ -46,8 +46,8 @@ public class ScreenManager implements AutoCloseable {
   /** 渲染帧间隔（毫秒） */
   private static final long FRAME_INTERVAL_MS = 100;
 
-  /** 补全菜单最大展示行数 —— 斜杠命令较多，设为 5 行 */
-  private static final int COMPLETION_LIST_MAX = 5;
+  /** 补全菜单最大展示行数 —— v2.3 边界防御：锁定 3 行，溢出自动内部滚动，杜绝底部状态栏被顶出 */
+  private static final int COMPLETION_LIST_MAX = 3;
 
   /** ANSI 转义序列（光标定位使用 terminal.puts，清屏操作使用原始 ANSI） */
   private static final String ANSI_CLEAR_SCREEN = "\033[2J\033[H";
@@ -275,7 +275,8 @@ public class ScreenManager implements AutoCloseable {
         event -> {
           switch (event) {
             case TuiEvent.StartThinking e -> {
-              layout.thought().addAgentMessage("\u601D\u8003\u4E2D: " + e.prompt());
+              // User input already displayed via addUserMessage in runInputLoop();
+              // No duplicate content needed — just trigger re-render.
               contentDirty.set(true);
             }
             case TuiEvent.NewThought e -> {

@@ -22,7 +22,8 @@ public class InputComponent extends Component {
     super("Input");
     this.inputBuffer = new StringBuilder();
     this.cursorPos = 0;
-    this.prompt = " > ";
+    // v2.3 零提示符净化设计：移除 > / $ 传统提示符，仅保留空白输入区
+    this.prompt = "";
   }
 
   public void setPrompt(String prompt) {
@@ -124,8 +125,7 @@ public class InputComponent extends Component {
     }
     clearDirty();
 
-    // 格式： > /_module_command_here
-    // prompt 左对齐，输入文本紧随其后
+    // v2.3 零噪音输入行：移除提示符，仅保留光标静默闪烁的纯净输入区域
     String display = prompt + inputBuffer.toString();
 
     StringBuilder sb = new StringBuilder(width);

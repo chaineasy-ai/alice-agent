@@ -2,7 +2,7 @@
  * Unit tests for TUI layout management and UI components (JLine 3 based).
  *
  * Covers: Component, TuiLayout, HeaderComponent, FooterComponent,
- *         InputComponent, ThoughtComponent
+ *         InputComponent, ThoughtComponent, TaoTag
  */
 package org.cland.alice.facade.tui
 
@@ -11,7 +11,7 @@ import spock.lang.Title
 import org.cland.alice.facade.tui.component.*
 import org.cland.alice.facade.tui.layout.TuiLayout
 
-@Title("TUI Layout and Component Unit Tests")
+@Title("TUI Layout and Component Unit Tests (v2.3)")
 class LayoutComponentSpec extends Specification {
 
     static class TestComponent extends Component {
@@ -29,7 +29,6 @@ class LayoutComponentSpec extends Specification {
 
     static String stripAnsi(String s) {
         // Strip ANSI escape sequences: ESC[...m
-        // Using explicit character matching to avoid regex engine issues
         def ESC = (char)27 as String
         return s.replaceAll(ESC + '\\[\\d+(;\\d+)*m', "")
     }
@@ -294,15 +293,14 @@ class LayoutComponentSpec extends Specification {
     }
 
     // ===================================================================
-    // HeaderComponent
+    // HeaderComponent (v2.3: 无噪细线，删除 session 标签)
     // ===================================================================
 
-    def "HeaderComponent default label and sessionLabel"() {
+    def "HeaderComponent default label"() {
         given: "a HeaderComponent"
         def header = new HeaderComponent()
         expect: "default values"
-        header.label() == "alice-agent v0.1.0"
-        header.sessionLabel() == ""
+        header.label() == "alice-agent v0.60.0"
     }
 
     def "HeaderComponent setLabel updates label and marks dirty"() {
@@ -313,17 +311,6 @@ class LayoutComponentSpec extends Specification {
         header.setLabel("my-custom-agent v2.0")
         then: "label is updated and dirty"
         header.label() == "my-custom-agent v2.0"
-        header.isDirty()
-    }
-
-    def "HeaderComponent setSessionLabel updates session and marks dirty"() {
-        given: "a HeaderComponent"
-        def header = new HeaderComponent()
-        header.clearDirty()
-        when: "setting session label"
-        header.setSessionLabel("[Session: C-Land Pay]")
-        then: "session label is updated and dirty"
-        header.sessionLabel() == "[Session: C-Land Pay]"
         header.isDirty()
     }
 
@@ -351,22 +338,10 @@ class LayoutComponentSpec extends Specification {
         then: "produces exactly one line"
         lines.size() == 1
         and: "line contains the label"
-        lines[0].contains("alice-agent v0.1.0")
+        lines[0].contains("alice-agent v0.60.0")
         and: "line contains robot emoji"
         lines[0].contains("\uD83E\uDD16")
         and: "line is exactly 60 visible chars wide"
-        stripAnsi(lines[0]).length() == 60
-    }
-
-    def "HeaderComponent render includes session label when set"() {
-        given: "a HeaderComponent with session label"
-        def header = new HeaderComponent()
-        header.setBounds(0, 0, 60, 1)
-        header.setSessionLabel("[Session: test-session]")
-        when: "rendering"
-        def lines = header.render()
-        then: "line contains session label"
-        lines[0].contains("[Session: test-session]")
         stripAnsi(lines[0]).length() == 60
     }
 
@@ -387,7 +362,6 @@ class LayoutComponentSpec extends Specification {
         given: "a HeaderComponent with very narrow width"
         def header = new HeaderComponent()
         header.setBounds(0, 0, 15, 1)
-        header.setSessionLabel("[Sess]")
         when: "rendering"
         def lines = header.render()
         then: "produces a non-empty single line"
@@ -407,7 +381,7 @@ class LayoutComponentSpec extends Specification {
     }
 
     // ===================================================================
-    // FooterComponent
+    // FooterComponent (v2.3: 实体色块仪表盘)
     // ===================================================================
 
     def "FooterComponent default values"() {
@@ -452,7 +426,7 @@ class LayoutComponentSpec extends Specification {
         f3.render().isEmpty()
     }
 
-    def "FooterComponent render produces single line with ANSI colors"() {
+    def "FooterComponent render produces single line with ANSI background color blocks"() {
         given: "a FooterComponent"
         def footer = new FooterComponent()
         footer.setBounds(0, 0, 80, 1)
@@ -469,17 +443,16 @@ class LayoutComponentSpec extends Specification {
         lines[0].contains('125 t/s')
         lines[0].contains("gpt-4o-mini")
         lines[0].contains("shell")
-        and: "contains ANSI color codes"
-        lines[0].contains("\u001B[38;5;214m")
-        lines[0].contains("\u001B[38;5;75m")
-        lines[0].contains("\u001B[38;5;118m")
-        lines[0].contains("\u001B[38;5;141m")
+        and: "contains background ANSI color codes (48;5 = background)"
+        lines[0].contains("\u001B[48;5;208m") // cost block: orange bg
+        lines[0].contains("\u001B[48;5;35m")  // speed block: green bg
+        lines[0].contains("\u001B[48;5;239m") // model block: dark gray bg
+        and: "contains dim ANSI for tool prefix"
         lines[0].contains("\u001B[38;5;242m")
-        lines[0].contains("\u001B[0m")
         and: "plain text fills exactly width"
         stripAnsi(lines[0]).length() == 80
         and: "contains separator characters"
-        lines[0].contains("\u2502")
+        lines[0].contains("\u2500")
     }
 
     def "FooterComponent render truncates preserving ANSI codes"() {
@@ -498,16 +471,16 @@ class LayoutComponentSpec extends Specification {
     }
 
     // ===================================================================
-    // InputComponent
+    // InputComponent (v2.3: 零提示符净化设计)
     // ===================================================================
 
     def "InputComponent initial state"() {
         given: "an InputComponent"
         def input = new InputComponent()
-        expect: "empty buffer"
+        expect: "empty buffer and empty prompt (v2.3 zero-noise)"
         input.getText() == ""
         input.cursorPos() == 0
-        input.prompt() == " > "
+        input.prompt() == ""
     }
 
     def "InputComponent insertChar appends and moves cursor"() {
@@ -664,7 +637,7 @@ class LayoutComponentSpec extends Specification {
         input.render().isEmpty()
     }
 
-    def "InputComponent render produces single line with prompt and text"() {
+    def "InputComponent render produces single line with input text (v2.3: no prompt prefix)"() {
         given: "an InputComponent"
         def input = new InputComponent()
         input.setBounds(0, 0, 40, 1)
@@ -673,9 +646,7 @@ class LayoutComponentSpec extends Specification {
         def lines = input.render()
         then: "produces single line"
         lines.size() == 1
-        and: "line starts with prompt"
-        lines[0].startsWith(" > ")
-        and: "line contains input text"
+        and: "line contains input text (no prompt prefix in v2.3)"
         lines[0].contains("ls -la")
         and: "line is exactly width"
         lines[0].length() == 40
@@ -690,8 +661,8 @@ class LayoutComponentSpec extends Specification {
         def lines = input.render()
         then: "line is exactly 30 characters"
         lines[0].length() == 30
-        and: "ends with spaces"
-        lines[0].endsWith(" " * (30 - 5 - 2))
+        and: "ends with spaces (v2.3: empty prompt, so padding = 30 - 2 = 28)"
+        lines[0].endsWith(" " * 28)
     }
 
     def "InputComponent render truncates text when longer than width"() {
@@ -708,7 +679,7 @@ class LayoutComponentSpec extends Specification {
     }
 
     // ===================================================================
-    // ThoughtComponent
+    // ThoughtComponent (v2.3: TAO 色块标签)
     // ===================================================================
 
     def "ThoughtComponent initial state renders empty for zero-sized"() {
@@ -752,34 +723,52 @@ class LayoutComponentSpec extends Specification {
         lines[2] == "line 5"
     }
 
-    def "ThoughtComponent addThought prepends [T Thought] prefix"() {
+    def "ThoughtComponent addThought renders TaoTag color block with content"() {
         given: "a ThoughtComponent with bounds"
         def thought = new ThoughtComponent()
         thought.setBounds(0, 0, 60, 3)
         when: "adding a thought"
         thought.addThought("analyzing data", 1)
-        then: "line has thought prefix"
-        thought.render()[0] == "[T Thought]: analyzing data"
+        then: "line has TaoTag THOUGHT ANSI background and content"
+        def line = thought.render()[0]
+        line.contains("\u001B[48;5;239m") // dark gray bg
+        line.contains("\u001B[37m")       // white fg
+        line.contains(" THOUGHT ")
+        line.contains("analyzing data")
+        and: "plain text shows indent + tag block + content (tag has built-in leading/trailing spaces)"
+        stripAnsi(line) == "   THOUGHT   analyzing data"
     }
 
-    def "ThoughtComponent addAction prepends [A Action] prefix"() {
+    def "ThoughtComponent addAction renders TaoTag color block with content"() {
         given: "a ThoughtComponent with bounds"
         def thought = new ThoughtComponent()
         thought.setBounds(0, 0, 60, 3)
         when: "adding an action"
         thought.addAction("execute search")
-        then: "line has action prefix"
-        thought.render()[0] == "[A Action ]: execute search"
+        then: "line has TaoTag ACTION ANSI background and content"
+        def line = thought.render()[0]
+        line.contains("\u001B[48;5;214m") // orange bg
+        line.contains("\u001B[30m")       // black fg
+        line.contains(" ACTION  ")
+        line.contains("execute search")
+        and: "plain text shows indent + tag block + content (ACTION tag has 2 trailing spaces)"
+        stripAnsi(line) == "   ACTION    execute search"
     }
 
-    def "ThoughtComponent addObservation prepends [O Observe] prefix"() {
+    def "ThoughtComponent addObservation renders TaoTag color block with content"() {
         given: "a ThoughtComponent with bounds"
         def thought = new ThoughtComponent()
         thought.setBounds(0, 0, 60, 3)
         when: "adding observation"
         thought.addObservation("result found")
-        then: "line has observation prefix"
-        thought.render()[0] == "[O Observe]: result found"
+        then: "line has TaoTag OBSERVE ANSI background and content"
+        def line = thought.render()[0]
+        line.contains("\u001B[48;5;35m")  // green bg
+        line.contains("\u001B[30m")       // black fg
+        line.contains(" OBSERVE ")
+        line.contains("result found")
+        and: "plain text shows indent + tag block + content (OBSERVE tag has 1 trailing space)"
+        stripAnsi(line) == "   OBSERVE   result found"
     }
 
     def "ThoughtComponent addUserMessage splits multi-line content"() {
@@ -788,10 +777,10 @@ class LayoutComponentSpec extends Specification {
         thought.setBounds(0, 0, 60, 5)
         when: "adding multi-line user message"
         thought.addUserMessage("hello\nworld")
-        then: "each line gets [User] prefix"
+        then: "each line has no role prefix (v2.3: pure content)"
         def lines = thought.render()
-        lines[0] == "[User]: hello"
-        lines[1] == "[User]: world"
+        lines[0] == "  hello"
+        lines[1] == "  world"
     }
 
     def "ThoughtComponent addSystemMessage splits multi-line content"() {
@@ -800,9 +789,9 @@ class LayoutComponentSpec extends Specification {
         thought.setBounds(0, 0, 60, 5)
         when: "adding system message"
         thought.addSystemMessage("system\nmessage")
-        then: "each line gets [System] prefix"
-        thought.render()[0] == "[System]: system"
-        thought.render()[1] == "[System]: message"
+        then: "each line has no role prefix (v2.3: pure content)"
+        thought.render()[0] == "  system"
+        thought.render()[1] == "  message"
     }
 
     def "ThoughtComponent addAgentMessage splits multi-line content"() {
@@ -811,9 +800,9 @@ class LayoutComponentSpec extends Specification {
         thought.setBounds(0, 0, 60, 5)
         when: "adding agent message"
         thought.addAgentMessage("agent\nresponse")
-        then: "each line gets [Agent] prefix"
-        thought.render()[0] == "[Agent]: agent"
-        thought.render()[1] == "[Agent]: response"
+        then: "each line has no role prefix (v2.3: pure content)"
+        thought.render()[0] == "  agent"
+        thought.render()[1] == "  response"
     }
 
     def "ThoughtComponent null messages are safely ignored"() {
@@ -830,11 +819,11 @@ class LayoutComponentSpec extends Specification {
         thought.addAgentMessage(null)
         then: "no exception"
         noExceptionThrown()
-        // appendLine ignores null; addThought/addAction/addObservation
-        // concatenate null as "null" string; addUser/System/AgentMessage
-        // check for null content so they skip
-        // Result: some lines added with "null" text
-        !thought.render().every { it.isEmpty() }
+        // appendLine skips null; addUser/System/AgentMessage check for null content so skip;
+        // addThought/addAction/addObservation concat null as "null" string
+        // Result: 3 lines with "null" text in TaoTag format
+        def lines = thought.render()
+        lines.size() == 3
     }
 
     def "ThoughtComponent clear removes all content"() {
@@ -932,12 +921,45 @@ class LayoutComponentSpec extends Specification {
         when: "appending more than MAX_LINES entries"
         1005.times { thought.appendLine("line $it") }
         then: "at most 1000 lines are stored"
-        // render gives height lines; but internal list is capped at 1000
         def lines = thought.render()
         lines.size() == 5
-        // First stored line should be "line 5" (0-indexed) after removing first 5
         // Auto-scroll to bottom -> shows last 5: "line 1000" to "line 1004"
         lines[0] == "line 1000"
         lines[4] == "line 1004"
+    }
+
+    // ===================================================================
+    // TaoTag (v2.3 新增)
+    // ===================================================================
+
+    def "TaoTag enum values have correct ANSI colors and text"() {
+        expect: "THOUGHT: dark gray bg, white fg"
+        TaoTag.THOUGHT.render().contains("\u001B[48;5;239m")
+        TaoTag.THOUGHT.render().contains("\u001B[37m")
+        TaoTag.THOUGHT.plainText() == " THOUGHT "
+        and: "ACTION: orange bg, black fg"
+        TaoTag.ACTION.render().contains("\u001B[48;5;214m")
+        TaoTag.ACTION.render().contains("\u001B[30m")
+        TaoTag.ACTION.plainText() == " ACTION  "
+        and: "OBSERVE: green bg, black fg"
+        TaoTag.OBSERVE.render().contains("\u001B[48;5;35m")
+        TaoTag.OBSERVE.render().contains("\u001B[30m")
+        TaoTag.OBSERVE.plainText() == " OBSERVE "
+    }
+
+    def "TaoTag render produces ANSI wrapped text with reset"() {
+        expect: "render starts with ANSI codes and ends with reset"
+        def rendered = TaoTag.THOUGHT.render()
+        rendered.startsWith("\u001B[48;5;239m")
+        rendered.endsWith("\u001B[0m")
+        and: "plain text has correct width"
+        stripAnsi(rendered) == " THOUGHT "
+    }
+
+    def "TaoTag all tags are equal width (9 chars)"() {
+        expect: "all tag plain texts are exactly 9 chars wide"
+        TaoTag.THOUGHT.plainText().length() == 9
+        TaoTag.ACTION.plainText().length() == 9
+        TaoTag.OBSERVE.plainText().length() == 9
     }
 }

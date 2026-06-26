@@ -3,26 +3,44 @@ package org.cland.alice.facade.tui.component;
 import java.util.List;
 
 /**
- * 底部计费状态栏组件（单行）。
+ * 底部状态栏组件（单行）— TAO 实体仪表盘（v2.3）。
  *
- * <p>对应 Layout.md §7.1 中最底行的全局数据仪表盘，采用 ANSI 256 色分级渲染：
+ * <p>对应 Layout.md §7.1 最底行，采用 ANSI 256 色背景实体色块渲染：
  *
  * <pre>
- * \u001B[38;5;214m💰 $0.041\u001B[0m \u001B[38;5;242m│\u001B[0m \u001B[38;5;75m📊 125 t/s\u001B[0m ...
+ *   \u001B[48;5;208m\u001B[30m  💰 $0.041  \u001B[0m  \u001B[48;5;35m\u001B[30m  📊 125 t/s  \u001B[0m  \u001B[48;5;239m\u001B[37m  🧠 gpt-4o  \u001B[0m ── 🔌 Active: cland-pay-mcp
  * </pre>
  *
- * <p>全程固定在页面最底端，通过 ANSI 定位精确刷新，永不偏移。
+ * <p>v2.3 进化点：
+ *
+ * <ul>
+ *   <li>指标数据全部纯色背景包裹，形成物理隔离独立色块
+ *   <li>废弃拼接符号和冗余提示文本
+ *   <li>底部状态栏物理固定，终端 WINCH 缩放自适应重绘定位
+ * </ul>
  */
 public class FooterComponent extends Component {
 
-  /** ANSI 256 色常量 */
+  /** ANSI 重置码 */
   private static final String ANSI_RESET = "\u001B[0m";
 
-  private static final String ANSI_DIM = "\u001B[38;5;242m"; // 暗色分隔符
-  private static final String ANSI_COST = "\u001B[38;5;214m"; // 橙色 — 费用
-  private static final String ANSI_SPEED = "\u001B[38;5;75m"; // 蓝色 — 速率
-  private static final String ANSI_MODEL = "\u001B[38;5;118m"; // 绿色 — 模型
-  private static final String ANSI_TOOL = "\u001B[38;5;141m"; // 紫色 — 工具
+  /** 色块前缀：费用 — 橙黄底(208) 黑色文字(30) */
+  private static final String BLOCK_COST_PRE = "\u001B[48;5;208m\u001B[30m  ";
+
+  /** 色块前缀：速率 — 绿色底(35) 黑色文字(30) */
+  private static final String BLOCK_SPEED_PRE = "\u001B[48;5;35m\u001B[30m  ";
+
+  /** 色块前缀：模型 — 暗灰底(239) 白色文字(37) */
+  private static final String BLOCK_MODEL_PRE = "\u001B[48;5;239m\u001B[37m  ";
+
+  /** 色块后缀：每个色块闭合前留 2 空格内边距 */
+  private static final String BLOCK_SUF = "  \u001B[0m";
+
+  /** 色块之间的分隔：2 空格 */
+  private static final String BLOCK_SEP = "  ";
+
+  /** 工具信息前缀：暗色双线 + 图标 */
+  private static final String TOOL_PREFIX = "\u001B[38;5;242m\u2500\u2500\u001B[0m \uD83D\uDD0C ";
 
   private String costInfo;
   private String speedInfo;
@@ -84,49 +102,34 @@ public class FooterComponent extends Component {
     }
     clearDirty();
 
-    // 格式（含 ANSI 色码）：
-    //   \033[38;5;214m💰 $0.041\033[0m \033[38;5;242m│\033[0m \033[38;5;75m📊 125 t/s\033[0m ...
+    // v2.3 实体色块仪表盘格式：
+    //   [208:💰 $0.041]  [35:📊 125 t/s]  [239:🧠 gpt-4o] ── 🔌 Active: cland-pay-mcp
+    // 每个色块为 48;5;XXX 背景色 + 30/37 前景色 + 内容 + 重置
     String text =
-        ANSI_COST
+        BLOCK_COST_PRE
             + "\uD83D\uDCB0 "
             + costInfo
-            + ANSI_RESET
-            + " "
-            + ANSI_DIM
-            + "\u2502"
-            + ANSI_RESET
-            + " "
-            + ANSI_SPEED
+            + BLOCK_SUF
+            + BLOCK_SEP
+            + BLOCK_SPEED_PRE
             + "\uD83D\uDCCA "
             + speedInfo
-            + ANSI_RESET
-            + " "
-            + ANSI_DIM
-            + "\u2502"
-            + ANSI_RESET
-            + " "
-            + ANSI_MODEL
+            + BLOCK_SUF
+            + BLOCK_SEP
+            + BLOCK_MODEL_PRE
             + "\uD83E\uDDE0 "
             + modelInfo
-            + ANSI_RESET
-            + " "
-            + ANSI_DIM
-            + "\u2502"
-            + ANSI_RESET
-            + " "
-            + ANSI_TOOL
-            + "\uD83D\uDD0C "
-            + toolInfo
-            + ANSI_RESET
-            + " ";
+            + BLOCK_SUF
+            + BLOCK_SEP
+            + TOOL_PREFIX
+            + toolInfo;
 
     // 去除 ANSI 码后计算实际显示宽度
     String plain = stripAnsi(text);
-    StringBuilder sb = new StringBuilder(width + 64); // extra for ANSI codes
+    StringBuilder sb = new StringBuilder(width + 80); // extra for ANSI codes
 
     if (plain.length() > width) {
-      // 可见字符超出宽度：保留左侧可见字符 + ANSI 码
-      // 遍历 text，逐字符追加直到收集到 width 个可见字符
+      // 可见字符超出宽度：逐字符采集，保留 ANSI 码
       int visibleCount = 0;
       boolean inAnsi = false;
       for (int i = 0; i < text.length() && visibleCount < width; i++) {
@@ -144,7 +147,6 @@ public class FooterComponent extends Component {
       }
     } else {
       sb.append(text);
-      // 用空格填充至 width
       int padLen = width - plain.length();
       if (padLen > 0) {
         sb.append(" ".repeat(padLen));
