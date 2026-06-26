@@ -106,11 +106,11 @@ public class ScreenManager implements AutoCloseable {
   /** 内容变更标记——渲染线程检测到此标记后重绘上方滚动区 */
   private final AtomicBoolean contentDirty;
 
-  /** 输入活跃标记——主线程在 readLine 中时置为 true，阻止渲染线程竞争写入终端 */
+  /**
+   * 输入活跃标记——主线程在 readLine 中时置为 true。 不再阻止渲染线程重绘（见 renderLoop），因为 redrawScrollArea 只操作 输入行上方的滚动区，不会与
+   * JLine readLine 产生终端输出竞争。
+   */
   private final AtomicBoolean inputActive;
-
-  /** 输入期间积压的重绘标记——inputActive 期间 contentDirty 被设置时记录，输入结束后处理 */
-  private final AtomicBoolean pendingRedraw;
 
   /**
    * 终端尺寸变更标记。
@@ -229,7 +229,6 @@ public class ScreenManager implements AutoCloseable {
     this.historyIndex = 0;
     this.contentDirty = new AtomicBoolean(true);
     this.inputActive = new AtomicBoolean(false);
-    this.pendingRedraw = new AtomicBoolean(false);
     this.needsFullClear = new AtomicBoolean(false);
     this.lastPollWidth = this.terminal.getWidth();
     this.lastPollHeight = this.terminal.getHeight();
@@ -575,14 +574,10 @@ public class ScreenManager implements AutoCloseable {
     while (running.get()) {
       try {
         // 1. 常规内容脏标记检查
-        if (inputActive.get()) {
-          // 输入活跃期间不写入终端，避免与 JLine 的 readLine() 竞争输出流。
-          // 积压的重绘由主线程在 readLine() 返回后处理。
-          if (contentDirty.get()) {
-            pendingRedraw.set(true);
-            contentDirty.set(false);
-          }
-        } else if (contentDirty.compareAndSet(true, false)) {
+        // 即使 inputActive=true 也进行重绘：redrawScrollArea() 只操作输入行上方的
+        // 滚动区（Header + Thought + 分割线），不触碰 JLine 管理的输入行，因此
+        // 不会与 readLine() 的终端输出产生竞争。这让 Agent 响应到达后能实时刷新。
+        if (contentDirty.compareAndSet(true, false)) {
           redrawScrollArea();
         }
 
@@ -617,10 +612,9 @@ public class ScreenManager implements AutoCloseable {
    *
    * <p>对应 Layout.md §1 视口与边界数学防御策略 + §7.2 Inline Completion Mode。
    *
-   * <p>首次 readLine 初始化：JLine 的显示层在首次 readLine() 调用时初始化。
-   * 调用 terminal.getHeight() 发送终端尺寸查询（终端 I/O 同步点），
-   * 确保终端完成处理所有先前输出；raw ANSI 定位光标后 readLine 启动时，
-   * 光标已在正确行。LINE_OFFSET=2 保留 input 下方 2 行不被 JLine 覆盖。
+   * <p>首次 readLine 初始化：JLine 的显示层在首次 readLine() 调用时初始化。 调用 terminal.getHeight() 发送终端尺寸查询（终端 I/O
+   * 同步点）， 确保终端完成处理所有先前输出；raw ANSI 定位光标后 readLine 启动时， 光标已在正确行。LINE_OFFSET=2 保留 input 下方 2 行不被 JLine
+   * 覆盖。
    */
   public void runInputLoop() {
     while (running.get()) {
@@ -656,13 +650,6 @@ public class ScreenManager implements AutoCloseable {
         break;
       } finally {
         inputActive.set(false);
-      }
-
-      // 处理输入期间积压的 deferred 重绘
-      if (pendingRedraw.compareAndSet(true, false)) {
-        contentDirty.set(true);
-        redrawScrollArea();
-        contentDirty.set(false);
       }
 
       // JLine 补全菜单可能在输入行上方渲染，覆盖了分割线和状态栏。

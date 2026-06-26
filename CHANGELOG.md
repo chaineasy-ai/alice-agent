@@ -18,7 +18,7 @@ scope:
   - "alice-facade-tui"
   - "alice-facade-web"
 status: "active"
-updated: "2026-06-26"
+updated: "2026-06-27"
 ---
 
 # Changelog
@@ -181,11 +181,14 @@ updated: "2026-06-26"
   - `ThoughtComponent`: 新增 `onResize(oldHeight)` 方法 — 终端变大时减少 `scrollOffset` 揭示上方隐藏内容，变小时保持底部锚定
   - `TuiLayout.recalculate()`: 调用 `thought.onResize(oldContentHeight)` 调整滚动视口
 
-## 20260624
+- **Micro-ReAct 陈旧状态泄漏导致无限工具循环 (`alice-core-agent`)**: 当 LLM 在一次响应中同时返回文本和 `tool_calls` 时，`dispatchToolCall` 排队的后续 LLM 调用继承了上一轮的 `__tool_calls`、`__tool_call_index`、`__finish_reason` 等上下文，导致陈旧工具被重新调度，Micro-ReAct 陷入无限循环直至断路器触发。
+  - 根因：Reason 阶段在 `continueAction=LLM_INFERENCE` 的 early-return 分支（`AgentExecutor.java` 第 ~525 行）直接递归 `microReActStep(updatedCtx, ...)`，跳过了 `__tool_calls` 等变量的清理
+  - 修复：在 early-return 分支中增加 `remove("__tool_calls")` 等 5 个清理调用，与下方 "All tool calls consumed" 块的清理保持一致
 
-### Fixes
-
-- **WAL 缺失 System Prompt 记录**: WAL 中只有 `user`、`assistant`、`tool` 三类消息，缺少 `role: "system"` 消息。
+- **TUI 输入期间 Agent 响应不可见 (`alice-facade-tui`)**: Agent 响应到达时若用户正在输入（`inputActive=true`），渲染循环跳过重绘并将脏标记清空，响应内容直到下一次 `readLine()` 返回后才出现。
+  - 根因：`ScreenManager.renderLoop()` 在 `inputActive=true` 时设置 `pendingRedraw` 并清除 `contentDirty`，实质上是丢弃了脏标记而不渲染
+  - 修复：移除输入活跃期间的跳过逻辑，始终执行 `redrawScrollArea()`；该操作只修改输入行上方的滚动区（Header + Thought + 分割线），不触碰 JLine 管理的输入行，不会与 `readLine()` 产生终端输出竞争
+  - 同步移除 `pendingRedraw` 字段及其在 `runInputLoop()` 中的 deferred 处理代码
 
 ### Fixes
 

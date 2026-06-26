@@ -522,6 +522,13 @@ public class AgentExecutor {
             if (continueAction != null
                 && continueAction.type() != Action.Type.FINISH
                 && continueAction.type() != Action.Type.REVISION) {
+              // Clean up stale state from previous LLM iteration to prevent
+              // stale tool_calls/__finish_reason from leaking into the follow-up.
+              updatedCtx.remove("__tool_calls");
+              updatedCtx.remove("__tool_call_index");
+              updatedCtx.remove("__finish_reason");
+              updatedCtx.remove("__turn_end");
+              updatedCtx.remove("__true_start");
               // Dispatch follow-up LLM action directly (tool result inserted into prompt)
               logger.warn(
                   "[Micro-ReAct/Reason] dispatching follow-up LLM: type={} target={} depth={}",
