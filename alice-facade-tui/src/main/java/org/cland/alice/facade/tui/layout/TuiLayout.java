@@ -4,33 +4,22 @@ import java.util.List;
 import org.cland.alice.facade.tui.component.*;
 
 /**
- * TUI 三层单线分割布局管理器 (v2.3).
+ * TUI 布局管理器 (v2.6).
  *
- * <p>对应 docs/alice-facade-tui/Layout.md §7.1 沉浸式三看板常态布局（TAO Standard Mode）v2.3。
- *
- * <p>布局结构（v2.3 终极工业版）:
+ * <p>布局结构（v2.6）:
  *
  * <pre>
- *  🤖 alice-agent v0.60.0 ──────────────────────────────  ← Header (1行，无噪细线)
- *   THOUGHT  监测到 uncommitted 悬空状态。               ← 上方滚动区（色块标签）
+ *  🤖 alice-agent v0.60.0 ──────────────────────────────  ← Header (1行)
+ *   THOUGHT  监测到 uncommitted 悬空状态。               ← 上方滚动区
  *   ACTION   调用本地 Bash 执行器。
  *   OBSERVE  BUILD SUCCESSFUL in 3s.
- * ──────────────────────────────────────────────────────  ← 上分割线 (1行)
- *  █                                                     ← 居中输入区 (1行，仅光标)
- * ──────────────────────────────────────────────────────  ← 下分割线 (1行)
- *  [48;5;208m💰 $0.041[0m  [48;5;35m📊 125 t/s[0m ...  ← 底部状态栏 (实体色块仪表盘)
+ * ──────────────────────────────────────────────────────  ← 分割线 (1行)
+ *  █                                                     ← 输入区 (1行)
+ * ──────────────────────────────────────────────────────  ← 分割线 (1行)
+ *  [48;5;208m💰 $0.041[0m  [48;5;35m📊 125 t/s[0m ...  ← Footer (1行，终端最底行)
  * </pre>
  *
- * <p>分区规则（v2.3）：
- *
- * <ol>
- *   <li>上方滚动区：Header 行之后（Header 自带暗色分隔线），业务日志以 {@link org.cland.alice.facade.tui.component.TaoTag}
- *       色块标签向上滚动
- *   <li>中间输入区：零提示符纯净输入，被两条独立分割线包裹
- *   <li>底部状态栏：ANSI 纯色背景全填充独立色块，全程物理固定
- * </ol>
- *
- * <p>固定非内容行数 = Header(1) + 上分割线(1) + Input(1) + 下分割线(1) + Status(1) = 5
+ * <p>固定非内容行数 = Header(1) + 分割线(1) + Input(1) + 分割线(1) + Footer(1) = 5
  */
 public class TuiLayout {
 
@@ -41,7 +30,7 @@ public class TuiLayout {
   public static final int INPUT_HEIGHT = 1;
   public static final int STATUS_HEIGHT = 1;
 
-  /** 固定非内容行数 = Header + 上分割线 + Input + 下分割线 + Status = 5 */
+  /** 固定非内容行数 = Header + 分割线 + Input + 分割线 + Footer = 5 */
   public static final int FIXED_ROWS =
       HEADER_HEIGHT + SEPARATOR_HEIGHT + INPUT_HEIGHT + SEPARATOR_HEIGHT + STATUS_HEIGHT;
 
@@ -65,10 +54,10 @@ public class TuiLayout {
   private int contentStartRow;
 
   private int contentHeight;
-  private int separator1Row; // content 和 input 之间的分割线
-  private int inputRow;
-  private int separator2Row; // input 和 footer 之间的分割线
-  private int footerRow;
+  private int separatorRow; // 滚动区和输入区之间的分割线
+  private int inputRow; // 输入区行
+  private int separator2Row; // 输入区和 footer 之间的分割线
+  private int footerRow; // 底部状态栏行（终端最底行）
 
   public TuiLayout(
       HeaderComponent header,
@@ -89,7 +78,7 @@ public class TuiLayout {
     // 布局计算（从顶到底）
     int currentRow = 0;
 
-    // 1. Header: row 0 (自带暗色分隔线，不占用额外行)
+    // 1. Header: row 0
     header.setBounds(currentRow, 0, this.terminalWidth, HEADER_HEIGHT);
     currentRow += HEADER_HEIGHT;
 
@@ -98,12 +87,11 @@ public class TuiLayout {
     int oldContentHeight = contentHeight;
     contentHeight = this.terminalHeight - FIXED_ROWS;
     thought.setBounds(contentStartRow, 0, this.terminalWidth, contentHeight);
-    // 终端 resize 后调整滚动偏移：变大时揭示上方隐藏内容，缩小时保持底部锚定
     thought.onResize(oldContentHeight);
     currentRow = contentStartRow + contentHeight;
 
-    // 3. 上分割线 (content 和 input 之间)
-    separator1Row = currentRow;
+    // 3. 分割线 (滚动区和输入区之间)
+    separatorRow = currentRow;
     currentRow += SEPARATOR_HEIGHT;
 
     // 4. 输入区
@@ -111,15 +99,14 @@ public class TuiLayout {
     input.setBounds(inputRow, 0, this.terminalWidth, INPUT_HEIGHT);
     currentRow += INPUT_HEIGHT;
 
-    // 5. 下分割线 (input 和 footer 之间)
+    // 5. 分割线 (输入区和 footer 之间)
     separator2Row = currentRow;
     currentRow += SEPARATOR_HEIGHT;
 
-    // 6. 底部状态栏
+    // 6. Footer (终端最底行)
     footerRow = currentRow;
     footer.setBounds(footerRow, 0, this.terminalWidth, STATUS_HEIGHT);
 
-    // 标记所有组件为脏
     markAllDirty();
   }
 
@@ -135,29 +122,29 @@ public class TuiLayout {
     return contentHeight;
   }
 
+  /** 获取滚动区和输入区之间的分割线行号 */
+  public int separatorRow() {
+    return separatorRow;
+  }
+
+  /** 获取输入区和 footer 之间的分割线行号 */
+  public int separator2Row() {
+    return separator2Row;
+  }
+
   /** 获取输入区行号 */
   public int inputRow() {
     return inputRow;
   }
 
-  /** 获取 content 下方分割线行号 */
-  public int separator1Row() {
-    return separator1Row;
-  }
-
-  /** 获取 input 下方分割线行号 */
-  public int separator2Row() {
-    return separator2Row;
-  }
-
-  /** 获取底部状态栏行号 */
+  /** 获取底部状态栏行号（终端最底行） */
   public int footerRow() {
     return footerRow;
   }
 
-  /** 获取底部状态栏最后一个行号 */
+  /** 获取终端最底行号 */
   public int lastRow() {
-    return footerRow + STATUS_HEIGHT - 1;
+    return footerRow;
   }
 
   /**

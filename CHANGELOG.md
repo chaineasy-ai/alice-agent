@@ -23,7 +23,40 @@ updated: "2026-06-26"
 
 # Changelog
 
-## 20260626
+## 20260627
+
+### BREAKING
+
+- **TUI 布局 v2.6 重构 (`alice-facade-tui`)**: 重新设计 TUI 布局，Footer 移至终端最底行 (H-1)，输入区位于 Footer 上方 (H-3)，由两条分割线包裹。
+  - `TuiLayout`: 新布局顺序 `Header → Content → Separator1 → Input → Separator2 → Footer`
+  - FIXED_ROWS=5 保持不变，contentHeight = H-5
+  - `separatorRow` (H-4): 滚动区与输入区之间的分割线
+  - `separator2Row` (H-2): 输入区与 Footer 之间的分割线
+  - `inputRow` (H-3): 输入区
+  - `footerRow` (H-1): Footer 在终端最底行
+
+### Fixes
+
+- **TUI 首次输入光标错位 — JLine 首次 readLine() 初始化覆盖手动定位**: 首次 `reader.readLine()` 调用时 JLine 初始化显示层，覆盖了手动 `cursorLine()` 的定位。修复方式：
+  - 在 synchronized 块前调用 `terminal.getHeight()` 创建终端 I/O 同步点，确保终端完成处理所有先前输出
+  - 使用原始 ANSI 转义 `\033[%d;1H` 而非 `cursorLine()`（`terminal.puts`）定位光标，不更新 JLine 内部光标跟踪
+  - 在 `setVariable(LINE_OFFSET, 2)` 前调用 `getVariable(LINE_OFFSET)` 预热 JLine 内部变量系统
+  - `LINE_OFFSET=2` 保留输入区下方 2 行（Separator2 + Footer）不被 JLine 覆盖
+
+- **TUI 渲染线程与 JLine readLine() 终端输出竞态**: 渲染线程的 `redrawScrollArea()` 与主线程的 `reader.readLine()` 同时写入终端，导致光标跳跃和内容错乱。
+  - 新增 `inputActive` / `pendingRedraw` 原子标记
+  - 渲染循环在 `inputActive=true` 时跳过终端写入，将重绘标记记录到 `pendingRedraw`
+  - 主线程在 `readLine()` 返回后在 terminalLock 下处理 deferred 重绘
+
+- **TUI `redrawScrollArea()` 使用 raw ANSI 导致光标定位不准**: `cursorLineRaw()` 在某些终端上不能正确解析 `\033[row;1H`，导致 Footer 和分割线出现在同一行。
+  - `redrawScrollArea()` / `restoreLowerArea()` / `fullRedraw()` 统一使用 `cursorLine()`（`terminal.puts`）定位，获取 terminfo 感知的转义序列
+  - `runInputLoop()` 中的预 readLine 定位依然使用 raw ANSI（避免干扰 JLine 内部跟踪）
+
+- **TUI 启动帮助提示文本**: 移除 `AliceTuiLauncher.start()` 中的 `eventBridge.onChatMessage("System", "欢迎使用 Alice Agent TUI！")` 和 `"输入 /help 查看可用命令。"`；移除 `ScreenManager.start()` 中的 `addSystemMessage("Alice Agent v0.1.0 TUI 已启动。输入 /help 查看可用命令。")`。
+
+### Docs
+
+- **`docs/alice-facade-tui/Layout.md`**: 更新为 v2.6 布局文档，Footer 在终端最底行，输入区由双分割线包裹。
 
 ### BREAKING
 

@@ -147,8 +147,6 @@ public class AliceTuiLauncher implements AutoCloseable {
   public void start() throws IOException {
     // screenManager.start() 会清屏 + 全量重绘，所有日志必须在此之后输出
     screenManager.start();
-    eventBridge.onChatMessage("System", "欢迎使用 Alice Agent TUI！");
-    eventBridge.onChatMessage("System", "输入 /help 查看可用命令。");
   }
 
   // ========== 主循环 ==========

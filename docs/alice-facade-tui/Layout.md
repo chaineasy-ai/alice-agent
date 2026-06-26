@@ -1,39 +1,31 @@
-# JLine 3 三层TUI架构 v2.3 工程设计文档
+# JLine 3 三层TUI架构 v2.6 工程设计文档
 ```markdown
 ---
-title: "TUI Layout - Single-line Cut + Inline Completion"
-summary: "基于 JLine 3 实现三层单行分割布局，支持行内自动补全"
+title: "TUI Layout - v2.6 Expert"
+summary: "基于 JLine 4 实现四层布局，Footer 在终端最底行，输入区位于 Footer 上方"
 read_when:
   - "TUI 布局新增/改造开发"
 scope:
   - "alice-facade-tui"
 status: "active"
-updated: "2026-06-26"
+updated: "2026-06-27"
 ---
-# JLine 3 三层TUI架构 v2.3 工程设计文档
+# JLine 4 四层TUI架构 v2.6 工程设计文档
 ## 前言
-本版为极致净化重构 v2.3，剔除冗余数学公式、无效符号；全面落地**等宽实体背景色块**、**零噪音输入视口**，兼顾黑客视觉美学与工程稳定落地。
+本版为 v2.6 稳定版，修复首次输入光标定位、渲染线程与 JLine readLine() 的终端输出竞态。
+
+布局核心变更：Footer 移至终端最底行 (H-1)，输入区在其上方 (H-3)，由两条分割线包裹。
+JLine 的 `reader.readLine()` 在输入行渲染，`LINE_OFFSET=2` 保留下方分隔线和 Footer。
+
 方案完整保留三大底层硬性约束：
 1. 绝对边界固定
 2. 无画面抖动
 3. 低开销增量重绘
 
-重构思路：废弃传统拼接符号、冗余提示文本，统一采用纯净分割线、ANSI实体背景色块、无干扰输入区的现代化终端交互方案。
-
 ---
 
-## 🎨 优化后TUI布局设计（v2.3 终极工业版）
-### 7.1 沉浸式三看板常态布局（TAO Standard Mode）
-#### 进化亮点
-1. **内容区全色块化**
-   废弃 `[T Thought]` 文本前缀，替换为等宽满背景填充实体矩形标签，消除界面碎屑，视觉信息抓取效率大幅提升。
-2. **顶部无噪细线**
-   删除会话ID等冗余文本，分割线动态自适应终端宽度延伸至视口最右侧，界面留白透气。
-3. **零干扰输入行**
-   移除 `>` / `$` 传统提示符、静态占位文本，仅保留光标静默闪烁的纯净输入区域。
-4. **底部TAO实体仪表盘**
-   指标数据全部纯色背景包裹，形成三块物理隔离独立色块。
-
+## 🎨 优化后TUI布局设计（v2.6）
+### 7.1 沉浸式四区域常态布局
 #### 布局效果示意
 ```text
  🤖 alice-agent v0.60.0 ────────────────────────────────────────────────────────────────────
@@ -47,14 +39,14 @@ updated: "2026-06-26"
  ───────────────────────────────────────────────────────────────────────────────────────────
   █████████████  █████████████  ███████████████████████ ── 🔌 Active: cland-pay-mcp
 ```
-> 说明：示例中 `THOUGHT` / `ACTION` / 底部仪表盘区域，运行时为 ANSI 背景色全填充纯色块，文字内嵌色块内展示。
+> 分区规则（自顶向下）：Header(1) → 上方滚动区 → 分割线(1) → 输入区(1) → 分割线(1) → Footer(1)
 
 ### 7.2 `/model` 指令：输入行内嵌补全列表（Inline Completion Mode）
 #### 进化亮点
 1. **全局高度锁定**
-   补全下拉菜单展开时，底部状态栏物理坐标固定，无上下位移。
+   补全下拉菜单展开时，底部 Footer 物理坐标固定，无上下位移。
 2. **光标行贴合布局**
-   补全列表紧贴输入行下边缘，反显高亮标记当前选中候选项。
+   补全列表紧贴输入行下方（由 LINE_OFFSET=2 保护的分割线之上）。
 
 #### 补全布局效果示意
 ```text
@@ -70,31 +62,86 @@ updated: "2026-06-26"
 ---
 
 ## 🛠 架构与工程实现重设计（Tactical Blueprint）
-### 1. 补全菜单边界防御策略
-不引入上层业务高度计算，直接通过 JLine3 内置变量硬编码限制内嵌补全菜单最大渲染行数；超出阈值自动内部滚动，从底层锁定渲染边界，彻底规避状态栏被顶出、界面闪烁问题。
+### 1. 首次输入光标定位策略
+JLine 的首次 `reader.readLine()` 调用会初始化显示层并覆盖手动光标定位。
+
+修复方案：
+1. 在 synchronized 块前调用 `terminal.getHeight()` 创建终端 I/O 同步点，确保终端完成处理所有先前输出
+2. 使用原始 ANSI `\033[%d;1H` 定位光标（不更新 JLine 内部跟踪），然后 `\033[2K` 清行后 `flush()`
+3. 在 `reader.setVariable(LINE_OFFSET, 2)` 前调用 `reader.getVariable(LINE_OFFSET)` 预热 JLine 变量系统
+4. `LINE_OFFSET=2` 确保 JLine 首次初始化时计算显示位置为 `terminalHeight - 1 - 2 = H-3 = inputRow`
+
 ```java
-// 边界防御核心：补全菜单最大渲染3行，溢出滚动，防止底部状态栏溢出视口
+int inputRow = layout.inputRow();
+int termH = terminal.getHeight();
+reader.getVariable(LineReader.LINE_OFFSET);
+
+synchronized (terminalLock) {
+    terminal.writer().write(String.format("\033[%d;1H", inputRow + 1));
+    terminal.writer().write("\033[2K");
+    terminal.writer().flush();
+}
+
+reader.setVariable(LineReader.LINE_OFFSET, 2);
+inputActive.set(true);
+String line = reader.readLine(layout.input().prompt());
+```
+
+### 2. 渲染线程与 readLine() 输出竞态防御
+渲染线程的 `redrawScrollArea()` 与主线程的 `reader.readLine()` 同时写入终端输出流时，
+会导致光标跳跃、内容错乱。
+
+防御策略：
+- 新增 `inputActive` 原子标记，渲染循环在 `inputActive=true` 时跳过终端写入，将重绘标记记录到 `pendingRedraw`
+- 主线程在 `readLine()` 返回后在 `terminalLock` 下处理 deferred 重绘
+
+```java
+// 渲染循环
+if (inputActive.get()) {
+    if (contentDirty.get()) {
+        pendingRedraw.set(true);
+        contentDirty.set(false);
+    }
+} else if (contentDirty.compareAndSet(true, false)) {
+    redrawScrollArea();
+}
+
+// 输入循环
+inputActive.set(true);
+try {
+    line = reader.readLine(emptyPrompt);
+} finally {
+    inputActive.set(false);
+}
+if (pendingRedraw.compareAndSet(true, false)) {
+    contentDirty.set(true);
+    redrawScrollArea();
+}
+```
+
+### 3. 补全菜单边界防御策略
+不引入上层业务高度计算，直接通过 JLine 内置变量硬编码限制内嵌补全菜单最大渲染行数；
+超出阈值自动内部滚动，从底层锁定渲染边界，彻底规避 Footer 被顶出、界面闪烁问题。
+```java
 reader.setVariable(LineReader.LIST_MAX, 3);
-reader.setVariable(LineReader.MENU_COMPLETE, true);
 ```
 
-### 2. 零提示符纯净输入实现
-调用底层 `LineReader.readLine()` 时传入空提示符字符串，配合 Java 25 原生终端API实现无冗余字符输入视口。
+### 4. 零提示符纯净输入实现
 ```java
-// 移除提示符噪音，仅保留光标
-String userInput = reader.readLine(""); 
+String userInput = reader.readLine("");
 ```
 
-### 3. 并发日志分流渲染机制
+### 5. 并发日志分流渲染机制
 1. **日志输出规范**
    禁止直接调用 `System.out.println()`；所有 TAO 业务日志由独立后台线程采集，统一通过 `reader.printAbove(logLine)` 输出。
 2. **底层渲染原理**
    `printAbove` 自带原生双缓冲打印逻辑：擦除输入框上方渲染区、追加日志滚动后，自动还原输入视口原始坐标，保证输入上下文不丢失。
 
-### 4. 状态栏与TAO标签实体色块渲染方案
-摒弃字符拼接模拟边框，统一使用 **ANSI 256色背景控制码 `48;5;xxxm`** 生成满宽填充矩形色块；支持终端窗口 `WINCH` 缩放信号自适应重绘定位。
+### 6. 状态栏与TAO标签实体色块渲染方案
+摒弃字符拼接模拟边框，统一使用 **ANSI 256色背景控制码 `48;5;xxxm`** 生成满宽填充矩形色块；
+支持终端窗口 `WINCH` 缩放信号自适应重绘定位。
 
-#### 4.1 TAO标签色块枚举核心实现
+#### 6.1 TAO标签色块枚举核心实现
 ```java
 public enum TaoTag {
     THOUGHT(" THOUGHT ", "\u001B[48;5;239m", "\u001B[37m"),  // 暗灰底 白色文字
@@ -111,23 +158,36 @@ public enum TaoTag {
         this.fgAnsi = fgAnsi;
     }
 
-    /** 输出带背景色块的完整ANSI文本 */
     public String render() {
         return this.bgAnsi + this.fgAnsi + this.text + "\u001B[0m";
     }
 }
 ```
 
-#### 4.2 底部状态栏动态定位逻辑
-状态刷新执行流程：
-1. 光标定位：`\u001B[${terminal.getHeight()};1H`，动态跳转至终端最后一行首列，规避固定行号缩放错位；
-2. 行清空：下发 `\u001B[K` 清除当前行残留字符；
-3. 单行覆盖写入多色块拼接文本流。
+#### 6.2 底部 Footer 定位逻辑
+Footer 固定在终端最底行 (H-1)。重绘流程：
+1. `cursorLine(H-1)` 定位到终端最后一行
+2. `\033[K` 清除当前行残留字符
+3. 单行覆盖写入多色块拼接文本流
 
 ANSI输出示例：
 ```text
 \u001B[48;5;208m\u001B[30m  💰 $0.041  \u001B[0m  \u001B[48;5;35m\u001B[30m  📊 125 t/s  \u001B[0m
 ```
+
+### 7. `restoreLowerArea()` 恢复被补全菜单覆盖的区域
+JLine 的 AUTO_MENU 补全菜单在输入行上方渲染，可能覆盖分割线和 Footer。
+每次 `readLine()` 返回后无条件恢复覆盖的区域。
+
+v2.6 恢复顺序：
+1. `cursorLine(separator2Row)` — 重绘输入区下方的分割线
+2. `cursorLine(footerRow)` — 重绘 Footer
+
+### 8. 键盘快捷键
+- **F5 / Ctrl+C**: 中断当前任务（`InterruptCmd`）
+- **Ctrl+D**: 退出 TUI
+- **Page Up / Page Down**: 滚动日志区
+- **Up / Down**: 输入历史浏览
 
 ---
 
@@ -136,6 +196,8 @@ ANSI输出示例：
    完全移除 `[T]`、`>`、`[Session]` 碎片化标记，统一等宽实体色块+极简分割线，视觉标准对齐工业级原生控制台。
 2. **底层变量锁死空间边界**
    不依赖复杂高度计算公式，通过 `LIST_MAX` 原生参数控制渲染范围，降低业务维护成本。
-3. **轻量极简实现**
-   纯 Java 25 + JLine3 原生API构建，无重型第三方TUI框架依赖；核心渲染代码总量 ≤ 300 行，迭代、缺陷修复成本极低。
+3. **终端 I/O 同步保障首次定位**
+   `terminal.getHeight()` 作为终端 I/O 同步点，确保首次 readLine 前光标已正确到位。
+4. **输入活跃标记防止渲染竞态**
+   `inputActive` / `pendingRedraw` 双标记系统，渲染循环在输入期间不写入终端，deferred 重绘在输入处理后安全执行。
 ```
