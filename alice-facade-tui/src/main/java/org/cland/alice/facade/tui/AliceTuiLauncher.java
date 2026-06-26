@@ -28,6 +28,10 @@ import org.cland.alice.facade.tui.bridge.EventBridge;
 import org.cland.alice.facade.tui.state.TuiState;
 import org.cland.alice.model.ModelConfigLoader;
 import org.cland.alice.model.ModelProvider;
+import org.cland.alice.tool.gateway.ToolRegistry;
+import org.cland.alice.tool.gateway.ToolRegistryHolder;
+import org.cland.alice.tool.gateway.builtin.BuiltinTools;
+import org.cland.alice.tool.gateway.engine.ToolDiscovery;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,7 +78,18 @@ public class AliceTuiLauncher implements AutoCloseable {
             new FileWalStore(
                 java.nio.file.Paths.get(
                     System.getProperty("user.home"), ".alice", "wal", sessionId)));
-    this.agent = new Agent(config).withWal(wal);
+    // 1a. 初始化工具注册中心并发现内置工具
+    ToolRegistry toolRegistry = ToolRegistryHolder.INSTANCE.registry();
+    try {
+      int count =
+          new ToolDiscovery(toolRegistry).scanAndRegister(java.util.List.of(new BuiltinTools()));
+      logger.info("[AliceTuiLauncher] Registered {} builtin tool(s)", count);
+    } catch (Exception e) {
+      logger.warn("[AliceTuiLauncher] Failed to discover builtin tools", e);
+    }
+
+    // 1b. 创建 Agent 并注入 WAL 和工具注册中心
+    this.agent = new Agent(config).withWal(wal).withToolRegistry(toolRegistry);
 
     // 2. 创建 EventBridge
     this.eventBridge = new EventBridge();
@@ -196,6 +211,11 @@ public class AliceTuiLauncher implements AutoCloseable {
         () -> {
           try {
             String result = agent.ask(task);
+            // 渲染推理/思考过程
+            String reasoning = agent.getLastReasoning();
+            if (reasoning != null && !reasoning.isBlank()) {
+              eventBridge.onNewThought(reasoning, 0);
+            }
             if (result == null || result.isBlank()) {
               logger.warn("Agent returned empty result for task: {}", task);
               eventBridge.onTaskComplete("(Agent 返回了空结果，请检查模型配置或 API 状态)", "warning");

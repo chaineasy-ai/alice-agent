@@ -46,47 +46,6 @@ class AgentExecutorUnitSpec extends Specification {
     }
 
     // ========================================================================
-    // countToolCallMarkers
-    // ========================================================================
-
-    def "countToolCallMarkers should return 0 for empty or null input"() {
-        expect:
-        invokeStatic("countToolCallMarkers", "") == 0
-        invokeStatic("countToolCallMarkers", "no markers here") == 0
-        invokeStatic("countToolCallMarkers", "just [TOOL_CALL] without colon") == 0
-        invokeStatic("countToolCallMarkers", "Just some text [FINISH] goodbye") == 0
-    }
-
-    def "countToolCallMarkers should detect single marker"() {
-        expect:
-        invokeStatic("countToolCallMarkers",
-                'First I need to read the file.\n[TOOL_CALL: read_file(path="test.py")]\nThen I will fix it.') == 1
-    }
-
-    def "countToolCallMarkers should detect multiple markers"() {
-        expect:
-        invokeStatic("countToolCallMarkers",
-                '[TOOL_CALL: read_file(path="a.py")] and [TOOL_CALL: read_file(path="b.py")]') == 2
-    }
-
-    def "countToolCallMarkers should detect three or more markers"() {
-        expect:
-        invokeStatic("countToolCallMarkers",
-                '[TOOL_CALL: read_file(path="a.py")]\n[TOOL_CALL: read_file(path="b.py")]\n[TOOL_CALL: read_file(path="c.py")]') == 3
-    }
-
-    def "countToolCallMarkers should handle markers with escaped double quotes inside"() {
-        expect:
-        invokeStatic("countToolCallMarkers",
-                '[TOOL_CALL: write_file(path="f.py", content="line1\\nline2")]') == 1
-    }
-
-    def "countToolCallMarkers should handle markers with no arguments"() {
-        expect:
-        invokeStatic("countToolCallMarkers", '[TOOL_CALL: finish()]') == 1
-    }
-
-    // ========================================================================
     // parseToolArgsJson
     // ========================================================================
 

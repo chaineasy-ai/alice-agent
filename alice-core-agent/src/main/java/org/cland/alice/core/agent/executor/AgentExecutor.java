@@ -420,6 +420,14 @@ public class AgentExecutor {
   }
 
   /**
+   * 运行 Micro-ReAct 循环并消费所有排队的后续动作（__next_action_type）。
+   *
+   * <p>dispatchToolCall 可能返回一个 Continue(Action.llmInference) 来触发后续 LLM 调用。 为了避免嵌套 compose 链，该
+   * action 被保存为 __next_action_type/__next_action_target/ __next_action_prompt，而 microReActStep 返回
+   * Continue(null)。当 micro 循环退出时， 此方法检查这些字段，若存在则用新的 Micro-ReAct 循环执行该 action，防止宏循环过早接管。
+   */
+
+  /**
    * Micro-ReAct 循环：Reason → Dispatch → Observe → (loop | break)。
    *
    * <p>这是设计文档中"战术执行态闭环"的实现。 在当前 Action 执行完毕后，基于观察结果调用 planner 生成下一个微意图， 直到满足终止条件（FINISH / 熔断 /
@@ -499,7 +507,7 @@ public class AgentExecutor {
             // Priority:
             // 1) If dispatch returned Continue with an embedded nextAction (e.g. tool→LLM),
             //    dispatch it directly.
-            // 2) Otherwise parse tool call markers from LLM output.
+            // 2) Otherwise check finish_reason and structured tool_calls.
             // 3) Otherwise finish micro loop.
 
             Action continueAction = result instanceof StepResult.Continue c ? c.nextAction() : null;
@@ -514,17 +522,23 @@ public class AgentExecutor {
             if (continueAction != null
                 && continueAction.type() != Action.Type.FINISH
                 && continueAction.type() != Action.Type.REVISION) {
-              // Dispatch-instructed next action (e.g. LLM reasoning after tool call)
+              // Dispatch follow-up LLM action directly (tool result inserted into prompt)
               logger.warn(
-                  "[Micro-ReAct/Reason] dispatching Continue's nextAction: type={} target={}",
+                  "[Micro-ReAct/Reason] dispatching follow-up LLM: type={} target={} depth={}",
                   continueAction.type(),
-                  continueAction.target());
+                  continueAction.target(),
+                  depth);
               return microReActStep(
                   updatedCtx, continueAction, originalPrompt, depth + 1, maxDepth);
             }
 
-            // 1. Check structured tool_calls from Function Calling API first
+            // 1. Dispatch structured tool_calls from Function Calling
             Object rawToolCalls = updatedCtx.get("__tool_calls");
+            String finishReason =
+                updatedCtx.containsKey("__finish_reason")
+                    ? updatedCtx.get("__finish_reason").toString()
+                    : "stop";
+
             if (rawToolCalls instanceof java.util.List<?> tcList && !tcList.isEmpty()) {
               @SuppressWarnings("unchecked")
               java.util.List<Call.ToolCall> toolCalls = (java.util.List<Call.ToolCall>) tcList;
@@ -537,12 +551,12 @@ public class AgentExecutor {
                 Call.ToolCall tc = toolCalls.get(idx);
                 updatedCtx.put("__tool_call_index", String.valueOf(idx + 1));
                 logger.info(
-                    "[Micro-ReAct/Reason] Dispatching structured tool_call #{}/{}: {}",
+                    "[Micro-ReAct/Reason] Dispatching tool_call #{}/{}: {} depth={}",
                     idx + 1,
                     toolCalls.size(),
-                    tc.name());
+                    tc.name(),
+                    depth);
 
-                // Parse arguments JSON -> Map (simple JSON parser, no Jackson dependency)
                 java.util.Map<String, Object> params = new java.util.LinkedHashMap<>();
                 if (tc.arguments() != null && !tc.arguments().isBlank()) {
                   params.putAll(parseToolArgsJson(tc.arguments()));
@@ -554,51 +568,62 @@ public class AgentExecutor {
 
                 Action toolAction = Action.toolCall(tc.name(), params);
                 return microReActStep(updatedCtx, toolAction, originalPrompt, depth + 1, maxDepth);
-              } else {
-                // All structured tool calls consumed — don't finish, get more from LLM
-                updatedCtx.remove("__tool_calls");
-                updatedCtx.remove("__tool_call_index");
-                logger.info(
-                    "[Micro-ReAct/Reason] All structured tool calls consumed, continuing micro loop");
-                return Future.succeededFuture(
-                    new StepWithContext(updatedCtx, new StepResult.Continue(null)));
               }
+              // All tool calls consumed - the dispatchToolCall should have queued a
+              // follow-up LLM action via __next_action_type. Let the outer compose
+              // check finish_reason or __next_action_type to decide next step.
+              updatedCtx.remove("__tool_calls");
+              updatedCtx.remove("__tool_call_index");
+              updatedCtx.remove("__finish_reason");
+              updatedCtx.remove("__turn_end");
+              updatedCtx.remove("__true_start");
+              logger.info(
+                  "[Micro-ReAct/Reason] All tool calls executed, checking for queued follow-up");
+              return Future.succeededFuture(
+                  new StepWithContext(updatedCtx, new StepResult.Continue(null)));
             }
 
-            // 2. Fallback: parse text-based tool call markers from LLM output
-            Action toolAction = parseToolCallFromOutput(updatedCtx);
-            if (toolAction != null) {
-              logger.warn(
-                  "[Micro-ReAct/Reason] parsed from output: type={} target={}",
-                  toolAction.type(),
-                  toolAction.target());
-              if (toolAction.type() == Action.Type.FINISH) {
-                updatedCtx.put("result", obs != null ? obs.summary() : "");
-                if (wal != null) {
-                  wal.checkpointOnReActEnd(
-                      updatedCtx.sessionId(), "ACTING_FINISHED", updatedCtx.asMap(), "");
-                }
-                return Future.succeededFuture(
-                    new StepWithContext(
-                        updatedCtx,
-                        new StepResult.Finish(
-                            obs != null ? obs.summary() : "",
-                            "Micro-ReAct loop completed via FINISH marker")));
+            // 2. No tool calls - determine next action from finish_reason
+            logger.info(
+                "[Micro-ReAct/Reason] finish_reason={} responseLength={} depth={}",
+                finishReason,
+                updatedCtx.containsKey("result") ? updatedCtx.get("result").toString().length() : 0,
+                depth);
+
+            if ("stop".equals(finishReason) || "tool_calls".equals(finishReason)) {
+              // Natural completion - agent is done
+              String llmOutput =
+                  updatedCtx.containsKey("result") ? updatedCtx.get("result").toString() : "";
+              if (!llmOutput.isEmpty()) {
+                Observation finalObs = Observation.success(llmOutput);
+                updatedCtx.put("lastObservation", finalObs);
+                updatedCtx.put("lastActionResult", llmOutput);
               }
-              return microReActStep(updatedCtx, toolAction, originalPrompt, depth + 1, maxDepth);
+              if (wal != null) {
+                wal.checkpointOnReActEnd(
+                    updatedCtx.sessionId(), "ACTING_FINISHED", updatedCtx.asMap(), "");
+              }
+              return Future.succeededFuture(
+                  new StepWithContext(
+                      updatedCtx,
+                      new StepResult.Finish(
+                          llmOutput, "Micro-ReAct completed: finish_reason=" + finishReason)));
             }
 
-            logger.warn("[Micro-ReAct/Reason] no next action, finishing micro loop");
-            // Save LLM raw output as observation so next macro plan can inject it
+            // Handle error finish reasons (length, content_filter, error)
+            logger.warn(
+                "[Micro-ReAct/Reason] Non-success finish_reason={}, finishing with error",
+                finishReason);
             String llmOutput =
                 updatedCtx.containsKey("result") ? updatedCtx.get("result").toString() : "";
-            if (!llmOutput.isEmpty()) {
-              Observation noToolObs = Observation.success(llmOutput);
-              updatedCtx.put("lastObservation", noToolObs);
-              updatedCtx.put("lastActionResult", llmOutput);
+            if (wal != null) {
+              wal.checkpointOnError(
+                  updatedCtx.sessionId(), "FINISH_REASON_" + finishReason.toUpperCase(), llmOutput);
             }
             return Future.succeededFuture(
-                new StepWithContext(updatedCtx, new StepResult.Continue(Action.finish())));
+                new StepWithContext(
+                    updatedCtx,
+                    new StepResult.Failure("LLM finished with reason: " + finishReason)));
           }
 
           // 构建 Micro 上下文：包含上一次行动的结果
@@ -731,6 +756,15 @@ public class AgentExecutor {
                     ctx.put("result", content);
                   }
                   ctx.put("__llm_response", content != null ? content : "");
+                  ctx.put("__llm_reasoning", extractReasoningFromRaw(response));
+                  String finishReason = extractFinishReasonFromRaw(response);
+                  ctx.put("__finish_reason", finishReason);
+                  ctx.put("__turn_end", "stop".equals(finishReason));
+                  ctx.put(
+                      "__true_start",
+                      "stop".equals(finishReason)
+                          || finishReason == null
+                          || finishReason.isBlank());
                   ctx.remove("__tool_call_index");
 
                   // 如果 LLM 返回了结构化 tool_calls，存入上下文
@@ -752,7 +786,7 @@ public class AgentExecutor {
                         String rawStr = raw.toString();
                         int idx = rawStr.indexOf("\"reasoning_content\":\"");
                         if (idx >= 0) {
-                          idx += 22;
+                          idx += 21;
                           StringBuilder sb = new StringBuilder();
                           while (idx < rawStr.length()) {
                             char c = rawStr.charAt(idx);
@@ -894,20 +928,6 @@ public class AgentExecutor {
                             ? Integer.parseInt(ctx.get("__tool_call_index").toString())
                             : 0;
                     hasMoreMarkers = currentIdx < tcList.size();
-                  }
-                  // Fallback: 检查文本标记
-                  if (!hasMoreMarkers) {
-                    String llmResponse =
-                        ctx.containsKey("__llm_response")
-                            ? ctx.get("__llm_response").toString()
-                            : null;
-                    if (llmResponse != null) {
-                      int currentIdx =
-                          ctx.containsKey("__tool_call_index")
-                              ? Integer.parseInt(ctx.get("__tool_call_index").toString())
-                              : 1;
-                      hasMoreMarkers = countToolCallMarkers(llmResponse) > currentIdx;
-                    }
                   }
 
                   if (hasMoreMarkers) {
@@ -1228,330 +1248,6 @@ public class AgentExecutor {
    *
    * <p>通过 {@code __tool_call_index} 跟踪已消费的调用索引，实现顺序执行多次工具调用。
    */
-  private static Action parseToolCallFromOutput(AgentContext ctx) {
-    // 优先从 result 中读取，退回到 lastObservation
-    String output = ctx.containsKey("result") ? ctx.get("result").toString() : null;
-    if (output == null || output.isBlank()) {
-      Object obs = ctx.get("lastObservation");
-      if (obs instanceof Observation o) {
-        output = o.summary();
-      } else if (obs instanceof String s) {
-        output = s;
-      }
-    }
-    if (output == null || output.isBlank()) {
-      logger.info("[ToolCallParser] no output to parse (result is null/blank)");
-      return null;
-    }
-
-    logger.info(
-        "[ToolCallParser] output first300={}", output.substring(0, Math.min(300, output.length())));
-
-    // Debug: check if TOOL_CALL or FINISH markers are in the output
-    if (output.contains("[TOOL_CALL:")
-        || output.contains("<tool>")
-        || output.contains("[FINISH]")) {
-      logger.info("[ToolCallParser] FOUND markers in output, length={}", output.length());
-    } else {
-      logger.info(
-          "[ToolCallParser] NO markers in output, length={} first200={}",
-          output.length(),
-          output.substring(0, Math.min(200, output.length())));
-    }
-
-    // 解析 [TOOL_CALL: toolName(key="value", ...)] 或 <tool>toolName(key="value", ...)</tool>
-    boolean matched = false;
-    String toolName = null;
-    String paramsRaw = null;
-    // Try [TOOL_CALL:] format
-    try {
-      java.util.regex.Matcher m =
-          java.util.regex.Pattern.compile(
-                  "\\[TOOL_CALL:\\s*(\\w+)\\(([^)]*)\\)\\]", java.util.regex.Pattern.DOTALL)
-              .matcher(output);
-      if (m.find()) {
-        matched = true;
-        toolName = m.group(1);
-        paramsRaw = m.group(2).trim();
-      }
-    } catch (Exception e) {
-      logger.warn("[ToolCallParser] regex compile failed: {}", e.getMessage());
-    }
-    // Try <tool> format as fallback
-    if (!matched) {
-      try {
-        java.util.regex.Matcher m =
-            java.util.regex.Pattern.compile(
-                    "<tool>(\\w+)\\(([^)]*)\\)</tool>", java.util.regex.Pattern.DOTALL)
-                .matcher(output);
-        if (m.find()) {
-          matched = true;
-          toolName = m.group(1);
-          paramsRaw = m.group(2).trim();
-        }
-      } catch (Exception e) {
-        logger.warn("[ToolCallParser] regex compile failed: {}", e.getMessage());
-      }
-    }
-    if (!matched) {
-      int tcIdx = output.indexOf("[TOOL_CALL:");
-      if (tcIdx >= 0) {
-        int parenIdx = output.indexOf('(', tcIdx);
-        if (parenIdx >= 0) {
-          int endIdx = output.lastIndexOf(")]");
-          if (endIdx > parenIdx) {
-            String prefix = output.substring(tcIdx + 11, parenIdx).trim();
-            String[] parts = prefix.split("\\s+", 2);
-            if (parts.length >= 1) {
-              toolName = parts[0];
-              paramsRaw = output.substring(parenIdx + 1, endIdx).trim();
-              matched = true;
-            }
-          }
-        }
-      }
-    }
-    // Try manual <tool> format as fallback
-    if (!matched) {
-      int tgIdx = output.indexOf("<tool>");
-      if (tgIdx >= 0) {
-        int parenIdx = output.indexOf('(', tgIdx);
-        if (parenIdx >= 0) {
-          int endIdx = output.indexOf("</tool>", parenIdx);
-          if (endIdx > parenIdx) {
-            String prefix = output.substring(tgIdx + 6, parenIdx).trim();
-            String[] parts = prefix.split("\\s+", 2);
-            if (parts.length >= 1) {
-              toolName = parts[0];
-              paramsRaw = output.substring(parenIdx + 1, endIdx).trim();
-              matched = true;
-            }
-          }
-        }
-      }
-    }
-
-    // Combine manual parse result with skipCount tracking
-    // (the regex approach fails for content containing ) characters)
-    int idx =
-        ctx.containsKey("__tool_call_index")
-            ? Integer.parseInt(ctx.get("__tool_call_index").toString())
-            : 0;
-
-    if (!matched) {
-      // Try manual fallback with skip-count: find the (idx+1)-th [TOOL_CALL: marker
-      int tcIdx = -1;
-      for (int skip = 0; skip <= idx; skip++) {
-        tcIdx = output.indexOf("[TOOL_CALL:", tcIdx + 1);
-        if (tcIdx < 0) break;
-      }
-      if (tcIdx >= 0) {
-        int parenIdx = output.indexOf('(', tcIdx);
-        if (parenIdx >= 0) {
-          int endIdx = output.lastIndexOf(")]");
-          if (endIdx > parenIdx) {
-            String prefix = output.substring(tcIdx + 11, parenIdx).trim();
-            String[] parts = prefix.split("\\s+", 2);
-            if (parts.length >= 1) {
-              toolName = parts[0];
-              paramsRaw = output.substring(parenIdx + 1, endIdx).trim();
-              matched = true;
-            }
-          }
-        }
-      }
-      // Fallback: try <tool> format with skip-count
-      if (!matched) {
-        int tgIdx = -1;
-        for (int skip = 0; skip <= idx; skip++) {
-          tgIdx = output.indexOf("<tool>", tgIdx + 1);
-          if (tgIdx < 0) break;
-        }
-        if (tgIdx >= 0) {
-          int parenIdx = output.indexOf('(', tgIdx);
-          if (parenIdx >= 0) {
-            int endIdx = output.indexOf("</tool>", parenIdx);
-            if (endIdx > parenIdx) {
-              String prefix = output.substring(tgIdx + 6, parenIdx).trim();
-              String[] parts = prefix.split("\\s+", 2);
-              if (parts.length >= 1) {
-                toolName = parts[0];
-                paramsRaw = output.substring(parenIdx + 1, endIdx).trim();
-                matched = true;
-              }
-            }
-          }
-        }
-      }
-      // Fallback: try regex approach for simple tool calls (no ) in content)
-      if (!matched) {
-        java.util.regex.Matcher m = null;
-        try {
-          java.util.regex.Pattern p =
-              java.util.regex.Pattern.compile(
-                  "\\[TOOL_CALL:\\s*(\\w+)\\(([^)]*)\\)\\]", java.util.regex.Pattern.DOTALL);
-          m = p.matcher(output);
-        } catch (Exception e) {
-          logger.warn("[ToolCallParser] regex compile failed: {}", e.getMessage());
-        }
-        if (m != null) {
-          int found = 0;
-          while (m.find()) {
-            if (found >= idx) {
-              matched = true;
-              toolName = m.group(1);
-              paramsRaw = m.group(2).trim();
-              break;
-            }
-            found++;
-          }
-        }
-      }
-      // Fallback: try <tool> regex with skip-count
-      if (!matched) {
-        java.util.regex.Matcher m = null;
-        try {
-          java.util.regex.Pattern p =
-              java.util.regex.Pattern.compile(
-                  "<tool>(\\w+)\\(([^)]*)\\)</tool>", java.util.regex.Pattern.DOTALL);
-          m = p.matcher(output);
-        } catch (Exception e) {
-          logger.warn("[ToolCallParser] regex compile failed: {}", e.getMessage());
-        }
-        if (m != null) {
-          int found = 0;
-          while (m.find()) {
-            if (found >= idx) {
-              matched = true;
-              toolName = m.group(1);
-              paramsRaw = m.group(2).trim();
-              break;
-            }
-            found++;
-          }
-        }
-      }
-    } else {
-      // Manual parse succeeded for idx==0; apply skipCount tracking
-      // If idx > 0, the first manual parse already found the correct marker
-      // (first occurrence which is idx==0 case), so for idx > 0 we need to skip
-      if (idx > 0) {
-        matched = false;
-        toolName = null;
-        paramsRaw = null;
-        // Retry with skip-count manual lookup
-        int tcIdx = -1;
-        for (int skip = 0; skip <= idx; skip++) {
-          tcIdx = output.indexOf("[TOOL_CALL:", tcIdx + 1);
-          if (tcIdx < 0) break;
-        }
-        if (tcIdx >= 0) {
-          int parenIdx = output.indexOf('(', tcIdx);
-          if (parenIdx >= 0) {
-            int endIdx = output.lastIndexOf(")]");
-            if (endIdx > parenIdx) {
-              String prefix = output.substring(tcIdx + 11, parenIdx).trim();
-              String[] parts = prefix.split("\\s+", 2);
-              if (parts.length >= 1) {
-                toolName = parts[0];
-                paramsRaw = output.substring(parenIdx + 1, endIdx).trim();
-                matched = true;
-              }
-            }
-          }
-        }
-        // Fallback: retry with <tool> skip-count
-        if (!matched) {
-          int tgIdx = -1;
-          for (int skip = 0; skip <= idx; skip++) {
-            tgIdx = output.indexOf("<tool>", tgIdx + 1);
-            if (tgIdx < 0) break;
-          }
-          if (tgIdx >= 0) {
-            int parenIdx = output.indexOf('(', tgIdx);
-            if (parenIdx >= 0) {
-              int endIdx = output.indexOf("</tool>", parenIdx);
-              if (endIdx > parenIdx) {
-                String prefix = output.substring(tgIdx + 6, parenIdx).trim();
-                String[] parts = prefix.split("\\s+", 2);
-                if (parts.length >= 1) {
-                  toolName = parts[0];
-                  paramsRaw = output.substring(parenIdx + 1, endIdx).trim();
-                  matched = true;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-    if (matched) {
-      ctx.put("__tool_call_index", String.valueOf(idx + 1));
-      logger.info("[ToolCallParser] MATCHED #{} tool={} params={}", idx, toolName, paramsRaw);
-
-      // 解析 key="value" 参数
-      java.util.regex.Pattern paramPattern =
-          java.util.regex.Pattern.compile("(\\w+)=\"((?:[^\"\\\\]|\\\\.)*)\"");
-      java.util.regex.Matcher paramMatcher = paramPattern.matcher(paramsRaw);
-
-      java.util.Map<String, Object> params = new java.util.LinkedHashMap<>();
-      while (paramMatcher.find()) {
-        params.put(paramMatcher.group(1), paramMatcher.group(2));
-      }
-
-      // write_file: extract content from raw output using indexOf
-      if ("write_file".equals(toolName) && output != null) {
-        int ci = output.indexOf("content=\"");
-        if (ci >= 0) {
-          // Find the last ")] to handle ) in content
-          int ce = output.lastIndexOf("\")]");
-          if (ce > ci + 9) {
-            params.put("content", output.substring(ci + 9, ce));
-          }
-        }
-      }
-
-      // 修正 read_file 的参数名兼容性
-      if ("read_file".equals(toolName) && params.containsKey("path")) {
-        params.putIfAbsent("filePath", params.get("path"));
-      }
-
-      logger.debug("[ToolCallParser] parsed tool={} params={}", toolName, params);
-      return Action.toolCall(toolName, params);
-    }
-
-    logger.info(
-        "[ToolCallParser] NO MATCH on output first200={}",
-        output.substring(0, Math.min(200, output.length())));
-    // 所有 TOOL_CALL 都已消费，检查 FINISH
-    if (output.contains("[FINISH]")) {
-      return Action.finish();
-    }
-
-    return null;
-  }
-
-  /** 统计输出中 [TOOL_CALL:] 标记的数量。 */
-  private static int countToolCallMarkers(String output) {
-    if (output == null || output.isBlank()) return 0;
-    int count = 0;
-    int idx = 0;
-    // Count [TOOL_CALL: markers
-    while ((idx = output.indexOf("[TOOL_CALL:", idx)) >= 0) {
-      count++;
-      idx += 10;
-    }
-    // Count <tool> markers
-    idx = 0;
-    while ((idx = output.indexOf("<tool>", idx)) >= 0) {
-      count++;
-      idx += 6;
-    }
-    return count;
-  }
-
-  /** 将 Planner 返回的 Map 意图描述转换为 {@link Action}。 */
   private static Action mapToAction(Map<String, Object> plan) {
     String type = (String) plan.getOrDefault("type", "LLM_INFERENCE");
     String target = (String) plan.getOrDefault("target", "gpt-4o-mini");
@@ -1621,6 +1317,51 @@ public class AgentExecutor {
         yield Map.copyOf(m);
       }
     };
+  }
+
+  /** 从 Call.Response 的 raw metadata 中提取 reasoning_content。 */
+  private static String extractReasoningFromRaw(Call.Response response) {
+    if (response == null || response.metadata() == null) return "";
+    Object raw = response.metadata().get("raw");
+    if (raw == null) return "";
+    String rawStr = raw.toString();
+    int idx = rawStr.indexOf("\"reasoning_content\":\"");
+    if (idx < 0) return "";
+    idx += 21;
+    StringBuilder sb = new StringBuilder();
+    while (idx < rawStr.length()) {
+      char c = rawStr.charAt(idx);
+      if (c == '\\' && idx + 1 < rawStr.length()) {
+        sb.append(rawStr.charAt(idx + 1));
+        idx += 2;
+      } else if (c == '"') {
+        break;
+      } else {
+        sb.append(c);
+        idx++;
+      }
+    }
+    return sb.toString();
+  }
+
+  /** 从 Call.Response 的 raw metadata 中提取 finish_reason。 */
+  private static String extractFinishReasonFromRaw(Call.Response response) {
+    if (response == null || response.metadata() == null) return "stop";
+    Object raw = response.metadata().get("raw");
+    if (raw == null) return "stop";
+    String rawStr = raw.toString();
+    // Match "finish_reason":"value" from choices[0]
+    int idx = rawStr.indexOf("\"finish_reason\":\"");
+    if (idx < 0) return "stop";
+    idx += 17;
+    StringBuilder sb = new StringBuilder();
+    while (idx < rawStr.length()) {
+      char c = rawStr.charAt(idx);
+      if (c == '"') break;
+      sb.append(c);
+      idx++;
+    }
+    return sb.toString();
   }
 
   /** 使用 Jackson 解析 LLM Function Calling 返回的 JSON arguments。 支持嵌套对象、字符串转义（\n, \t, \" 等）。 */

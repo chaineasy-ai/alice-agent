@@ -27,6 +27,19 @@ updated: "2026-06-26"
 
 ### BREAKING
 
+- **移除所有文本格式工具调用解析，仅保留标准 Function Calling (`alice-core-agent`)**: 移除全部向后兼容的文本格式解析逻辑，仅保留标准 Function Calling API（`finish_reason` + `tool_calls` 结构化字段），遵循 `docs/alice-model/LLM Function Calling（Tool Call）接口技术规范文档.md`。
+  - 移除 `parseToolCallFromOutput()` 方法（~200 行）— 不再解析 `[TOOL_CALL:]`、`<tool_call>`、fenced code blocks、inline backticks 等文本格式
+  - 移除 `countToolCallMarkers()` 方法 — 文本标记计数不再需要
+  - 移除 `[FINISH]` 文本标记检查 — Agent 终止现在由 `finish_reason="stop"` 确定，模型无需输出 `[FINISH]`
+  - 移除所有 `<tool_call>` 相关正则表达式和 `indexOf` 手动解析代码（16 处）
+  - 删除 `AgentExecutorUnitSpec.groovy` 中对应的 `countToolCallMarkers` 测试方法
+  - 应用 `spotless` 格式化
+
+- **Prompt 模板移除 `[FINISH]` 和文本格式指令**: 三个 FreeMarker `.ftl` 模板全面更新。
+  - `core_loop.ftl`: 移除系统提示中的 `[FINISH]` 协议标记和 `<tool_call>` 文本回退格式说明，精简为仅使用 Function Calling
+  - `micro_loop.ftl`: 移除 `[FINISH]` 和 `<tool_call>` 文本格式指令
+  - `micro_loop_error.ftl`: 移除 `[FINISH]` 指令
+
 - **TUI 三层布局 v2.3 净化重构 (`alice-facade-tui`)**: 基于 `docs/alice-facade-tui/Layout.md` v2.3 全面重写 TUI 渲染管线，落地等宽实体背景色块、零噪音输入视口、底部 TAO 实体仪表盘。
   - **`TaoTag` 色块枚举 (新增)**: `THOUGHT`(暗灰底 239)、`ACTION`(橙黄底 214)、`OBSERVE`(绿底 35) — ANSI 256 色背景全填充矩形色块，替代传统 `[T Thought]` 文本前缀
   - **`HeaderComponent` 净化**: 移除 `sessionLabel` 字段/`setSessionLabel()` — 删除会话 ID 冗余文本；分割线动态自适应终端宽度延伸至视口最右侧；版本标识更新至 v0.60.0
@@ -47,6 +60,33 @@ updated: "2026-06-26"
   - 所有模块编译通过（85 tasks），全部单元测试通过
 
 ### Features
+
+- **推理内容（reasoning_content）渲染 (`alice-core-agent`, `alice-facade-tui`)**: 模型返回的 `reasoning_content`（DeepSeek R1 风格推理链）现被提取并传递到 TUI 渲染。
+  - `AgentExecutor.dispatchLlmInference()`: 新增 `extractReasoningFromRaw()` 从原始元数据 JSON 中解析 `reasoning_content`，存入 `ctx.__llm_reasoning`
+  - `Agent.ask()`: 新增 `lastReasoning` 字段和 `getLastReasoning()` getter，PPAO 完成后从上下文中提取推理内容
+  - `AliceTuiLauncher.submitTaskToAgent()`: agent 调用完成后读取 `agent.getLastReasoning()`，通过 `eventBridge.onNewThought()` 发射到 `ThoughtComponent` 渲染
+  - 修复 `extractReasoningFromRaw()` 中 `"reasoning_content":"` 长度计算 off-by-one 错误（21 字符，原为 22）
+  - 修复 `extractFinishReasonFromRaw()` 中 `"finish_reason":"` 长度计算 off-by-one 错误（17 字符，原为 18），导致 `stop` 读为 `top`
+
+- **`finish_reason` 驱动 Agent 终止 (`alice-core-agent`)**: Agent 终止逻辑从 `[FINISH]` 文本标记迁移为标准的 `finish_reason` 枚举值。
+  - `dispatchLlmInference()`: 解析 `finish_reason` 并存入 `ctx.__finish_reason`
+  - Micro-ReAct Reason 段: 使用 `finish_reason` 判断下一步——`"stop"` → 完成并返回结果、`"tool_calls"` → 分发工具调用、其他（`length`, `content_filter`, `error`）→ 返回错误
+  - 无 `finish_reason` 时默认回退 `"stop"`
+
+- **`__true_start` / `__turn_end` 对话轮次元数据 (`alice-core-agent`)**: 新增两个上下文字段追踪对话状态。
+  - `__turn_end` — boolean，`finish_reason="stop"` 时为 `true`（本轮对话结束），否则 `false`
+  - `__true_start` — boolean，当响应为最终回答（非工具调用中间响应）时为 `true`
+
+- **TUI ToolRegistry 接线 (`alice-facade-tui`)**: TUI 启动时自动发现并注册 BuiltinTools（9 个工具：read_file, write_file, grep, run, list_dir, file_exists, search_file, remove_file, web_search）到 Agent。
+  - `AliceTuiLauncher()`: 从 `ToolRegistryHolder.INSTANCE` 获取全局注册表，通过 `ToolDiscovery.scanAndRegister()` 扫描 `BuiltinTools` 实例
+  - 通过 `agent.withToolRegistry(toolRegistry)` 将注册表注入 Agent
+  - `module-info.java`: 新增 `requires alice.agent.alice.tool.gateway.main`
+  - `build.gradle`: 新增 `implementation project(':alice-tool-gateway')`
+
+- **Micro-ReAct 后续 LLM 调用修复 (`alice-core-agent`)**: 修复 dispatchToolCall 返回 `Continue(Action.llmInference(...))` 后 compose 链深度累积导致 circuit breaker 误触发的问题。
+  - 直接递归分派后续 LLM 调用（`microReActStep(updatedCtx, continueAction, originalPrompt, depth + 1, maxDepth)`），保持 compose 链扁平
+  - microReActLoop 每次重置 depth 为 0，确保 depth 不会跨 LLM 调用累积
+  - 移除 `All tool calls consumed` 中对 `__next_action` 相关字段的错误清理
 
 - **TUI `/resume` 会话恢复命令**: 在 TUI 模式下实现完整的会话列表查看与选择恢复功能。
 - **`tool_register` 角色 & 动态工具变更追踪**: 新增 `tool_register` 作为 WAL 第六种消息角色，用于记录对话中途工具集变更。

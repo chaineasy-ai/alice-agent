@@ -66,6 +66,9 @@ public class Agent {
   private AgentSession memory;
   private EnvEvent envAdapter;
 
+  /** 最近一次 LLM 调用的推理/思考过程，供前端渲染 */
+  private String lastReasoning;
+
   // ========== 构造 ==========
 
   public Agent() {
@@ -260,6 +263,9 @@ public class Agent {
                   result = callLlmDirect(prompt, modelId);
                 }
                 resultRef.set(result);
+                // 提取推理内容供前端渲染
+                lastReasoning =
+                    ctx.containsKey("__llm_reasoning") ? ctx.get("__llm_reasoning").toString() : "";
               } catch (Exception e) {
                 errorRef.set(e);
               } finally {
@@ -290,6 +296,15 @@ public class Agent {
 
     logger.info("Agent {} response length={}", agentId, result.length());
     return result;
+  }
+
+  /**
+   * 获取最近一次 LLM 调用的推理内容（reasoning_content），供 TUI 渲染。
+   *
+   * @return 推理文本，若无则返回空字符串
+   */
+  public String getLastReasoning() {
+    return lastReasoning != null ? lastReasoning : "";
   }
 
   // ========== 异步 API ==========

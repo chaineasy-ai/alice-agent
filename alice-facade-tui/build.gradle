@@ -31,6 +31,7 @@ dependencies {
     implementation project(':alice-memory-vault')
     implementation project(':alice-model')
     implementation project(':alice-agent-command')
+    implementation project(':alice-tool-gateway')
 
     // JLine 4: 纯硬编码三层单线分割布局（TAO Standard Mode）
     // 参考 docs/alice-facade-tui/Layout.md：依赖 JLine 4 原生 AUTO_MENU 实现向上顶出补全
