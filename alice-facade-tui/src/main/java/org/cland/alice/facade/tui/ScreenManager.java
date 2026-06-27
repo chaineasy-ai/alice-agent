@@ -512,15 +512,16 @@ public class ScreenManager implements AutoCloseable {
   private void renderLoop() {
     while (running.get()) {
       try {
-        if (inputActive.get()) {
-          // 输入活跃期间不写入终端，避免与 JLine 的 readLine() 竞争输出流。
-          // 积压的重绘由主线程在 readLine() 返回后处理。
-          if (contentDirty.get()) {
+        if (contentDirty.compareAndSet(true, false)) {
+          if (inputActive.get()) {
+            // 输入活跃期间只渲染滚动区域（非输入行），不触碰 JLine 管理的输入行及下方区域。
+            // 滚动区域（header → separator）位于输入行上方，JLine 不管理这些行，安全可写。
+            // 同时标记 pendingRedraw，等 readLine 返回后由主线程补全下方（separator2/footer）。
+            redrawScrollArea();
             pendingRedraw.set(true);
-            contentDirty.set(false);
+          } else {
+            redrawScrollArea();
           }
-        } else if (contentDirty.compareAndSet(true, false)) {
-          redrawScrollArea();
         }
         frameCount++;
         if (frameCount % SIZE_POLL_INTERVAL_FRAMES == 0) {
