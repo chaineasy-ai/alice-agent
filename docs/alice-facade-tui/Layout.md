@@ -1,8 +1,6 @@
-# JLine 3 三层TUI架构 v2.6 工程设计文档
-```markdown
 ---
-title: "TUI Layout - v2.6 Expert"
-summary: "基于 JLine 4 实现四层布局，Footer 在终端最底行，输入区位于 Footer 上方"
+title: "TUI Layout - v3.1 TAO 四段式布局"
+summary: "基于 JLine 4 实现 TAO 四段式布局，PPAO 事件流 Observer 模式 + 输入队列"
 read_when:
   - "TUI 布局新增/改造开发"
 scope:
@@ -10,194 +8,288 @@ scope:
 status: "active"
 updated: "2026-06-27"
 ---
-# JLine 4 四层TUI架构 v2.6 工程设计文档
+
+# TAO 四段式 TUI 架构 v3.1 — 工程设计文档
+
 ## 前言
-本版为 v2.6 稳定版，修复首次输入光标定位、渲染线程与 JLine readLine() 的终端输出竞态。
 
-布局核心变更：Footer 移至终端最底行 (H-1)，输入区在其上方 (H-3)，由两条分割线包裹。
-JLine 的 `reader.readLine()` 在输入行渲染，`LINE_OFFSET=2` 保留下方分隔线和 Footer。
+本版为 v3.1，在 v2.6（Footer 固定底行）基础上全面重构为 TAO 四段式布局：
 
-方案完整保留三大底层硬性约束：
-1. 绝对边界固定
-2. 无画面抖动
-3. 低开销增量重绘
+- 用四个独立区域组件（InputBlock / ThinkBlock / ActionBlock / ObserveBlock）替代单一 `ThoughtComponent`
+- PPAO 事件流通过 Observer 模式（`AgentEventListener`）实时投递
+- 输入队列缓存忙碌期间的输入，`📋 N queued messages` 队列状态行
+- 区块背景色取代 `TaoTag` 色块标签
 
 ---
 
-## 🎨 优化后TUI布局设计（v2.6）
-### 7.1 沉浸式四区域常态布局
-#### 布局效果示意
+## 🎨 TAO 四段式布局（v3.1）
+
+### 8 组件全景
+
 ```text
- 🤖 alice-agent v0.60.0 ────────────────────────────────────────────────────────────────────
-  THOUGHT  监测到 uncommitted 悬空状态，自动触发双式记账平衡等式校验。
-  THOUGHT  校验断言 ∑Debit = ∑Credit 失败，潜在风险指向 Double-Entry 借贷不平衡。
-  ACTION   调用本地 Bash 执行器: $ gradle :cland-chainpay:test --tests "AccountLedgerTest"
-  OBSERVE  BUILD SUCCESSFUL in 3s (1 test passed)
-  THOUGHT  单元测试断言通过，判定悬空流水为 Clearing 延迟，账目底层等式实质守恒。
- ───────────────────────────────────────────────────────────────────────────────────────────
-  █
- ───────────────────────────────────────────────────────────────────────────────────────────
-  █████████████  █████████████  ███████████████████████ ── 🔌 Active: cland-pay-mcp
+ 🤖 alice-agent v0.60.0 ──────────────────────────────  ← Header (1行, row 0, ANSI 242 暗色延伸)
+  debug current program                                 ← InputBlock (2行, ANSI 48;5;236 深色底)
+  ┈ Step 1 ┈                                            ← ThinkBlock (~45% 内容区, ANSI 48;5;255 亮色底)
+  The user wants to debug the current program...
+  ┈ Step 2 ┈
+  Let me explore these directories...
+  $ list_dir({path: .}) (timeout 120s)                  ← ActionBlock (2行, ANSI 48;5;236 深色底)
+  $ read_file({path: README.md}) (timeout 120s)
+  $ list_dir({path: .})                                 ← ObserveBlock (~55% 内容区, ANSI 48;5;234 终端深色底)
+  alice-memory-vault/
+  todos/
+  Took 0.0s
+ ─────────────────────────────────────────────────────  ← 分割线 (1行, ANSI 242 暗色)
+  📋 2 queued messages                                  ← 队列状态行 (1行, 有消息时显示, 无消息时空白)
+  █                                                    ← 输入区 (1行, JLine readLine 管理)
+  [💰 $0.041] [📊 125 t/s] [🧠 deepseek-v4-flash]      ← Footer (1行, 终端最底行 H-1)
 ```
-> 分区规则（自顶向下）：Header(1) → 上方滚动区 → 分割线(1) → 输入区(1) → 分割线(1) → Footer(1)
 
-### 7.2 `/model` 指令：输入行内嵌补全列表（Inline Completion Mode）
-#### 进化亮点
-1. **全局高度锁定**
-   补全下拉菜单展开时，底部 Footer 物理坐标固定，无上下位移。
-2. **光标行贴合布局**
-   补全列表紧贴输入行下方（由 LINE_OFFSET=2 保护的分割线之上）。
+### 区域坐标公式（H×W 终端）
 
-#### 补全布局效果示意
-```text
- ───────────────────────────────────────────────────────────────────────────────────────────
-  /model █
-    deepseek-v4-flash • medium       (Current)
-  █ deepseek-v4-reasoning • deep 
-    gpt-4o-mini
- ───────────────────────────────────────────────────────────────────────────────────────────
-  █████████████  █████████████  ███████████████████████ ── 🔌 Active: cland-pay-mcp
+```
+FIXED_ROWS = HEADER(1) + INPUT_BLOCK(2) + ACTION_BLOCK(2) + STATUS_HEIGHT(1) = 6
+QUEUE_HEIGHT = 1 (always present, blank when empty)
+contentHeight = H - 8 - 1 = H - 9
+
+ThinkBlock   ─ floor(contentHeight × 0.45)
+ObserveBlock ─ contentHeight - ThinkBlock
+```
+
+80×24 终端示例：
+
+```
+row  0:  Header
+row  1-2:  InputBlock       (2行)
+row  3-8:  ThinkBlock       (6行, 45%)
+row  9-10: ActionBlock      (2行)
+row 11-19: ObserveBlock     (9行, 55%)
+row 20:    Separator        (1行)
+row 21:    Queue line       (1行, 空白或无消息)
+row 22:    Input            (1行)
+row 23:    Footer           (1行, 终端最底行)
+```
+
+### TuiLayout 计算代码
+
+```java
+public void recalculate(int terminalWidth, int terminalHeight) {
+    this.terminalWidth = Math.max(terminalWidth, 40);
+    this.terminalHeight = Math.max(terminalHeight, FIXED_ROWS + 6);
+
+    int currentRow = 0;
+
+    // 1. Header: row 0
+    header.setBounds(currentRow, 0, this.terminalWidth, HEADER_HEIGHT);
+    currentRow += HEADER_HEIGHT;
+
+    // 2. InputBlock: 固定 2 行
+    inputBlock.setBounds(currentRow, 0, this.terminalWidth, INPUT_BLOCK_HEIGHT);
+    currentRow += INPUT_BLOCK_HEIGHT;
+
+    // 3. ThinkBlock: 45% of remaining
+    int remaining = terminalHeight - currentRow
+        - ACTION_BLOCK_HEIGHT - 1(separator) - QUEUE_HEIGHT - 1(input) - STATUS_HEIGHT;
+    thinkBlockHeight = (int) Math.floor(remaining * 0.45);
+    thinkBlock.setBounds(currentRow, 0, this.terminalWidth, thinkBlockHeight);
+    currentRow += thinkBlockHeight;
+
+    // 4. ActionBlock: 固定 2 行
+    actionBlock.setBounds(currentRow, 0, this.terminalWidth, ACTION_BLOCK_HEIGHT);
+    currentRow += ACTION_BLOCK_HEIGHT;
+
+    // 5. ObserveBlock: 剩余
+    remaining = terminalHeight - currentRow
+        - 1(separator) - QUEUE_HEIGHT - 1(input) - STATUS_HEIGHT;
+    observeBlock.setBounds(currentRow, 0, this.terminalWidth, remaining);
+    currentRow += remaining;
+
+    // 6-9. Separator / Queue / Input / Footer
+    separatorRow = currentRow;
+    queueRow = separatorRow + 1;
+    inputRow = queueRow + 1;
+    input.setBounds(inputRow, 0, this.terminalWidth, 1);
+    footerRow = terminalHeight - 1;
+    footer.setBounds(footerRow, 0, this.terminalWidth, STATUS_HEIGHT);
+}
 ```
 
 ---
 
-## 🛠 架构与工程实现重设计（Tactical Blueprint）
-### 1. 首次输入光标定位策略
-JLine 的首次 `reader.readLine()` 调用会初始化显示层并覆盖手动光标定位。
+## 🔌 PPAO 事件流 — Observer 模式
 
-修复方案：
-1. 在 synchronized 块前调用 `terminal.getHeight()` 创建终端 I/O 同步点，确保终端完成处理所有先前输出
-2. 使用原始 ANSI `\033[%d;1H` 定位光标（不更新 JLine 内部跟踪），然后 `\033[2K` 清行后 `flush()`
-3. 在 `reader.setVariable(LINE_OFFSET, 2)` 前调用 `reader.getVariable(LINE_OFFSET)` 预热 JLine 变量系统
-4. `LINE_OFFSET=2` 确保 JLine 首次初始化时计算显示位置为 `terminalHeight - 1 - 2 = H-3 = inputRow`
+### 接口定义 (`alice-core-agent`)
 
 ```java
-int inputRow = layout.inputRow();
-int termH = terminal.getHeight();
-reader.getVariable(LineReader.LINE_OFFSET);
-
-synchronized (terminalLock) {
-    terminal.writer().write(String.format("\033[%d;1H", inputRow + 1));
-    terminal.writer().write("\033[2K");
-    terminal.writer().flush();
-}
-
-reader.setVariable(LineReader.LINE_OFFSET, 2);
-inputActive.set(true);
-String line = reader.readLine(layout.input().prompt());
-```
-
-### 2. 渲染线程与 readLine() 输出竞态防御
-渲染线程的 `redrawScrollArea()` 与主线程的 `reader.readLine()` 同时写入终端输出流时，
-会导致光标跳跃、内容错乱。
-
-防御策略：
-- 新增 `inputActive` 原子标记，渲染循环在 `inputActive=true` 时跳过终端写入，将重绘标记记录到 `pendingRedraw`
-- 主线程在 `readLine()` 返回后在 `terminalLock` 下处理 deferred 重绘
-
-```java
-// 渲染循环
-if (inputActive.get()) {
-    if (contentDirty.get()) {
-        pendingRedraw.set(true);
-        contentDirty.set(false);
-    }
-} else if (contentDirty.compareAndSet(true, false)) {
-    redrawScrollArea();
-}
-
-// 输入循环
-inputActive.set(true);
-try {
-    line = reader.readLine(emptyPrompt);
-} finally {
-    inputActive.set(false);
-}
-if (pendingRedraw.compareAndSet(true, false)) {
-    contentDirty.set(true);
-    redrawScrollArea();
+public interface AgentEventListener {
+    default void onThought(String reasoningContent) {}
+    default void onAction(String target, Map<String, Object> params) {}
+    default void onObserve(String rawData, String summary, long elapsedMs) {}
 }
 ```
 
-### 3. 补全菜单边界防御策略
-不引入上层业务高度计算，直接通过 JLine 内置变量硬编码限制内嵌补全菜单最大渲染行数；
-超出阈值自动内部滚动，从底层锁定渲染边界，彻底规避 Footer 被顶出、界面闪烁问题。
+### AgentExecutor 分发点
+
+| 阶段 | AgentExecutor 方法 | 触发方法 | 监听器回调 |
+|------|-------------------|----------|-----------|
+| Reason | `dispatchLlmInference()` | `fireOnThought(reasoning)` | `onThought(String)` |
+| Dispatch | `dispatchToolCall()` | `fireOnAction(target, params)` | `onAction(target, params)` |
+| Observe | `dispatchToolCall()` (工具返回后) | `fireOnObserve(rawData, summary, elapsedMs)` | `onObserve(...)` |
+
+### TuiAgentListener 实现 (`alice-facade-tui`)
+
 ```java
-reader.setVariable(LineReader.LIST_MAX, 3);
-```
+public class TuiAgentListener implements AgentEventListener {
+    private final EventBridge eventBridge;
+    private final AtomicInteger thoughtStep;
+    private final AtomicReference<String> lastAction;
+    private final AtomicLong actionStartNanos;
 
-### 4. 零提示符纯净输入实现
-```java
-String userInput = reader.readLine("");
-```
-
-### 5. 并发日志分流渲染机制
-1. **日志输出规范**
-   禁止直接调用 `System.out.println()`；所有 TAO 业务日志由独立后台线程采集，统一通过 `reader.printAbove(logLine)` 输出。
-2. **底层渲染原理**
-   `printAbove` 自带原生双缓冲打印逻辑：擦除输入框上方渲染区、追加日志滚动后，自动还原输入视口原始坐标，保证输入上下文不丢失。
-
-### 6. 状态栏与TAO标签实体色块渲染方案
-摒弃字符拼接模拟边框，统一使用 **ANSI 256色背景控制码 `48;5;xxxm`** 生成满宽填充矩形色块；
-支持终端窗口 `WINCH` 缩放信号自适应重绘定位。
-
-#### 6.1 TAO标签色块枚举核心实现
-```java
-public enum TaoTag {
-    THOUGHT(" THOUGHT ", "\u001B[48;5;239m", "\u001B[37m"),  // 暗灰底 白色文字
-    ACTION( " ACTION  ", "\u001B[48;5;214m", "\u001B[30m"),  // 橙黄底 黑色文字
-    OBSERVE(" OBSERVE ", "\u001B[48;5;35m",  "\u001B[30m");  // 绿色底 黑色文字
-
-    private final String text;
-    private final String bgAnsi;
-    private final String fgAnsi;
-
-    TaoTag(String text, String bgAnsi, String fgAnsi) {
-        this.text = text;
-        this.bgAnsi = bgAnsi;
-        this.fgAnsi = fgAnsi;
+    @Override
+    public void onThought(String reasoningContent) {
+        eventBridge.onNewThought(reasoningContent, thoughtStep.incrementAndGet());
+        // → ScreenManager: ThinkBlock.addThought()
     }
 
-    public String render() {
-        return this.bgAnsi + this.fgAnsi + this.text + "\u001B[0m";
+    @Override
+    public void onAction(String target, Map<String, Object> params) {
+        lastAction.set(target + "(" + params + ")");
+        actionStartNanos.set(System.nanoTime());
+        eventBridge.onActionExecuting(ac);
+        // → ScreenManager: ActionBlock.addCommand()
+    }
+
+    @Override
+    public void onObserve(String rawData, String summary, long elapsedMs) {
+        double seconds = elapsedMs > 0 ? elapsedMs/1000.0 : nanos since actionStartNanos;
+        String content = "$ " + lastAction.get() + "\n" + rawData;
+        eventBridge.onObserved(content, seconds);
+        // → ScreenManager: ObserveBlock.addOutput() + addTiming(seconds)
     }
 }
 ```
 
-#### 6.2 底部 Footer 定位逻辑
-Footer 固定在终端最底行 (H-1)。重绘流程：
-1. `cursorLine(H-1)` 定位到终端最后一行
-2. `\033[K` 清除当前行残留字符
-3. 单行覆盖写入多色块拼接文本流
+### 注册
 
-ANSI输出示例：
-```text
-\u001B[48;5;208m\u001B[30m  💰 $0.041  \u001B[0m  \u001B[48;5;35m\u001B[30m  📊 125 t/s  \u001B[0m
+```java
+// AliceTuiLauncher.hookAgentEvents()
+agent.getExecutor().addListener(new TuiAgentListener(eventBridge));
 ```
-
-### 7. `restoreLowerArea()` 恢复被补全菜单覆盖的区域
-JLine 的 AUTO_MENU 补全菜单在输入行上方渲染，可能覆盖分割线和 Footer。
-每次 `readLine()` 返回后无条件恢复覆盖的区域。
-
-v2.6 恢复顺序：
-1. `cursorLine(separator2Row)` — 重绘输入区下方的分割线
-2. `cursorLine(footerRow)` — 重绘 Footer
-
-### 8. 键盘快捷键
-- **F5 / Ctrl+C**: 中断当前任务（`InterruptCmd`）
-- **Ctrl+D**: 退出 TUI
-- **Page Up / Page Down**: 滚动日志区
-- **Up / Down**: 输入历史浏览
 
 ---
 
-## 💎 设计演进核心总结
-1. **色块驱动，去符号化**
-   完全移除 `[T]`、`>`、`[Session]` 碎片化标记，统一等宽实体色块+极简分割线，视觉标准对齐工业级原生控制台。
-2. **底层变量锁死空间边界**
-   不依赖复杂高度计算公式，通过 `LIST_MAX` 原生参数控制渲染范围，降低业务维护成本。
-3. **终端 I/O 同步保障首次定位**
-   `terminal.getHeight()` 作为终端 I/O 同步点，确保首次 readLine 前光标已正确到位。
-4. **输入活跃标记防止渲染竞态**
-   `inputActive` / `pendingRedraw` 双标记系统，渲染循环在输入期间不写入终端，deferred 重绘在输入处理后安全执行。
+## 📋 输入队列
+
+### 队列生命周期
+
 ```
+用户输入 (Agent 忙碌)
+       ↓
+  ScreenManager.inputQueue.addLast(text)    ← 静默入队
+  layout.setQueueCount(queue.size())        ← 📋 N queued messages 显示
+       ↓
+Agent 任务完成 (TaskComplete / TaskError)
+       ↓
+  dispatchNextFromQueue()
+  queue.pollFirst() → 自动提交
+       ↓
+Agent 开始执行新任务
+```
+
+### 实现要点
+
+- `inputQueue` 为 `ArrayDeque<String>` FIFO 队列
+- `layout.setQueueCount(n)` 更新队列计数
+- `layout.queueLine()` 返回 ANSI 格式化队列行文本（空队列返回 `""`）
+- `queueRow` 位于 `separatorRow + 1`，在 `fullRedraw()` / `redrawScrollArea()` / `restoreLowerArea()` 中同步渲染
+- 队列行在 `cursorLine(queueRow)` 写入 `queueLine()` + `ANSI_CLEAR_LINE`
+
+---
+
+## 🎨 配色速查
+
+| 区域 | 背景 ANSI | 前景 ANSI | 说明 |
+|------|-----------|-----------|------|
+| Header | — | `38;5;242` | 暗色延伸 `─` |
+| InputBlock | `48;5;236` | `37` | 深灰底 |
+| ThinkBlock | `48;5;255` | `30` | 亮白底 |
+| ThinkBlock Step | `48;5;255` | `38;5;242` | 暗灰 `┈ Step N ┈` |
+| ActionBlock | `48;5;236` | `37` | 同 InputBlock 深灰底 |
+| ActionBlock `$` | `48;5;236` | `38;5;39` | 亮蓝命令提示符 |
+| ActionBlock timeout | `48;5;236` | `38;5;147` | 淡蓝超时标签 |
+| ObserveBlock | `48;5;234` | `37` | 终端深色底 |
+| ObserveBlock dir | `48;5;234` | `38;5;222` | 亮黄 drwx 行 |
+| ObserveBlock timing | `48;5;234` | `38;5;246` | 暗灰 Took X.XXs |
+| Queue line | — | `38;5;242` | 暗灰 `📋 N queued` |
+| Footer 费用 | `48;5;208` | `30` | 橙黄底 |
+| Footer 速率 | `48;5;35` | `30` | 绿底 |
+| Footer 模型 | `48;5;239` | `37` | 暗灰底 |
+
+---
+
+## 🛠 架构组件一览
+
+| 组件类 | 文件 | 职责 |
+|--------|------|------|
+| `InputBlockComponent` | `component/InputBlockComponent.java` | 顶部深色块，展示用户最新输入，无会话前缀 |
+| `ThinkBlockComponent` | `component/ThinkBlockComponent.java` | 中间推理区，亮底白字，`┈ Step N ┈` 步骤标记 |
+| `ActionBlockComponent` | `component/ActionBlockComponent.java` | 动作命令区，深底，`$ cmd (timeout 120s)` |
+| `ObserveBlockComponent` | `component/ObserveBlockComponent.java` | 观察输出区，终端深底，`Took X.XXs` |
+| `TuiLayout` | `layout/TuiLayout.java` | 8 组件布局计算，队列状态行渲染 |
+| `ScreenManager` | `ScreenManager.java` | 全屏渲染，输入循环，事件路由，队列管理 |
+| `EventBridge` | `bridge/EventBridge.java` | 事件总线，异步/同步投递 |
+| `TuiEvent` | `bridge/TuiEvent.java` | 密封事件类型 |
+| `TuiAgentListener` | `TuiAgentListener.java` | Observer 实现，PPAO → EventBridge 转发 |
+| `AgentEventListener` | (alice-core-agent) `executor/AgentEventListener.java` | Observer 接口 |
+| `AgentExecutor` | (alice-core-agent) | `addListener()` 注册，PPAO 三点分发 |
+
+---
+
+## 🧵 线程模型
+
+```
+┌──────────────────────┐    ┌─────────────────────────┐
+│   AgentExecutor      │    │   EventBridge            │
+│   (Vert.x eventloop) │    │   (single-thread exec)   │
+│                      │    │                          │
+│  fireOnThought() ────┼───→│  emit(NewThought)        │
+│  fireOnAction()  ────┼───→│  emit(ActionExecuting)   │
+│  fireOnObserve() ────┼───→│  emit(ObservationResult) │
+└──────────────────────┘    └─────────┬────────────────┘
+                                      │ dispatchToListeners()
+                                      ↓
+┌──────────────────────────────────────────────┐
+│  ScreenManager  (EventBridge listener)        │
+│  → layout.thinkBlock().addThought()           │
+│  → layout.actionBlock().addCommand()          │
+│  → layout.observeBlock().addOutput()          │
+│  → contentDirty.set(true)                     │
+└──────────────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│  Render Thread  (renderLoop)                  │
+│  polling contentDirty → redrawScrollArea()    │
+│  → cursorLine() + ANSI writes                 │
+└──────────────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│  Main Thread  (runInputLoop)                  │
+│  → reader.readLine()                          │
+│  → enqueue / submitTask                       │
+│  → restoreLowerArea() after readLine()        │
+└──────────────────────────────────────────────┘
+```
+
+---
+
+## 💎 设计演进总结
+
+| 版本 | 布局 | 事件 | 输入 |
+|------|------|------|------|
+| v2.6 | 单滚动区 + TaoTag 色块 | 轮询 StepResult | 阻塞时错误提示 |
+| v3.0 | 四段式 TAO 区域组件 | `Consumer<PPAOEvent>` | 同上 |
+| **v3.1** | 四段式 + 队列行 (8 组件) | `AgentEventListener` Observer 模式 | FIFO 输入队列自动提交 |
+
+关键转变：
+1. **去 TaoTag** — 区块背景色自身提供视觉区分
+2. **Observer 模式** — 类型安全接口，多监听器支持
+3. **实际耗时传递** — `ObservationResult.elapsedSec` 替代 `addTiming(0.0)`
+4. **输入队列** — 忙碌时静默入队，完成后自动提交
