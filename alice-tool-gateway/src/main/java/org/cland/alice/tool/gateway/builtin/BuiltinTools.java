@@ -135,7 +135,7 @@ public final class BuiltinTools {
     }
     Path resolved = resolvePath(path);
     if (!Files.exists(resolved)) {
-      throw new IOException("grep: path not found: " + path);
+      throw new IOException("grep: file not found: " + path);
     }
     java.util.regex.Pattern regex = java.util.regex.Pattern.compile(pattern);
 
