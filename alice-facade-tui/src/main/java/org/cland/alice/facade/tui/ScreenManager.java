@@ -234,7 +234,7 @@ public class ScreenManager implements AutoCloseable {
               contentDirty.set(true);
             }
             case TuiEvent.NewThought e -> {
-              layout.thinkBlock().addThought(e.thought(), e.step());
+              layout.thinkBlock().addThought(e.thought(), e.step(), e.traceId());
               contentDirty.set(true);
             }
             case TuiEvent.ActionExecuting e -> {
@@ -242,11 +242,18 @@ public class ScreenManager implements AutoCloseable {
                   e.action().type().name()
                       + (e.action().target() != null ? " (" + e.action().target() + ")" : "");
               layout.actionBlock().addCommand(desc);
+              // Also route to ThinkBlock for chronological PAO flow
+              String actionTarget = e.action().target();
+              if (actionTarget != null && !actionTarget.isBlank()) {
+                layout.thinkBlock().addActionLine(actionTarget, e.traceId());
+              }
               contentDirty.set(true);
             }
             case TuiEvent.ObservationResult e -> {
               layout.observeBlock().addOutput(e.summary());
               layout.observeBlock().addTiming(e.elapsedSec());
+              // Also route to ThinkBlock for chronological PAO flow
+              layout.thinkBlock().addObservationLine(e.summary(), e.elapsedSec());
               contentDirty.set(true);
             }
             case TuiEvent.ChatMessage e -> {
@@ -335,87 +342,30 @@ public class ScreenManager implements AutoCloseable {
     terminal.flush();
   }
 
-  /**
-   * 全屏重绘 — TAO 四段式布局 (v3.1)。
-   *
-   * <p>绘制顺序：Header → InputBlock → ThinkBlock → ActionBlock → ObserveBlock → 分割线 → 输入区 → Footer
-   */
+  /** 写入单行内容到指定行（含行尾清除）。row 为 0-indexed。 */
+  private void writeRow(java.io.Writer writer, int row, String content) throws java.io.IOException {
+    writer.write(String.format(ANSI_CURSOR_LINE, row + 1));
+    writer.write(content != null ? content : "");
+    writer.write(ANSI_CLEAR_LINE);
+  }
+
+  /** 全屏重绘 — 每个组件通过 {@code renderTo(writer)} 自行处理光标定位和行尾清除。 */
   private void fullRedraw() {
     java.io.Writer writer = terminal.writer();
     try {
-      // 1. Header
-      List<String> headerLines = layout.header().render();
-      for (int i = 0; i < headerLines.size(); i++) {
-        cursorLine(layout.header().row() + i);
-        writer.write(headerLines.get(i));
-        writer.write(ANSI_CLEAR_LINE);
-      }
+      layout.header().renderTo(writer);
+      layout.inputBlock().renderTo(writer);
+      layout.thinkBlock().renderTo(writer);
+      layout.actionBlock().renderTo(writer);
+      layout.observeBlock().renderTo(writer);
 
-      // 2. InputBlock
-      List<String> inputBlockLines = layout.inputBlock().render();
-      for (int i = 0; i < layout.inputBlockHeight(); i++) {
-        cursorLine(layout.inputBlockStartRow() + i);
-        if (i < inputBlockLines.size()) writer.write(inputBlockLines.get(i));
-        writer.write(ANSI_CLEAR_LINE);
-      }
+      writeRow(writer, layout.separatorRow(), layout.separatorLine());
+      writeRow(writer, layout.queueRow(), layout.queueLine());
 
-      // 3. ThinkBlock
-      List<String> thinkBlockLines = layout.thinkBlock().render();
-      for (int i = 0; i < layout.thinkBlockHeight(); i++) {
-        cursorLine(layout.thinkBlockStartRow() + i);
-        if (i < thinkBlockLines.size()) writer.write(thinkBlockLines.get(i));
-        writer.write(ANSI_CLEAR_LINE);
-      }
+      layout.input().renderTo(writer);
 
-      // 4. ActionBlock
-      List<String> actionBlockLines = layout.actionBlock().render();
-      for (int i = 0; i < layout.actionBlockHeight(); i++) {
-        cursorLine(layout.actionBlockStartRow() + i);
-        if (i < actionBlockLines.size()) writer.write(actionBlockLines.get(i));
-        writer.write(ANSI_CLEAR_LINE);
-      }
-
-      // 5. ObserveBlock
-      List<String> observeBlockLines = layout.observeBlock().render();
-      for (int i = 0; i < layout.observeBlockHeight(); i++) {
-        cursorLine(layout.observeBlockStartRow() + i);
-        if (i < observeBlockLines.size()) writer.write(observeBlockLines.get(i));
-        writer.write(ANSI_CLEAR_LINE);
-      }
-
-      // 6. 分割线
-      cursorLine(layout.separatorRow());
-      writer.write(layout.separatorLine());
-      writer.write(ANSI_CLEAR_LINE);
-
-      // 7. 队列状态行 (有消息时显示, 无消息时留空)
-      cursorLine(layout.queueRow());
-      String queueLine = layout.queueLine();
-      if (!queueLine.isEmpty()) {
-        writer.write(queueLine);
-      }
-      writer.write(ANSI_CLEAR_LINE);
-
-      // 8. 输入区
-      List<String> inputLines = layout.input().render();
-      for (int i = 0; i < inputLines.size(); i++) {
-        cursorLine(layout.inputRow() + i);
-        writer.write(inputLines.get(i));
-        writer.write(ANSI_CLEAR_LINE);
-      }
-
-      // 9. 下分割线 (输入区和 Footer 之间)
-      cursorLine(layout.separator2Row());
-      writer.write(layout.separatorLine());
-      writer.write(ANSI_CLEAR_LINE);
-
-      // 10. Footer
-      List<String> footerLines = layout.footer().render();
-      for (int i = 0; i < footerLines.size(); i++) {
-        cursorLine(layout.footerRow() + i);
-        writer.write(footerLines.get(i));
-        writer.write(ANSI_CLEAR_LINE);
-      }
+      writeRow(writer, layout.separator2Row(), layout.separatorLine());
+      layout.footer().renderTo(writer);
 
       writer.flush();
     } catch (IOException e) {
@@ -436,71 +386,17 @@ public class ScreenManager implements AutoCloseable {
           writer.write(ANSI_CLEAR_SCREEN);
         }
 
-        // 1. Header
-        List<String> headerLines = layout.header().render();
-        for (int i = 0; i < headerLines.size(); i++) {
-          cursorLine(layout.header().row() + i);
-          writer.write(headerLines.get(i));
-          writer.write(ANSI_CLEAR_LINE);
-        }
+        layout.header().renderTo(writer);
+        layout.inputBlock().renderTo(writer);
+        layout.thinkBlock().renderTo(writer);
+        layout.actionBlock().renderTo(writer);
+        layout.observeBlock().renderTo(writer);
 
-        // 2. InputBlock
-        List<String> inputBlockLines = layout.inputBlock().render();
-        for (int i = 0; i < layout.inputBlockHeight(); i++) {
-          cursorLine(layout.inputBlockStartRow() + i);
-          if (i < inputBlockLines.size()) writer.write(inputBlockLines.get(i));
-          writer.write(ANSI_CLEAR_LINE);
-        }
+        writeRow(writer, layout.separatorRow(), layout.separatorLine());
+        writeRow(writer, layout.queueRow(), layout.queueLine());
 
-        // 3. ThinkBlock
-        List<String> thinkBlockLines = layout.thinkBlock().render();
-        for (int i = 0; i < layout.thinkBlockHeight(); i++) {
-          cursorLine(layout.thinkBlockStartRow() + i);
-          if (i < thinkBlockLines.size()) writer.write(thinkBlockLines.get(i));
-          writer.write(ANSI_CLEAR_LINE);
-        }
-
-        // 4. ActionBlock
-        List<String> actionBlockLines = layout.actionBlock().render();
-        for (int i = 0; i < layout.actionBlockHeight(); i++) {
-          cursorLine(layout.actionBlockStartRow() + i);
-          if (i < actionBlockLines.size()) writer.write(actionBlockLines.get(i));
-          writer.write(ANSI_CLEAR_LINE);
-        }
-
-        // 5. ObserveBlock
-        List<String> observeBlockLines = layout.observeBlock().render();
-        for (int i = 0; i < layout.observeBlockHeight(); i++) {
-          cursorLine(layout.observeBlockStartRow() + i);
-          if (i < observeBlockLines.size()) writer.write(observeBlockLines.get(i));
-          writer.write(ANSI_CLEAR_LINE);
-        }
-
-        // 6. 分割线
-        cursorLine(layout.separatorRow());
-        writer.write(layout.separatorLine());
-        writer.write(ANSI_CLEAR_LINE);
-
-        // 7. 队列状态行 (有消息时显示, 无消息时留空)
-        cursorLine(layout.queueRow());
-        String queueLine = layout.queueLine();
-        if (!queueLine.isEmpty()) {
-          writer.write(queueLine);
-        }
-        writer.write(ANSI_CLEAR_LINE);
-
-        // 8. 下分割线 (输入区和 Footer 之间)
-        cursorLine(layout.separator2Row());
-        writer.write(layout.separatorLine());
-        writer.write(ANSI_CLEAR_LINE);
-
-        // 9. Footer
-        List<String> footerLines = layout.footer().render();
-        for (int i = 0; i < footerLines.size(); i++) {
-          cursorLine(layout.footerRow() + i);
-          writer.write(footerLines.get(i));
-          writer.write(ANSI_CLEAR_LINE);
-        }
+        writeRow(writer, layout.separator2Row(), layout.separatorLine());
+        layout.footer().renderTo(writer);
 
         writer.flush();
       } catch (IOException e) {
@@ -514,10 +410,8 @@ public class ScreenManager implements AutoCloseable {
       try {
         if (contentDirty.compareAndSet(true, false)) {
           if (inputActive.get()) {
-            // 输入活跃期间只渲染滚动区域（非输入行），不触碰 JLine 管理的输入行及下方区域。
-            // 滚动区域（header → separator）位于输入行上方，JLine 不管理这些行，安全可写。
-            // 同时标记 pendingRedraw，等 readLine 返回后由主线程补全下方（separator2/footer）。
-            redrawScrollArea();
+            // 输入活跃期间不触碰终端（避免干扰 JLine 光标管理），仅标记 deferred redraw。
+            // readLine 返回后由主线程通过 pendingRedraw 处理。
             pendingRedraw.set(true);
           } else {
             redrawScrollArea();
@@ -566,13 +460,14 @@ public class ScreenManager implements AutoCloseable {
 
       // 光标定位：使用 raw ANSI 直接写入 terminal.writer()，
       // 避免 terminal.puts() 可能产生的 JLine 内部状态干扰。
+      inputActive.set(true);
+
       synchronized (terminalLock) {
         terminal.writer().write(String.format(ANSI_CURSOR_LINE, inputRow + 1));
         terminal.writer().write("\033[2K");
         terminal.writer().flush();
       }
 
-      inputActive.set(true);
       String line;
       try {
         line = reader.readLine(layout.input().prompt());
@@ -642,32 +537,10 @@ public class ScreenManager implements AutoCloseable {
     synchronized (terminalLock) {
       java.io.Writer writer = terminal.writer();
       try {
-        // 1. 上分割线 (内容区和输入区之间)
-        cursorLine(layout.separatorRow());
-        writer.write(layout.separatorLine());
-        writer.write(ANSI_CLEAR_LINE);
-
-        // 2. 队列状态行
-        cursorLine(layout.queueRow());
-        String queueLine = layout.queueLine();
-        if (!queueLine.isEmpty()) {
-          writer.write(queueLine);
-        }
-        writer.write(ANSI_CLEAR_LINE);
-
-        // 3. 下分割线 (输入区和 Footer 之间)
-        cursorLine(layout.separator2Row());
-        writer.write(layout.separatorLine());
-        writer.write(ANSI_CLEAR_LINE);
-
-        // 4. Footer
-        List<String> footerLines = layout.footer().render();
-        for (int i = 0; i < footerLines.size(); i++) {
-          cursorLine(layout.footerRow() + i);
-          writer.write(footerLines.get(i));
-          writer.write(ANSI_CLEAR_LINE);
-        }
-
+        writeRow(writer, layout.separatorRow(), layout.separatorLine());
+        writeRow(writer, layout.queueRow(), layout.queueLine());
+        writeRow(writer, layout.separator2Row(), layout.separatorLine());
+        layout.footer().renderTo(writer);
         writer.flush();
       } catch (IOException e) {
         logger.warn("Failed to restore lower area after JLine completion menu", e);

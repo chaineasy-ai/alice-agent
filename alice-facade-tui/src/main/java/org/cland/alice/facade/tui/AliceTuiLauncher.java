@@ -63,6 +63,9 @@ public class AliceTuiLauncher implements AutoCloseable {
   /** 当前会话 ID */
   private final String sessionId;
 
+  /** TUI Agent 事件监听器（用于新 trace 通知） */
+  private final TuiAgentListener tuiListener;
+
   // ========== 构造 ==========
 
   public AliceTuiLauncher() throws IOException {
@@ -98,6 +101,9 @@ public class AliceTuiLauncher implements AutoCloseable {
     this.screenManager = new ScreenManager(eventBridge);
     this.running = true;
 
+    // 3a. 创建 TUI Agent 事件监听器
+    this.tuiListener = new TuiAgentListener(eventBridge);
+
     // 4. 设置回调
     setupCallbacks();
 
@@ -112,6 +118,7 @@ public class AliceTuiLauncher implements AutoCloseable {
     this.eventBridge = new EventBridge();
     this.screenManager = new ScreenManager(eventBridge);
     this.running = true;
+    this.tuiListener = new TuiAgentListener(eventBridge);
     setupCallbacks();
     this.screenManager.layout().footer().setModel(agent.config().defaultModelId());
   }
@@ -139,7 +146,6 @@ public class AliceTuiLauncher implements AutoCloseable {
    * 渲染顺序与执行顺序一致。
    */
   private void hookAgentEvents() {
-    var tuiListener = new TuiAgentListener(eventBridge);
     agent.getExecutor().addListener(tuiListener);
   }
 
@@ -206,6 +212,10 @@ public class AliceTuiLauncher implements AutoCloseable {
   /** 提交任务给 Agent 核心执行 */
   private void submitTaskToAgent(String task) {
     logger.info("Submitting task: {}", task);
+
+    // 为本次用户输入生成新的 traceId，标记 t/a/o 微单元的归属
+    String traceId = SnowflakeIdGenerator.generateSessionId();
+    tuiListener.newTrace(traceId);
 
     CompletableFuture.runAsync(
         () -> {

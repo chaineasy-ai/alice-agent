@@ -41,6 +41,26 @@ public abstract class Component {
    */
   public abstract java.util.List<String> render();
 
+  /**
+   * 将组件内容渲染到终端 Writer 的指定位置。
+   *
+   * <p>每个组件根据自身 {@link #row} 和 {@link #height} 决定输出行号， 并在每行后附加 {@code \033[K}（清除行尾）避免残留字符。
+   *
+   * @param writer 终端 Writer 实例
+   */
+  public void renderTo(java.io.Writer writer) throws java.io.IOException {
+    if (!visible || width <= 0 || height <= 0) {
+      clearDirty();
+      return;
+    }
+    clearDirty();
+    java.util.List<String> lines = render();
+    // row 是 0-indexed，\033[%d;1H 是 1-indexed
+    for (int i = 0; i < lines.size(); i++) {
+      writer.write(String.format("\033[%d;1H%s\033[K", row + i + 1, lines.get(i)));
+    }
+  }
+
   // ========== 布局管理 ==========
 
   public void setBounds(int row, int col, int width, int height) {

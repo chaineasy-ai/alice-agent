@@ -110,22 +110,37 @@ public class EventBridge implements AutoCloseable {
 
   /** 当 Agent 产生新的思考时调用 */
   public void onNewThought(String thought, int step) {
-    emit(new TuiEvent.NewThought(thought, step));
+    emit(new TuiEvent.NewThought(thought, step, null));
+  }
+
+  /** 当 Agent 产生新的思考时调用（含 traceId） */
+  public void onNewThought(String thought, int step, String traceId) {
+    emit(new TuiEvent.NewThought(thought, step, traceId));
   }
 
   /** 当 Agent 执行 Action 时调用 */
   public void onActionExecuting(Action action) {
-    emit(new TuiEvent.ActionExecuting(action));
+    emit(new TuiEvent.ActionExecuting(action, null));
+  }
+
+  /** 当 Agent 执行 Action 时调用（含 traceId） */
+  public void onActionExecuting(Action action, String traceId) {
+    emit(new TuiEvent.ActionExecuting(action, traceId));
   }
 
   /** 当观测结果返回时调用 */
   public void onObserved(String summary) {
-    emit(new TuiEvent.ObservationResult(summary, 0.0));
+    emit(new TuiEvent.ObservationResult(summary, 0.0, null));
   }
 
   /** 当观测结果返回时调用（含执行耗时） */
   public void onObserved(String summary, double elapsedSec) {
-    emit(new TuiEvent.ObservationResult(summary, elapsedSec));
+    emit(new TuiEvent.ObservationResult(summary, elapsedSec, null));
+  }
+
+  /** 当观测结果返回时调用（含执行耗时 + traceId） */
+  public void onObserved(String summary, double elapsedSec, String traceId) {
+    emit(new TuiEvent.ObservationResult(summary, elapsedSec, traceId));
   }
 
   /** 任务完成时调用 */

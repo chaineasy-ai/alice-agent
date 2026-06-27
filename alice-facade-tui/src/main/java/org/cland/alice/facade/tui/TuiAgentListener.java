@@ -29,6 +29,9 @@ public class TuiAgentListener implements AgentEventListener {
   private final java.util.concurrent.atomic.AtomicReference<String> lastAction;
   private final java.util.concurrent.atomic.AtomicLong actionStartNanos;
 
+  /** 当前 traceId（对应一次 user say），由 AliceTuiLauncher 在提交任务时设置 */
+  private volatile String currentTraceId;
+
   /**
    * @param eventBridge TUI EventBridge 实例
    */
@@ -37,10 +40,26 @@ public class TuiAgentListener implements AgentEventListener {
     this.thoughtStep = new java.util.concurrent.atomic.AtomicInteger(0);
     this.lastAction = new java.util.concurrent.atomic.AtomicReference<>();
     this.actionStartNanos = new java.util.concurrent.atomic.AtomicLong(0L);
+    this.currentTraceId = null;
   }
 
   /** 重置步骤计数器（会话重置时调用）。 */
   public void reset() {
+    thoughtStep.set(0);
+    lastAction.set(null);
+    actionStartNanos.set(0L);
+    currentTraceId = null;
+  }
+
+  /**
+   * 开始新的 trace（对应一次 user say）。
+   *
+   * <p>重置步数计数器，设置 traceId，后续所有 t/a/o 事件携带此 traceId。
+   *
+   * @param traceId 新 trace 的 ID
+   */
+  public void newTrace(String traceId) {
+    this.currentTraceId = traceId;
     thoughtStep.set(0);
     lastAction.set(null);
     actionStartNanos.set(0L);
@@ -51,7 +70,7 @@ public class TuiAgentListener implements AgentEventListener {
     if (reasoningContent == null || reasoningContent.isBlank() || reasoningContent.length() < 10) {
       return;
     }
-    eventBridge.onNewThought(reasoningContent, thoughtStep.incrementAndGet());
+    eventBridge.onNewThought(reasoningContent, thoughtStep.incrementAndGet(), currentTraceId);
   }
 
   @Override
@@ -65,7 +84,7 @@ public class TuiAgentListener implements AgentEventListener {
 
     // 构建 Action 对象并投递到 ActionBlock
     var ac = Action.builder().type(Action.Type.TOOL_CALL).target(actionText).build();
-    eventBridge.onActionExecuting(ac);
+    eventBridge.onActionExecuting(ac, currentTraceId);
   }
 
   @Override
@@ -92,6 +111,6 @@ public class TuiAgentListener implements AgentEventListener {
     var observeContent = action != null ? "$ " + action + "\n" + rawData : rawData;
 
     // 将包含 action 命令前缀的观察内容 + 实际耗时一起投递
-    eventBridge.onObserved(observeContent, seconds);
+    eventBridge.onObserved(observeContent, seconds, currentTraceId);
   }
 }

@@ -45,10 +45,16 @@ public abstract sealed class TuiEvent {
   public static final class NewThought extends TuiEvent {
     private final String thought;
     private final int step;
+    private final String traceId;
 
     public NewThought(String thought, int step) {
+      this(thought, step, null);
+    }
+
+    public NewThought(String thought, int step, String traceId) {
       this.thought = thought;
       this.step = step;
+      this.traceId = traceId;
     }
 
     public String thought() {
@@ -58,18 +64,32 @@ public abstract sealed class TuiEvent {
     public int step() {
       return step;
     }
+
+    public String traceId() {
+      return traceId;
+    }
   }
 
   /** Agent 正在执行某个 Action */
   public static final class ActionExecuting extends TuiEvent {
     private final Action action;
+    private final String traceId;
 
     public ActionExecuting(Action action) {
+      this(action, null);
+    }
+
+    public ActionExecuting(Action action, String traceId) {
       this.action = action;
+      this.traceId = traceId;
     }
 
     public Action action() {
       return action;
+    }
+
+    public String traceId() {
+      return traceId;
     }
   }
 
@@ -96,15 +116,20 @@ public abstract sealed class TuiEvent {
   public static final class ObservationResult extends TuiEvent {
     private final String summary;
     private final double elapsedSec;
+    private final String traceId;
 
     public ObservationResult(String summary) {
-      this.summary = summary;
-      this.elapsedSec = 0.0;
+      this(summary, 0.0, null);
     }
 
     public ObservationResult(String summary, double elapsedSec) {
+      this(summary, elapsedSec, null);
+    }
+
+    public ObservationResult(String summary, double elapsedSec, String traceId) {
       this.summary = summary;
       this.elapsedSec = elapsedSec;
+      this.traceId = traceId;
     }
 
     public String summary() {
@@ -114,6 +139,10 @@ public abstract sealed class TuiEvent {
     /** 工具执行耗时（秒），由 AgentExecutor 或 TuiAgentListener 计时提供。 */
     public double elapsedSec() {
       return elapsedSec;
+    }
+
+    public String traceId() {
+      return traceId;
     }
   }
 

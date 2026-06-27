@@ -3,6 +3,8 @@ package org.cland.alice.facade.tui.component;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
+import org.jline.utils.AttributedString;
+import org.jline.utils.AttributedStyle;
 
 /**
  * 思考内容区组件（TAO 三段式 — 中间推理块）。
@@ -41,6 +43,31 @@ public class ThinkBlockComponent extends Component {
   private static final String ANSI_BOLD = "\u001B[1m";
   private static final String ANSI_DIM = "\u001B[38;5;242m";
 
+  /** ACTION 色块：橙黄底 + 黑字 — 9字符等宽 */
+  private static final String ACTION_TAG =
+      new AttributedString(
+              " ACTION  ",
+              AttributedStyle.DEFAULT.background(255, 135, 0).foreground(AttributedStyle.BLACK))
+          .toAnsi();
+
+  /** OBSERVE 色块：绿底 + 黑字 — 9字符等宽 */
+  private static final String OBSERVE_TAG =
+      new AttributedString(
+              " OBSERVE ",
+              AttributedStyle.DEFAULT.background(0, 175, 75).foreground(AttributedStyle.BLACK))
+          .toAnsi();
+
+  /** 缩进 + ACTION 色块 + 恢复 ThinkBlock 背景 */
+  private static final String ACTION_PREFIX =
+      TAO_INDENT + ACTION_TAG + ANSI_BG_LIGHT + ANSI_FG_DARK + " ";
+
+  /** 缩进 + OBSERVE 色块 + 恢复 ThinkBlock 背景 */
+  private static final String OBSERVE_PREFIX =
+      TAO_INDENT + OBSERVE_TAG + ANSI_BG_LIGHT + ANSI_FG_DARK + " ";
+
+  /** 耗时前缀（暗色） */
+  private static final String TIMING_PREFIX = TAO_INDENT + "  " + ANSI_DIM;
+
   /** Agent 内部协议标记 */
   private static final Pattern AGENT_MARKERS = Pattern.compile("\\[FINISH\\]");
 
@@ -72,9 +99,25 @@ public class ThinkBlockComponent extends Component {
    * <p>使用暗色 step 标记前缀区分连续推理块，避免多段推理视觉粘连。 区域背景色已由 ThinkBlock 亮色背景区分。
    */
   public void addThought(String thought, int step) {
+    addThought(thought, step, null);
+  }
+
+  /**
+   * 追加思考片段（含 traceId）。
+   *
+   * <p>step 标记后附加 traceId 短哈希，方便关联同一 trace 下的 t/a/o 微单元。
+   */
+  public void addThought(String thought, int step, String traceId) {
     if (thought != null) {
       if (step > 0) {
-        appendLine(TAO_INDENT + ANSI_DIM + "\u2508 Step " + step + " \u2508" + ANSI_RESET);
+        var sb = new StringBuilder();
+        sb.append(TAO_INDENT).append(ANSI_DIM).append("\u2508 Step ").append(step);
+        if (traceId != null && !traceId.isBlank()) {
+          String shortTrace = traceId.length() > 8 ? traceId.substring(0, 8) : traceId;
+          sb.append(" [").append(shortTrace).append("]");
+        }
+        sb.append(" \u2508").append(ANSI_RESET);
+        appendLine(sb.toString());
       }
       for (String line : resolveLines(thought)) {
         appendLine(TAO_INDENT + line);
@@ -92,6 +135,68 @@ public class ThinkBlockComponent extends Component {
     for (String line : resolveLines(content)) {
       appendLine("  " + line);
     }
+  }
+
+  /**
+   * 追加 Action 执行行到思考区域（保持 PAO 时间序）。
+   *
+   * <p>在思考内容之后插入橙黄色箭头行，形如：
+   *
+   * <pre>
+   *     ⮞ TOOL_CALL: list_dir ({path:.})
+   * </pre>
+   */
+  public void addActionLine(String desc) {
+    addActionLine(desc, null);
+  }
+
+  /**
+   * 追加 Action 执行行到思考区域（含 traceId）。
+   *
+   * <p>在 action 描述后附加 traceId 短哈希，方便关联到所属的 thought。
+   */
+  public void addActionLine(String desc, String traceId) {
+    if (desc == null || desc.isBlank()) return;
+    appendLine(ACTION_PREFIX + desc + ANSI_RESET);
+  }
+
+  /**
+   * 追加 Observation 结果行到思考区域（保持 PAO 时间序）。
+   *
+   * <p>在 action 行之后插入绿色箭头行，形如：
+   *
+   * <pre>
+   *     ⮞ # Alice Agent...
+   *     (Took 0.0s)
+   * </pre>
+   *
+   * @param observation 观测内容（多行自动拆分）
+   * @param elapsedSec 执行耗时（秒）
+   */
+  /** Pattern to match leading "$ command" lines (skip them since action is already shown) */
+  private static final java.util.regex.Pattern ACTION_CMD_PREFIX =
+      java.util.regex.Pattern.compile("^\\s*\\$\\s+\\S+.*");
+
+  public void addObservationLine(String observation, double elapsedSec) {
+    if (observation == null || observation.isBlank()) return;
+    // 取观测内容的前 3 行摘要，避免撑爆 ThinkBlock
+    String[] lines = observation.split("\n", -1);
+    int printed = 0;
+    int totalLines = 0;
+    for (String line : lines) {
+      // Skip "$ command" lines (already shown by addActionLine) and blank lines
+      if (line.isBlank() || ACTION_CMD_PREFIX.matcher(line).matches()) continue;
+      totalLines++;
+      if (printed >= 3) continue;
+      appendLine(OBSERVE_PREFIX + line);
+      printed++;
+    }
+    if (totalLines > 3) {
+      appendLine(
+          OBSERVE_PREFIX + ANSI_DIM + "... (" + (totalLines - 3) + " more lines)" + ANSI_RESET);
+    }
+    // 耗时行
+    appendLine(TIMING_PREFIX + "(Took " + String.format("%.1f", elapsedSec) + "s)" + ANSI_RESET);
   }
 
   /** 追加系统消息（支持多行，自动处理 \n 转义）。 */
