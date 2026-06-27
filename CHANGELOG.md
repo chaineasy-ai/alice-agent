@@ -32,14 +32,25 @@ updated: "2026-06-27"
   - **`ThinkBlockComponent`** (新增) — 中间思考推理区，亮色底 ANSI 255，每段推理前显示暗色 `┈ Step N ┈` 步骤标记
   - **`ActionBlockComponent`** (新增) — 动作命令区，深色底 ANSI 236（同 InputBlock 风格），`$ command (timeout 120s)` 终端格式
   - **`ObserveBlockComponent`** (新增) — 观察输出区，终端深色底 ANSI 234，`ls -la` 风格行亮黄高亮，`Took X.XXs` 耗时统计
-  - **`TuiLayout`**: 7 组件布局（Header + 4 TAO Zone + Input + Footer），FIXED_ROWS=6，ThinkBlock(~45%)/ObserveBlock(~55%) 比例分配
+  - **`TuiLayout`**: 8 组件布局（Header + 4 TAO Zone + Input + Queue + Footer），FIXED_ROWS=6 + QUEUE_HEIGHT=1，ThinkBlock(~45%)/ObserveBlock(~55%) 比例分配
   - `TaoTag` 色块标签不再用于 ThinkBlock 内容，区域背景色自身提供视觉区分
-- **PPAO 事件流实时推送 (`alice-core-agent`, `alice-facade-tui`)**: AgentExecutor 的 Micro-ReAct 循环中推理/动作/观察事件实时转发到 TUI。
-  - `AgentExecutor`: 新增 `PPAOEvent` record + `onPPAOEvent(Consumer<PPAOEvent>)` 注册方法
-  - `dispatchLlmInference`: 提取 `__llm_reasoning` 后即发射 `thought` 事件
-  - `dispatchToolCall`: 执行前发射 `action` 事件，工具结果返回后发射 `observe` 事件（使用 `rawData` 而非 `summary` 去除 `"Tool [X] returned: "` 前缀）
-  - `Agent.java`: 新增 `getExecutor()` 公开 getter
-  - `AliceTuiLauncher.hookAgentEvents()`: 注册 PPAO consumer，跟踪 `lastAction` 配对 observe 上下文
+- **PPAO 事件流 Observer 模式重构 (`alice-core-agent`, `alice-facade-tui`)**: 使用标准 Observer 模式替代原始 `Consumer<>` 回调。
+  - `AgentEventListener` interface (新增, alice-core-agent): 类型安全的事件监听器方法——`onThought(String)`、`onAction(target, params)`、`onObserve(rawData, summary, elapsedMs)`
+  - `AgentExecutor`: `List<AgentEventListener>` 替代单 `Consumer<PPAOEvent>`；移除 `PPAOEvent` record；新增 `addListener()`、`fireOnThought/Action/Observe()` 分发方法
+  - `TuiAgentListener` (新增, alice-facade-tui): 实现 `AgentEventListener`，将 PPAO 事件转发到 EventBridge，追踪 `lastAction` 配对 observe，计入工具实际耗时
+  - `AliceTuiLauncher.hookAgentEvents()`: 简化为单行 `agent.getExecutor().addListener(new TuiAgentListener(eventBridge))`
+  - `TuiEvent.ObservationResult`: 新增 `elapsedSec` 字段，携带实际工具执行耗时
+  - `ScreenManager`: 使用 `ObservationResult.elapsedSec()` 替代硬编码的 `addTiming(0.0)`
+- **PPAO observe 事件使用 rawData**: 工具执行结果从 `summary`（截断+ `"Tool [X] returned: "` 前缀）改为 `rawData`（完整原生输出），在 ObserveBlock 中展示完整内容
+
+### Features
+
+- **TUI 输入队列 (`alice-facade-tui`)**: Agent 忙碌时用户输入自动入队等待，完成后逐一自动提交。
+  - `ScreenManager.inputQueue` (`Deque<String>`): FIFO 队列缓存忙碌期间的输入
+  - `runInputLoop()`: Agent 忙碌时不再显示 `Agent 正在执行中，请等待` 错误消息，改为静默入队
+  - `dispatchNextFromQueue()`: `TaskComplete` 触发后自动从队列取出并提交下一条，状态无需用户干预
+  - `TuiLayout.queueRow`: 分割线与输入区之间的状态行，有消息时显示 `📋 N queued messages`，无消息时留空
+  - `restoreLowerArea()`/`fullRedraw()`/`redrawScrollArea()`: 同步渲染队列状态行
 
 ### Fixes
 
