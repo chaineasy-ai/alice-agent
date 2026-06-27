@@ -121,11 +121,11 @@ public final class BuiltinTools {
   @AgentTool(
       name = "grep",
       description =
-          "Search for lines matching a regex pattern in a file. Returns matching lines with line numbers.",
+          "Search for lines matching a regex pattern in a file or directory. If path is a directory, searches all files recursively (like 'grep -r'). Returns matching lines with line numbers.",
       risk = RiskLevel.LOW)
   public String grep(
       @ToolParam(value = "pattern", description = "Regex pattern to search for") String pattern,
-      @ToolParam(value = "path", description = "File path to search in") String path)
+      @ToolParam(value = "path", description = "File or directory path to search in") String path)
       throws IOException {
     if (path == null || path.isBlank()) {
       throw new IllegalArgumentException("grep: path is required");
@@ -134,27 +134,54 @@ public final class BuiltinTools {
       throw new IllegalArgumentException("grep: pattern is required");
     }
     Path resolved = resolvePath(path);
-    if (!Files.exists(resolved) || !Files.isRegularFile(resolved)) {
-      throw new IOException("grep: file not found: " + path);
+    if (!Files.exists(resolved)) {
+      throw new IOException("grep: path not found: " + path);
     }
     java.util.regex.Pattern regex = java.util.regex.Pattern.compile(pattern);
-    List<String> lines;
-    try (Stream<String> lineStream = Files.lines(resolved, StandardCharsets.UTF_8)) {
-      lines = lineStream.toList();
+
+    // Collect all regular files to search
+    List<Path> files = new ArrayList<>();
+    if (Files.isRegularFile(resolved)) {
+      files.add(resolved);
+    } else if (Files.isDirectory(resolved)) {
+      try (Stream<Path> walk = Files.walk(resolved)) {
+        walk.filter(Files::isRegularFile).forEach(files::add);
+      }
+    } else {
+      throw new IOException("grep: not a regular file or directory: " + path);
     }
+
     StringBuilder sb = new StringBuilder();
-    int count = 0;
-    for (int i = 0; i < lines.size(); i++) {
-      if (regex.matcher(lines.get(i)).find()) {
-        sb.append(i + 1).append(": ").append(lines.get(i)).append("\n");
-        count++;
+    int totalMatches = 0;
+    boolean multiFile = files.size() > 1;
+
+    for (Path file : files) {
+      List<String> lines;
+      try (Stream<String> lineStream = Files.lines(file, StandardCharsets.UTF_8)) {
+        lines = lineStream.toList();
+      }
+
+      for (int i = 0; i < lines.size(); i++) {
+        if (regex.matcher(lines.get(i)).find()) {
+          if (multiFile) {
+            sb.append(file.getFileName()).append(":");
+          }
+          sb.append(i + 1).append(": ").append(lines.get(i)).append("\n");
+          totalMatches++;
+        }
       }
     }
+
     String result = sb.toString();
-    logger.debug("[BuiltinTool] grep '{}' in {} ({} matches)", pattern, path, count);
-    return count == 0
+    logger.debug(
+        "[BuiltinTool] grep '{}' in {} ({} matches across {} files)",
+        pattern,
+        path,
+        totalMatches,
+        files.size());
+    return totalMatches == 0
         ? "No matches found for pattern '" + pattern + "' in " + path
-        : "Found " + count + " match(es):\n" + result;
+        : "Found " + totalMatches + " match(es) across " + files.size() + " file(s):\n" + result;
   }
 
   // ==================================================================

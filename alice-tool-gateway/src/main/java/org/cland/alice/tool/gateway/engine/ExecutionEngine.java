@@ -165,13 +165,37 @@ public class ExecutionEngine {
    *
    * <p>对应设计文档 §6.2 错误处理的语义化： 不直接返回 Java StackTrace，而是转换为 LLM 可理解的描述性错误。
    */
+  /** Dig into the cause chain to find the deepest meaningful message. */
+  private static String deepestCauseMessage(Throwable error) {
+    Throwable current = error;
+    String lastMessage = null;
+    while (current != null) {
+      String msg = current.getMessage();
+      if (msg != null && !msg.isBlank()) {
+        lastMessage = msg;
+      }
+      current = current.getCause();
+    }
+    return lastMessage;
+  }
+
   private ToolResult wrapError(String toolName, Throwable error) {
     String errorMessage = error.getMessage();
+    String deepMessage = deepestCauseMessage(error);
     String causeMessage = error.getCause() != null ? error.getCause().getMessage() : null;
 
-    // 构建 LLM 友好的错误描述
+    // 构建 LLM 友好的错误描述（尽量使用最深处的原因消息）
     String description;
-    if (errorMessage != null && causeMessage != null) {
+    if (deepMessage != null && !deepMessage.equals(errorMessage) && causeMessage != null) {
+      description =
+          "Tool ["
+              + toolName
+              + "] execution failed: "
+              + errorMessage
+              + " (cause: "
+              + deepMessage
+              + ")";
+    } else if (errorMessage != null && causeMessage != null) {
       description =
           "Tool ["
               + toolName

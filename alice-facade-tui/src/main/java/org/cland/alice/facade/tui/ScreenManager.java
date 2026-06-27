@@ -648,6 +648,13 @@ public class ScreenManager implements AutoCloseable {
         running.set(false);
         if (onExit != null) onExit.run();
         break;
+      } catch (Exception e) {
+        // 终端可能在关闭过程中（close() 从另一线程调用），
+        // reader.readLine() 会抛出 Already closed（IllegalStateException）
+        inputActive.set(false);
+        if (!running.get()) break;
+        logger.warn("Unexpected error in input loop, retrying", e);
+        continue;
       } finally {
         inputActive.set(false);
       }

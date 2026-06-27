@@ -71,7 +71,8 @@ public final class TuiState {
 
   private static boolean canTransition(State from, State to) {
     return switch (from) {
-      case IDLE -> to == State.INPUTING || to == State.RUNNING || to == State.ERROR;
+      case IDLE ->
+          to == State.IDLE || to == State.INPUTING || to == State.RUNNING || to == State.ERROR;
       case INPUTING -> to == State.RUNNING || to == State.IDLE || to == State.ERROR;
       case RUNNING -> to == State.IDLE || to == State.INTERVENE || to == State.ERROR;
       case INTERVENE -> to == State.RUNNING || to == State.IDLE || to == State.ERROR;

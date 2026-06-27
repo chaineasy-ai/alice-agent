@@ -23,6 +23,15 @@ updated: "2026-06-27"
 
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- **alice-facade-tui/TuiState**: Invalid TUI state transition `IDLE -> IDLE` 不再抛出 `IllegalStateException`。允许 `IDLE -> IDLE` 作为合法的空操作转换，消除 `TaskComplete` 事件或 `/reset` 命令在状态已为 `IDLE` 时触发的异常。
+- **alice-facade-tui/ScreenManager**: 修复终端关闭时 `reader.readLine()` 抛出 `Already closed`（`IllegalStateException`）的竞态条件。新增通用 `catch (Exception e)` 分支，在终端关闭时优雅退出输入循环而非崩溃。
+- **alice-tool-gateway/BuiltinTools/grep**: `grep` 工具从仅支持单个文件扩展为支持目录路径递归搜索（类似 `grep -r`）。当 LLM 传入 `.` 等目录路径时自动遍历所有文件搜索匹配行，多文件场景在输出行前附加文件名前缀。
+- **alice-tool-gateway/ExecutionEngine/wrapError**: 修复工具执行异常时根因消息被双层异常包装（`ExecutionException -> RuntimeException`）掩盖的问题。新增 `deepestCauseMessage()` 深入异常链提取最内层原因消息，LLM 现在能收到如 `"Tool [grep] execution failed: Sandbox execution failed (cause: grep: path not found: .)"` 的有用信息。
+
 ## 20260627
 
 ### BREAKING
