@@ -23,18 +23,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * ScreenManager：基于 JLine 3 的 TUI 核心管理器 — TAO 四段式布局 (v3.1)。
+ * ScreenManager：基于 JLine 3 的 TUI 核心管理器 — 三区对齐布局 (v4.0)。
  *
- * <p>对应 Layout_TAO.md 扩展四段式布局：
+ * <p>将终端窗口划分为三个清晰对齐的区域：
  *
  * <ul>
- *   <li>输入内容区（InputBlock）—— 用户输入和会话上下文
- *   <li>思考内容区（ThinkBlock）—— Agent 推理/思考过程
- *   <li>动作内容区（ActionBlock）—— 执行的命令（同 InputBlock 风格）
- *   <li>观察内容区（ObserveBlock）—— 命令执行输出的结果
+ *   <li><b>Main Area</b> — Header + MessageArea (unified scrollable message stream)
+ *   <li><b>Input Area</b> — 分割线 + 队列状态 + 输入行
+ *   <li><b>Footer</b> — 费用 + 模型 + 工具信息
  * </ul>
  *
- * <p>参考 docs/alice-facade-tui/Layout_TAO.md
+ * <p>参考 docs/alice-facade-tui/Layout.md (v4.0 三区对齐)
  */
 public class ScreenManager implements AutoCloseable {
 
@@ -127,17 +126,15 @@ public class ScreenManager implements AutoCloseable {
             .variable(LineReader.LIST_MAX, COMPLETION_LIST_MAX)
             .build();
 
-    // 初始化 TAO 四段式组件
+    // 初始化三区对齐组件
     HeaderComponent header = new HeaderComponent();
-    InputBlockComponent inputBlock = new InputBlockComponent();
-    ThinkBlockComponent thinkBlock = new ThinkBlockComponent();
-    ActionBlockComponent actionBlock = new ActionBlockComponent();
-    ObserveBlockComponent observeBlock = new ObserveBlockComponent();
+    MessageAreaComponent messageArea = new MessageAreaComponent();
+    LineComponent separator = new LineComponent();
+    LineComponent separator2 = new LineComponent();
     InputComponent input = new InputComponent();
     FooterComponent footer = new FooterComponent();
 
-    this.layout =
-        new TuiLayout(header, inputBlock, thinkBlock, actionBlock, observeBlock, input, footer);
+    this.layout = new TuiLayout(header, messageArea, separator, separator2, input, footer);
     this.state = new TuiState();
     this.commandHandler = new CommandHandler(eventBridge);
     this.running = new AtomicBoolean(true);
@@ -172,15 +169,9 @@ public class ScreenManager implements AutoCloseable {
     logger.info("[ScreenManager] init terminal size: {}x{}", initW, initH);
     layout.recalculate(initW, initH);
     logger.info(
-        "[ScreenManager] TAO layout: input=[{}-{}] think=[{}-{}] action=[{}-{}] observe=[{}-{}] sep={} input={} footer={}",
-        layout.inputBlockStartRow(),
-        layout.inputBlockStartRow() + layout.inputBlockHeight() - 1,
-        layout.thinkBlockStartRow(),
-        layout.thinkBlockStartRow() + layout.thinkBlockHeight() - 1,
-        layout.actionBlockStartRow(),
-        layout.actionBlockStartRow() + layout.actionBlockHeight() - 1,
-        layout.observeBlockStartRow(),
-        layout.observeBlockStartRow() + layout.observeBlockHeight() - 1,
+        "[ScreenManager] 3-zone layout: messageArea=[{}-{}] sep={} input={} footer={}",
+        layout.messageAreaStartRow(),
+        layout.messageAreaStartRow() + layout.messageAreaHeight() - 1,
         layout.separatorRow(),
         layout.inputRow(),
         layout.footerRow());
@@ -209,20 +200,15 @@ public class ScreenManager implements AutoCloseable {
     contentDirty.set(true);
   }
 
-  // ========== TAO 事件路由 (v3.1) ==========
+  // ========== 事件路由 (v4.0 三区对齐) ==========
 
   /**
-   * TAO 四段式事件路由:
+   * 三区对齐事件路由：
    *
    * <ul>
-   *   <li>StartThinking → InputBlock: 显示 ✓ + 用户输入
-   *   <li>NewThought → ThinkBlock: 推理过程
-   *   <li>ActionExecuting → ActionBlock: $ command (timeout 120s)
-   *   <li>ObservationResult → ObserveBlock: 输出 + Took X.XXs
-   *   <li>ChatMessage(User) → InputBlock
-   *   <li>ChatMessage(System/Agent) → ThinkBlock
-   *   <li>TaskComplete → ThinkBlock
-   *   <li>TaskError → ThinkBlock
+   *   <li>所有消息类事件 → MessageArea (Main Area)
+   *   <li>队列/状态 → layout queueRow
+   *   <li>Footer 更新 → FooterComponent
    * </ul>
    */
   private void setupEventListeners() {
@@ -230,53 +216,44 @@ public class ScreenManager implements AutoCloseable {
         event -> {
           switch (event) {
             case TuiEvent.StartThinking e -> {
-              // 用户输入已由 runInputLoop() 直接写入 InputBlock，此处不重复
               contentDirty.set(true);
             }
             case TuiEvent.NewThought e -> {
-              layout.thinkBlock().addThought(e.thought(), e.step(), e.traceId());
+              layout.messageArea().addThought(e.thought(), e.step(), e.traceId());
               contentDirty.set(true);
             }
             case TuiEvent.ActionExecuting e -> {
               String desc =
                   e.action().type().name()
                       + (e.action().target() != null ? " (" + e.action().target() + ")" : "");
-              layout.actionBlock().addCommand(desc);
-              // Also route to ThinkBlock for chronological PAO flow
-              String actionTarget = e.action().target();
-              if (actionTarget != null && !actionTarget.isBlank()) {
-                layout.thinkBlock().addActionLine(actionTarget, e.traceId());
-              }
+              layout.messageArea().addActionLine(desc, e.traceId());
               contentDirty.set(true);
             }
             case TuiEvent.ObservationResult e -> {
-              layout.observeBlock().addOutput(e.summary());
-              layout.observeBlock().addTiming(e.elapsedSec());
-              // Also route to ThinkBlock for chronological PAO flow
-              layout.thinkBlock().addObservationLine(e.summary(), e.elapsedSec());
+              layout.messageArea().addObservationLine(e.summary(), e.elapsedSec());
               contentDirty.set(true);
             }
             case TuiEvent.ChatMessage e -> {
               if ("User".equalsIgnoreCase(e.sender())) {
-                layout.thinkBlock().addUserMessage(e.content());
+                layout.messageArea().addUserMessage(e.content());
               } else if ("System".equalsIgnoreCase(e.sender())) {
-                layout.thinkBlock().addSystemMessage(e.content());
+                layout.messageArea().addSystemMessage(e.content());
               } else {
-                layout.thinkBlock().addAgentMessage(e.content());
+                layout.messageArea().addAgentMessage(e.content());
               }
               contentDirty.set(true);
             }
             case TuiEvent.TaskComplete e -> {
               String result = e.result();
               if (result != null && !result.isBlank()) {
-                layout.thinkBlock().addAgentMessage(result);
+                layout.messageArea().addAgentMessage(result);
               }
               state.transitionTo(TuiState.State.IDLE);
               dispatchNextFromQueue();
               contentDirty.set(true);
             }
             case TuiEvent.TaskError e -> {
-              layout.thinkBlock().addSystemMessage("\u9519\u8BEF: " + e.errorMessage());
+              layout.messageArea().addSystemMessage("\u9519\u8BEF: " + e.errorMessage());
               state.transitionTo(TuiState.State.ERROR);
               contentDirty.set(true);
             }
@@ -287,9 +264,7 @@ public class ScreenManager implements AutoCloseable {
               logger.info("TerminalResize event: {}x{}", w, h);
               layout.recalculate(w, h);
               reader.setVariable(
-                  LineReader.LINE_OFFSET,
-                  Math.max(
-                      1, layout.footerRow() + layout.footer().height() - layout.inputRow() - 1));
+                  LineReader.LINE_OFFSET, Math.max(1, layout.footerRow() - layout.inputRow()));
               lastPollWidth = w;
               lastPollHeight = h;
               needsFullClear.set(true);
@@ -304,18 +279,13 @@ public class ScreenManager implements AutoCloseable {
     commandHandler
         .onReset(
             args -> {
-              layout.inputBlock().clear();
-              layout.thinkBlock().clear();
-              layout.actionBlock().clear();
-              layout.observeBlock().clear();
+              layout.messageArea().clear();
               state.transitionTo(TuiState.State.IDLE);
               contentDirty.set(true);
             })
         .onClear(
             () -> {
-              layout.thinkBlock().clear();
-              layout.actionBlock().clear();
-              layout.observeBlock().clear();
+              layout.messageArea().clear();
               contentDirty.set(true);
             })
         .onExit(
@@ -349,22 +319,21 @@ public class ScreenManager implements AutoCloseable {
     writer.write(ANSI_CLEAR_LINE);
   }
 
-  /** 全屏重绘 — 每个组件通过 {@code renderTo(writer)} 自行处理光标定位和行尾清除。 */
+  /** 全屏重绘 — 三区对齐：Main Area / Input Area / Footer。 */
   private void fullRedraw() {
     java.io.Writer writer = terminal.writer();
     try {
+      // ── Main Area ──────────────────────────────────────────────
       layout.header().renderTo(writer);
-      layout.inputBlock().renderTo(writer);
-      layout.thinkBlock().renderTo(writer);
-      layout.actionBlock().renderTo(writer);
-      layout.observeBlock().renderTo(writer);
+      layout.messageArea().renderTo(writer);
 
-      writeRow(writer, layout.separatorRow(), layout.separatorLine());
+      // ── Input Area ─────────────────────────────────────────────
+      layout.separator().renderTo(writer);
       writeRow(writer, layout.queueRow(), layout.queueLine());
-
       layout.input().renderTo(writer);
 
-      writeRow(writer, layout.separator2Row(), layout.separatorLine());
+      // ── separator2 + Footer ────────────────────────────────────
+      layout.separator2().renderTo(writer);
       layout.footer().renderTo(writer);
 
       // Restore cursor to input row
@@ -377,7 +346,7 @@ public class ScreenManager implements AutoCloseable {
   }
 
   /**
-   * 重绘所有静态区域 — TAO 四段式。
+   * 重绘所有静态区域 — 三区对齐。
    *
    * <p>不触碰输入行（由 LineReader 管理）。
    */
@@ -389,24 +358,20 @@ public class ScreenManager implements AutoCloseable {
           writer.write(ANSI_CLEAR_SCREEN);
         }
 
+        // ── Main Area ────────────────────────────────────────────
         layout.header().renderTo(writer);
-        layout.inputBlock().renderTo(writer);
-        layout.thinkBlock().renderTo(writer);
-        layout.actionBlock().renderTo(writer);
-        layout.observeBlock().renderTo(writer);
+        layout.messageArea().renderTo(writer);
 
-        writeRow(writer, layout.separatorRow(), layout.separatorLine());
+        // ── Input Area (separator + queue + input) ───────────────
+        layout.separator().renderTo(writer);
         writeRow(writer, layout.queueRow(), layout.queueLine());
+        layout.input().renderTo(writer);
 
-        writeRow(writer, layout.separator2Row(), layout.separatorLine());
+        // ── separator2 + Footer ───────────────────────────────────
+        layout.separator2().renderTo(writer);
         layout.footer().renderTo(writer);
 
-        // Restore cursor to input row: every ANSI cursor_address from
-        // component.renderTo() (\033[%d;1H) moves the physical terminal
-        // cursor. JLine tracks cursor position internally and does NOT
-        // know about our writes — it expects the cursor at the input row.
-        // Without restoration, the physical cursor stays at footer, and
-        // JLine's next readLine() outputs characters at the wrong position.
+        // Restore cursor to input row
         writer.write(String.format(ANSI_CURSOR_LINE, layout.inputRow() + 1));
         writer.write("\033[2K");
         writer.flush();
@@ -420,10 +385,6 @@ public class ScreenManager implements AutoCloseable {
     while (running.get()) {
       try {
         if (contentDirty.compareAndSet(true, false)) {
-          // safe: redrawScrollArea() only writes to rows above the input line
-          // (header, inputBlock, thinkBlock, actionBlock, observeBlock, separator,
-          // queue, separator2, footer). It never touches the JLine-managed input
-          // row (inputRow), so no interference with reader.readLine().
           redrawScrollArea();
         }
         frameCount++;
@@ -450,28 +411,17 @@ public class ScreenManager implements AutoCloseable {
     contentDirty.set(true);
 
     while (running.get()) {
-      // 同步块外：先重绘静态内容区，然后设置 JLine 保留行数。
-      // LINE_OFFSET 必须在光标定位之前设置，确保 JLine 在显示初始化时
-      // 已经知道保留行数，不会将 scroll region 设置到覆盖 footer。
       if (contentDirty.get()) {
         redrawScrollArea();
-        // Intentionally NOT clearing contentDirty here — leave it for the renderLoop's
-        // atomic CAS. If we clear it, we risk losing concurrent contentDirty.set(true)
-        // calls from event listeners firing during redrawScrollArea().
-        // The renderLoop (run every 100ms) will pick it up atomically.
       }
 
-      // LINE_OFFSET：保留 input 组件下方所有行不被 JLine 覆盖（separator2 + Footer）。
-      // 从 input 组件底部到 Footer 底部之间的行数为保留行数。
+      // LINE_OFFSET：保留 Footer 行不被 JLine 覆盖
       int inputRow = layout.inputRow();
-      int linesBelow = layout.footerRow() + layout.footer().height() - inputRow - 1;
+      int linesBelow = layout.footerRow() - inputRow;
       reader.setVariable(LineReader.LINE_OFFSET, Math.max(1, linesBelow));
 
-      // 终端 I/O 同步点：getHeight() 使终端完成处理所有先前输出的缓冲区。
       terminal.getHeight();
 
-      // 光标定位：使用 raw ANSI 直接写入 terminal.writer()，
-      // 避免 terminal.puts() 可能产生的 JLine 内部状态干扰。
       inputActive.set(true);
 
       synchronized (terminalLock) {
@@ -500,14 +450,11 @@ public class ScreenManager implements AutoCloseable {
         inputActive.set(false);
       }
 
-      // 处理输入期间积压的 deferred 重绘
       if (pendingRedraw.compareAndSet(true, false)) {
         contentDirty.set(true);
         redrawScrollArea();
-        // Same rationale: leave contentDirty for renderLoop's atomic CAS.
       }
 
-      // JLine 补全菜单可能覆盖分割线和状态行，readLine 返回后显式恢复
       restoreLowerArea();
 
       if (line == null) break;
@@ -529,14 +476,13 @@ public class ScreenManager implements AutoCloseable {
       }
 
       if (state.isRunning()) {
-        // Agent 忙碌时入队，不阻塞用户输入
         inputQueue.addLast(trimmed);
         layout.setQueueCount(inputQueue.size());
         contentDirty.set(true);
         continue;
       }
 
-      layout.inputBlock().showUserInput(trimmed);
+      layout.messageArea().addUserMessage(trimmed);
       state.transitionTo(TuiState.State.RUNNING);
       contentDirty.set(true);
 
@@ -549,11 +495,11 @@ public class ScreenManager implements AutoCloseable {
     synchronized (terminalLock) {
       java.io.Writer writer = terminal.writer();
       try {
-        writeRow(writer, layout.separatorRow(), layout.separatorLine());
+        layout.separator().renderTo(writer);
         writeRow(writer, layout.queueRow(), layout.queueLine());
-        writeRow(writer, layout.separator2Row(), layout.separatorLine());
+        layout.separator2().renderTo(writer);
         layout.footer().renderTo(writer);
-        // Restore cursor to input row
+        // JLine manages input row, just restore cursor
         writer.write(String.format(ANSI_CURSOR_LINE, layout.inputRow() + 1));
         writer.write("\033[2K");
         writer.flush();
@@ -569,7 +515,7 @@ public class ScreenManager implements AutoCloseable {
     String next = inputQueue.pollFirst();
     layout.setQueueCount(inputQueue.size());
     if (next != null && !next.isBlank()) {
-      layout.inputBlock().showUserInput(next);
+      layout.messageArea().addUserMessage(next);
       state.transitionTo(TuiState.State.RUNNING);
       contentDirty.set(true);
       if (onTaskSubmit != null) onTaskSubmit.accept(next);

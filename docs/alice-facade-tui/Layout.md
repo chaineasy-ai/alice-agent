@@ -1,6 +1,6 @@
 ---
-title: "TUI Layout - v3.1 TAO 四段式布局"
-summary: "基于 JLine 4 实现 TAO 四段式布局，PPAO 事件流 Observer 模式 + 输入队列"
+title: "TUI Layout - v4.0 三区对齐布局"
+summary: "基于 JLine 4 实现三区对齐布局（Main Area / Input Area / Footer），LineComponent 区域分隔，PPAO 事件流 Observer 模式 + 输入队列"
 read_when:
   - "TUI 布局新增/改造开发"
 scope:
@@ -9,110 +9,140 @@ status: "active"
 updated: "2026-06-27"
 ---
 
-# TAO 四段式 TUI 架构 v3.1 — 工程设计文档
+# 三区对齐 TUI 架构 v4.0 — 工程设计文档
 
 ## 前言
 
-本版为 v3.1，在 v2.6（Footer 固定底行）基础上全面重构为 TAO 四段式布局：
+v4.0 在 v3.1（TAO 四段式）基础上全面重构为**三区对齐布局**：
 
-- 用四个独立区域组件（InputBlock / ThinkBlock / ActionBlock / ObserveBlock）替代单一 `ThoughtComponent`
-- PPAO 事件流通过 Observer 模式（`AgentEventListener`）实时投递
-- 输入队列缓存忙碌期间的输入，`📋 N queued messages` 队列状态行
-- 区块背景色取代 `TaoTag` 色块标签
+- **Main Area** — Header + `MessageAreaComponent`（统一消息流，替代旧 InputBlock / ThinkBlock / ActionBlock / ObserveBlock 四个独立组件）
+- **Input Area** — `LineComponent` / 队列状态 / `InputComponent`
+- **Footer** — `LineComponent` / `FooterComponent`（费用 + 模型 + 工具）
+
+每个区域之间由 `LineComponent` 渲染 ANSI 暗色水平分割线，形成视觉清晰的三个对齐区块。
 
 ---
 
-## 🎨 TAO 四段式布局（v3.1）
+## 🎨 三区对齐布局（v4.0）
 
-### 8 组件全景
+### 6 组件全景
 
 ```text
- 🤖 alice-agent v0.60.0 ──────────────────────────────  ← Header (1行, row 0, ANSI 242 暗色延伸)
-  debug current program                                 ← InputBlock (2行, ANSI 48;5;236 深色底)
-  ┈ Step 1 ┈                                            ← ThinkBlock (~45% 内容区, ANSI 48;5;255 亮色底)
-  The user wants to debug the current program...
-  ┈ Step 2 ┈
-  Let me explore these directories...
-  $ list_dir({path: .}) (timeout 120s)                  ← ActionBlock (2行, ANSI 48;5;236 深色底)
-  $ read_file({path: README.md}) (timeout 120s)
-  $ list_dir({path: .})                                 ← ObserveBlock (~55% 内容区, ANSI 48;5;234 终端深色底)
-  alice-memory-vault/
-  todos/
-  Took 0.0s
- ─────────────────────────────────────────────────────  ← 分割线 (1行, ANSI 242 暗色)
-  📋 2 queued messages                                  ← 队列状态行 (1行, 有消息时显示, 无消息时空白)
-  █                                                    ← 输入区 (1行, JLine readLine 管理)
-  [💰 $0.041] [📊 125 t/s] [🧠 deepseek-v4-flash]      ← Footer (1行, 终端最底行 H-1)
+ ┌─ Main Area ──────────────────────────────────────────┐
+ │ 🤖 alice-agent v0.60.0 ──────────────────────────── │  ← HeaderComponent (1行, row 0)
+ │                                                      │
+ │ together debug current program...                    │  ← MessageAreaComponent
+ │ ╸ Step 1 ╸                                          │     (统一消息流, 可滚动)
+ │ analyzing the request...                             │
+ │ ⮞ TOOL_CALL: list_dir ({path:.})                   │  ← ACTION tag + dark bg
+ │ ⮞ -rw------- 1 alice alice 111 config.json         │  ← OBSERVE tag + terminal bg
+ │ ⮞ (Took 0.0s)                                       │
+ ├────────────────────────────────────────────────────── │  ← LineComponent 1
+ │ 📋 2 queued messages                                  │  ← 队列状态行 (1行)
+ │ █                                                    │  ← InputComponent (1行, JLine 管理)
+ ├────────────────────────────────────────────────────── │  ← LineComponent 2
+ │ [💰 $0.041] [📊 125 t/s] [🧠 deepseek-v4-flash]      │  ← FooterComponent (1行, 终端最底行)
+ └───────────────────────────────────────────────────────┘
 ```
 
 ### 区域坐标公式（H×W 终端）
 
 ```
-FIXED_ROWS = HEADER(1) + INPUT_BLOCK(2) + ACTION_BLOCK(2) + STATUS_HEIGHT(1) = 6
-QUEUE_HEIGHT = 1 (always present, blank when empty)
-contentHeight = H - 8 - 1 = H - 9
-
-ThinkBlock   ─ floor(contentHeight × 0.45)
-ObserveBlock ─ contentHeight - ThinkBlock
+FIXED_ROWS = HEADER(1) + SEP(1) + QUEUE(1) + INPUT(1) + SEP(1) + FOOTER(1) = 6
+messageAreaHeight = H - FIXED_ROWS = H - 6
 ```
 
 80×24 终端示例：
 
 ```
-row  0:  Header
-row  1-2:  InputBlock       (2行)
-row  3-8:  ThinkBlock       (6行, 45%)
-row  9-10: ActionBlock      (2行)
-row 11-19: ObserveBlock     (9行, 55%)
-row 20:    Separator        (1行)
-row 21:    Queue line       (1行, 空白或无消息)
-row 22:    Input            (1行)
-row 23:    Footer           (1行, 终端最底行)
+row  0:  HeaderComponent           (1行)
+row  1-17: MessageAreaComponent    (18行, H-6=18)
+row 18:  LineComponent 1           (1行)
+row 19:  Queue line                (1行, 空白 or "📋 N queued messages")
+row 20:  InputComponent            (1行)
+row 21:  LineComponent 2           (1行)
+row 22:  FooterComponent           (1行)
 ```
 
-### TuiLayout 计算代码
+### TuiLayout 计算逻辑
 
 ```java
-public void recalculate(int terminalWidth, int terminalHeight) {
-    this.terminalWidth = Math.max(terminalWidth, 40);
-    this.terminalHeight = Math.max(terminalHeight, FIXED_ROWS + 6);
-
+public void recalculate(int w, int h) {
     int currentRow = 0;
 
-    // 1. Header: row 0
-    header.setBounds(currentRow, 0, this.terminalWidth, HEADER_HEIGHT);
+    // ── 1. Main Area ──
+    header.setBounds(currentRow, 0, w, HEADER_HEIGHT);
     currentRow += HEADER_HEIGHT;
 
-    // 2. InputBlock: 固定 2 行
-    inputBlock.setBounds(currentRow, 0, this.terminalWidth, INPUT_BLOCK_HEIGHT);
-    currentRow += INPUT_BLOCK_HEIGHT;
+    int msgH = h - HEADER_HEIGHT - SEP - QUEUE - INPUT - SEP - FOOTER;
+    messageArea.setBounds(currentRow, 0, w, msgH);
+    currentRow += msgH;
 
-    // 3. ThinkBlock: 45% of remaining
-    int remaining = terminalHeight - currentRow
-        - ACTION_BLOCK_HEIGHT - 1(separator) - QUEUE_HEIGHT - 1(input) - STATUS_HEIGHT;
-    thinkBlockHeight = (int) Math.floor(remaining * 0.45);
-    thinkBlock.setBounds(currentRow, 0, this.terminalWidth, thinkBlockHeight);
-    currentRow += thinkBlockHeight;
+    // ── 2. Input Area ──
+    separator.setBounds(currentRow, 0, w, SEP);
+    currentRow += SEP + QUEUE;
+    input.setBounds(currentRow, 0, w, INPUT);
+    currentRow += INPUT;
 
-    // 4. ActionBlock: 固定 2 行
-    actionBlock.setBounds(currentRow, 0, this.terminalWidth, ACTION_BLOCK_HEIGHT);
-    currentRow += ACTION_BLOCK_HEIGHT;
-
-    // 5. ObserveBlock: 剩余
-    remaining = terminalHeight - currentRow
-        - 1(separator) - QUEUE_HEIGHT - 1(input) - STATUS_HEIGHT;
-    observeBlock.setBounds(currentRow, 0, this.terminalWidth, remaining);
-    currentRow += remaining;
-
-    // 6-9. Separator / Queue / Input / Footer
-    separatorRow = currentRow;
-    queueRow = separatorRow + 1;
-    inputRow = queueRow + 1;
-    input.setBounds(inputRow, 0, this.terminalWidth, 1);
-    footerRow = terminalHeight - 1;
-    footer.setBounds(footerRow, 0, this.terminalWidth, STATUS_HEIGHT);
+    // ── separator2 + Footer ──
+    separator2.setBounds(currentRow, 0, w, SEP);
+    currentRow += SEP;
+    footer.setBounds(currentRow, 0, w, FOOTER);
 }
 ```
+
+---
+
+## 🧩 组件详解
+
+### 1. HeaderComponent
+
+- **文件**: `component/HeaderComponent.java`
+- **位置**: row 0
+- **渲染**: `🤖 alice-agent v0.60.0 ────────────` （ANSI 38;5;242 暗色分隔线延伸至最右侧）
+- **API**: `setLabel(text)`, `label()`
+
+### 2. MessageAreaComponent
+
+- **文件**: `component/MessageAreaComponent.java`
+- **位置**: row 1 ～ `H-6`
+- **渲染**: 统一消息流，每种消息类型保留独立视觉风格：
+
+| 消息类型 | 背景 | 标识 | API |
+|----------|------|------|-----|
+| 用户消息 | `48;5;236` 深灰 | 纯文本缩进 | `addUserMessage(text)` |
+| 思考推理 | `48;5;255` 亮白 | `╸ Step N ╸` 暗灰标记 | `addThought(text, step, traceId)` |
+| 动作执行 | `48;5;236` 深灰 | `ACTION` 橙黄色块 | `addActionLine(desc, traceId)` |
+| 观察结果 | `48;5;234` 终端深色 | `OBSERVE` 绿色色块 | `addObservationLine(text, seconds)` |
+| 系统消息 | `48;5;255` 亮白 | 纯文本 | `addSystemMessage(text)` |
+| Agent 消息 | `48;5;255` 亮白 | 剥除 `[FINISH]` 标记 | `addAgentMessage(text)` |
+
+- **滚动**: `scrollUp/Down/ToBottom/PageUp/Down`
+- **行上限**: 2000 行
+
+### 3. LineComponent
+
+- **文件**: `component/LineComponent.java`
+- **位置**: Main↔Input 之间（row `H-5`），Input↔Footer 之间（row `H-1`）
+- **渲染**: ANSI `38;5;242` 暗色 `─` 填满整行
+
+### 4. InputComponent
+
+- **文件**: `component/InputComponent.java`
+- **位置**: row `H-3`
+- **说明**: 实际终端 I/O 由 JLine 3 `LineReader.readLine()` 管理，本组件仅维护输入缓冲区模型
+
+### 5. FooterComponent
+
+- **文件**: `component/FooterComponent.java`
+- **位置**: 最底行
+- **渲染**: 三个 ANSI 256 色实体色块 + 工具信息
+
+```text
+[48;5;208m💰 $0.041[0m  [48;5;35m📊 125 t/s[0m  [48;5;239m🧠 gpt-4o[0m ── 🔌 Active: mcp
+```
+
+- **API**: `setCost(cost)`, `setSpeed(speed)`, `setModel(modelId)`, `setTool(tool)`
 
 ---
 
@@ -128,59 +158,47 @@ public interface AgentEventListener {
 }
 ```
 
-### AgentExecutor 分发点
+### TuiAgentListener (v4.0 统一路由)
 
-| 阶段 | AgentExecutor 方法 | 触发方法 | 监听器回调 |
-|------|-------------------|----------|-----------|
-| Reason | `dispatchLlmInference()` | `fireOnThought(reasoning)` | `onThought(String)` |
-| Dispatch | `dispatchToolCall()` | `fireOnAction(target, params)` | `onAction(target, params)` |
-| Observe | `dispatchToolCall()` (工具返回后) | `fireOnObserve(rawData, summary, elapsedMs)` | `onObserve(...)` |
-
-### TuiAgentListener 实现 (`alice-facade-tui`)
+所有 PPAO 事件统一路由到 `MessageAreaComponent`：
 
 ```java
-public class TuiAgentListener implements AgentEventListener {
-    private final EventBridge eventBridge;
-    private final AtomicInteger thoughtStep;
-    private final AtomicReference<String> lastAction;
-    private final AtomicLong actionStartNanos;
+@Override public void onThought(String reasoningContent) {
+    eventBridge.onNewThought(reasoningContent, thoughtStep.incrementAndGet(), traceId);
+    // → ScreenManager setupEventListeners:
+    //   layout.messageArea().addThought(reasoningContent, step, traceId)
+}
 
-    @Override
-    public void onThought(String reasoningContent) {
-        eventBridge.onNewThought(reasoningContent, thoughtStep.incrementAndGet());
-        // → ScreenManager: ThinkBlock.addThought()
-    }
+@Override public void onAction(String target, Map<String, Object> params) {
+    String desc = target + "(" + params + ")";
+    eventBridge.onActionExecuting(Action.builder().type(TOOL_CALL).target(desc).build(), traceId);
+    // → layout.messageArea().addActionLine(desc, traceId)
+}
 
-    @Override
-    public void onAction(String target, Map<String, Object> params) {
-        lastAction.set(target + "(" + params + ")");
-        actionStartNanos.set(System.nanoTime());
-        eventBridge.onActionExecuting(ac);
-        // → ScreenManager: ActionBlock.addCommand()
-    }
-
-    @Override
-    public void onObserve(String rawData, String summary, long elapsedMs) {
-        double seconds = elapsedMs > 0 ? elapsedMs/1000.0 : nanos since actionStartNanos;
-        String content = "$ " + lastAction.get() + "\n" + rawData;
-        eventBridge.onObserved(content, seconds);
-        // → ScreenManager: ObserveBlock.addOutput() + addTiming(seconds)
-    }
+@Override public void onObserve(String rawData, String summary, long elapsedMs) {
+    double seconds = elapsedMs > 0 ? elapsedMs/1000.0 : nanos since start;
+    eventBridge.onObserved(rawData, seconds, traceId);
+    // → layout.messageArea().addObservationLine(rawData, seconds)
 }
 ```
 
-### 注册
+### 事件路由映射 (v4.0)
 
-```java
-// AliceTuiLauncher.hookAgentEvents()
-agent.getExecutor().addListener(new TuiAgentListener(eventBridge));
-```
+| 事件 | 去向 | 路由方法 |
+|------|------|----------|
+| `StartThinking` | MessageArea | 由 `runInputLoop()` 直接写入 `addUserMessage()` |
+| `NewThought` | MessageArea | `messageArea.addThought(content, step, traceId)` |
+| `ActionExecuting` | MessageArea | `messageArea.addActionLine(desc, traceId)` |
+| `ObservationResult` | MessageArea | `messageArea.addObservationLine(summary, elapsedSec)` |
+| `ChatMessage(User)` | MessageArea | `messageArea.addUserMessage(content)` |
+| `ChatMessage(System)` | MessageArea | `messageArea.addSystemMessage(content)` |
+| `ChatMessage(Agent)` | MessageArea | `messageArea.addAgentMessage(content)` |
+| `TaskComplete` | MessageArea | `messageArea.addAgentMessage(result)` |
+| `TaskError` | MessageArea | `messageArea.addSystemMessage("错误: " + msg)` |
 
 ---
 
 ## 📋 输入队列
-
-### 队列生命周期
 
 ```
 用户输入 (Agent 忙碌)
@@ -196,13 +214,10 @@ Agent 任务完成 (TaskComplete / TaskError)
 Agent 开始执行新任务
 ```
 
-### 实现要点
-
 - `inputQueue` 为 `ArrayDeque<String>` FIFO 队列
 - `layout.setQueueCount(n)` 更新队列计数
-- `layout.queueLine()` 返回 ANSI 格式化队列行文本（空队列返回 `""`）
-- `queueRow` 位于 `separatorRow + 1`，在 `fullRedraw()` / `redrawScrollArea()` / `restoreLowerArea()` 中同步渲染
-- 队列行在 `cursorLine(queueRow)` 写入 `queueLine()` + `ANSI_CLEAR_LINE`
+- `queueLine()` 返回 ANSI 格式化队列行文本（空队列返回 `""`）
+- `queueRow` 位于 `separatorRow + 1`
 
 ---
 
@@ -211,15 +226,13 @@ Agent 开始执行新任务
 | 区域 | 背景 ANSI | 前景 ANSI | 说明 |
 |------|-----------|-----------|------|
 | Header | — | `38;5;242` | 暗色延伸 `─` |
-| InputBlock | `48;5;236` | `37` | 深灰底 |
-| ThinkBlock | `48;5;255` | `30` | 亮白底 |
-| ThinkBlock Step | `48;5;255` | `38;5;242` | 暗灰 `┈ Step N ┈` |
-| ActionBlock | `48;5;236` | `37` | 同 InputBlock 深灰底 |
-| ActionBlock `$` | `48;5;236` | `38;5;39` | 亮蓝命令提示符 |
-| ActionBlock timeout | `48;5;236` | `38;5;147` | 淡蓝超时标签 |
-| ObserveBlock | `48;5;234` | `37` | 终端深色底 |
-| ObserveBlock dir | `48;5;234` | `38;5;222` | 亮黄 drwx 行 |
-| ObserveBlock timing | `48;5;234` | `38;5;246` | 暗灰 Took X.XXs |
+| MessageArea 用户消息 | `48;5;236` | `37` | 深灰底 |
+| MessageArea 思考/Agent/系统 | `48;5;255` | `30` | 亮白底 |
+| MessageArea 动作 | `48;5;236` | `37` | 深灰底 + `ACTION` 橙黄色块 |
+| MessageArea 观察 | `48;5;234` | `37` | 终端深色底 + `OBSERVE` 绿色色块 |
+| MessageArea Step 标记 | `48;5;255` | `38;5;242` | 暗灰 `╸ Step N ╸` |
+| MessageArea Timing | `48;5;255` | `38;5;246` | 暗灰 `(Took X.Xs)` |
+| LineComponent | — | `38;5;242` | 暗色 `─` 满行 |
 | Queue line | — | `38;5;242` | 暗灰 `📋 N queued` |
 | Footer 费用 | `48;5;208` | `30` | 橙黄底 |
 | Footer 速率 | `48;5;35` | `30` | 绿底 |
@@ -231,17 +244,16 @@ Agent 开始执行新任务
 
 | 组件类 | 文件 | 职责 |
 |--------|------|------|
-| `InputBlockComponent` | `component/InputBlockComponent.java` | 顶部深色块，展示用户最新输入，无会话前缀 |
-| `ThinkBlockComponent` | `component/ThinkBlockComponent.java` | 中间推理区，亮底白字，`┈ Step N ┈` 步骤标记 |
-| `ActionBlockComponent` | `component/ActionBlockComponent.java` | 动作命令区，深底，`$ cmd (timeout 120s)` |
-| `ObserveBlockComponent` | `component/ObserveBlockComponent.java` | 观察输出区，终端深底，`Took X.XXs` |
-| `TuiLayout` | `layout/TuiLayout.java` | 8 组件布局计算，队列状态行渲染 |
+| `HeaderComponent` | `component/HeaderComponent.java` | 顶部标题栏 |
+| `MessageAreaComponent` | `component/MessageAreaComponent.java` | **统一消息流**（替代旧 4 组件） |
+| `LineComponent` | `component/LineComponent.java` | 区域分割线 |
+| `InputComponent` | `component/InputComponent.java` | 输入缓冲区模型 |
+| `FooterComponent` | `component/FooterComponent.java` | 底部状态栏（费用+速率+模型+工具） |
+| `TuiLayout` | `layout/TuiLayout.java` | 6 组件三区对齐布局计算 |
 | `ScreenManager` | `ScreenManager.java` | 全屏渲染，输入循环，事件路由，队列管理 |
 | `EventBridge` | `bridge/EventBridge.java` | 事件总线，异步/同步投递 |
 | `TuiEvent` | `bridge/TuiEvent.java` | 密封事件类型 |
 | `TuiAgentListener` | `TuiAgentListener.java` | Observer 实现，PPAO → EventBridge 转发 |
-| `AgentEventListener` | (alice-core-agent) `executor/AgentEventListener.java` | Observer 接口 |
-| `AgentExecutor` | (alice-core-agent) | `addListener()` 注册，PPAO 三点分发 |
 
 ---
 
@@ -260,15 +272,21 @@ Agent 开始执行新任务
                                       ↓
 ┌──────────────────────────────────────────────┐
 │  ScreenManager  (EventBridge listener)        │
-│  → layout.thinkBlock().addThought()           │
-│  → layout.actionBlock().addCommand()          │
-│  → layout.observeBlock().addOutput()          │
+│  → layout.messageArea().addThought()          │
+│  → layout.messageArea().addActionLine()       │
+│  → layout.messageArea().addObservationLine()  │
 │  → contentDirty.set(true)                     │
 └──────────────────────────────────────────────┘
 ┌──────────────────────────────────────────────┐
 │  Render Thread  (renderLoop)                  │
 │  polling contentDirty → redrawScrollArea()    │
-│  → cursorLine() + ANSI writes                 │
+│  → header.renderTo(writer)                    │
+│  → messageArea.renderTo(writer)               │
+│  → separator.renderTo(writer)                 │
+│  → writeRow(queueRow, queueLine())            │
+│  → input.renderTo(writer)                     │
+│  → separator2.renderTo(writer)                │
+│  → footer.renderTo(writer)                    │
 └──────────────────────────────────────────────┘
 ┌──────────────────────────────────────────────┐
 │  Main Thread  (runInputLoop)                  │
@@ -282,14 +300,15 @@ Agent 开始执行新任务
 
 ## 💎 设计演进总结
 
-| 版本 | 布局 | 事件 | 输入 |
-|------|------|------|------|
-| v2.6 | 单滚动区 + TaoTag 色块 | 轮询 StepResult | 阻塞时错误提示 |
-| v3.0 | 四段式 TAO 区域组件 | `Consumer<PPAOEvent>` | 同上 |
-| **v3.1** | 四段式 + 队列行 (8 组件) | `AgentEventListener` Observer 模式 | FIFO 输入队列自动提交 |
+| 版本 | 布局 | 事件 | 输入 | 组件数 |
+|------|------|------|------|--------|
+| v2.6 | 单滚动区 + TaoTag 色块 | 轮询 StepResult | 阻塞时错误提示 | 3 |
+| v3.0 | 四段式 TAO 区域组件 | `Consumer<PPAOEvent>` | 同上 | 7 |
+| v3.1 | 四段式 + 队列行 (8 组件) | `AgentEventListener` Observer 模式 | FIFO 输入队列 | 8 |
+| **v4.0** | **三区对齐 (Main/Input/Footer)** | **统一 MessageArea 路由** | **同上** | **6** |
 
-关键转变：
-1. **去 TaoTag** — 区块背景色自身提供视觉区分
-2. **Observer 模式** — 类型安全接口，多监听器支持
-3. **实际耗时传递** — `ObservationResult.elapsedSec` 替代 `addTiming(0.0)`
-4. **输入队列** — 忙碌时静默入队，完成后自动提交
+v4.0 关键转变：
+1. **四段式 → 三区对齐** — InputBlock/ThinkBlock/ActionBlock/ObserveBlock → 统一 `MessageAreaComponent`
+2. **LineComponent 分割线** — 取代 inline `writeRow()`，参与脏标记管线
+3. **区域视觉对齐** — Header / MessageArea / Line / Queue+Input / Line / Footer 三区清晰分隔
+4. **简化渲染管线** — `redrawScrollArea()` 按 3 个逻辑区顺序渲染

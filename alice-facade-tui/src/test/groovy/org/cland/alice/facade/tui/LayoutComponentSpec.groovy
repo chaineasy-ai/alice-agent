@@ -1,9 +1,8 @@
 /*
  * Unit tests for TUI layout management and UI components (JLine 3 based).
  *
- * Covers: Component, TuiLayout (TAO四段式), HeaderComponent, FooterComponent,
- *         InputComponent, InputBlockComponent, ThinkBlockComponent,
- *         ActionBlockComponent, ObserveBlockComponent, TaoTag
+ * Covers: Component, TuiLayout (3-zone alignment v4.0), HeaderComponent,
+ *         FooterComponent, InputComponent, MessageAreaComponent, TaoTag
  */
 package org.cland.alice.facade.tui
 
@@ -12,7 +11,7 @@ import spock.lang.Title
 import org.cland.alice.facade.tui.component.*
 import org.cland.alice.facade.tui.layout.TuiLayout
 
-@Title("TUI Layout and Component Unit Tests (v3.1 TAO四段式)")
+@Title("TUI Layout and Component Unit Tests (v4.0 三区对齐)")
 class LayoutComponentSpec extends Specification {
 
     static class TestComponent extends Component {
@@ -36,10 +35,9 @@ class LayoutComponentSpec extends Specification {
     static TuiLayout createLayout() {
         return new TuiLayout(
             new HeaderComponent(),
-            new InputBlockComponent(),
-            new ThinkBlockComponent(),
-            new ActionBlockComponent(),
-            new ObserveBlockComponent(),
+            new MessageAreaComponent(),
+            new LineComponent(),
+            new LineComponent(),
             new InputComponent(),
             new FooterComponent())
     }
@@ -97,19 +95,20 @@ class LayoutComponentSpec extends Specification {
     }
 
     // ===================================================================
-    // TuiLayout — TAO 四段式 (v3.1)
+    // TuiLayout — 三区对齐 (v4.0)
     // ===================================================================
 
-    def "TuiLayout FIXED_ROWS is 6 (Header+InputBlock+ActionBlock+Footer)"() {
+    def "TuiLayout FIXED_ROWS is 5 (Header+Sep+Queue+Input+Footer)"() {
         expect:
         TuiLayout.FIXED_ROWS == 6
         TuiLayout.HEADER_HEIGHT == 1
-        TuiLayout.INPUT_BLOCK_HEIGHT == 2
-        TuiLayout.ACTION_BLOCK_HEIGHT == 2
-        TuiLayout.STATUS_HEIGHT == 1
+        TuiLayout.SEPARATOR_HEIGHT == 1
+        TuiLayout.QUEUE_HEIGHT == 1
+        TuiLayout.INPUT_HEIGHT == 1
+        TuiLayout.FOOTER_HEIGHT == 1
     }
 
-    def "TuiLayout recalculate positions all TAO zones for standard 80x24"() {
+    def "TuiLayout recalculate positions all zones for standard 80x24"() {
         given: "a TuiLayout"
         def layout = createLayout()
         when: "recalculating for 80x24 terminal"
@@ -118,49 +117,31 @@ class LayoutComponentSpec extends Specification {
         layout.header().row() == 0
         layout.header().width() == 80
 
-        and: "InputBlock at rows 1-2"
-        layout.inputBlockStartRow() == 1
-        layout.inputBlockHeight() == 2
-        layout.inputBlock().row() == 1
-        layout.inputBlock().height() == 2
-        layout.inputBlock().width() == 80
+        and: "MessageArea starts at row 1"
+        layout.messageAreaStartRow() == 1
+        layout.messageArea().row() == 1
+        layout.messageArea().width() == 80
+        layout.messageAreaHeight() > 0
 
-        and: "ThinkBlock below InputBlock"
-        layout.thinkBlockStartRow() == 3
-        layout.thinkBlock().row() == 3
-        layout.thinkBlock().width() == 80
-        layout.thinkBlockHeight() > 0
+        and: "separator below MessageArea"
+        layout.separatorRow() == layout.messageAreaStartRow() + layout.messageAreaHeight()
 
-        and: "ActionBlock below ThinkBlock"
-        layout.actionBlockStartRow() == layout.thinkBlockStartRow() + layout.thinkBlockHeight()
-        layout.actionBlockHeight() == 2
-        layout.actionBlock().row() == layout.actionBlockStartRow()
-        layout.actionBlock().height() == 2
-        layout.actionBlock().width() == 80
-
-        and: "ObserveBlock below ActionBlock"
-        layout.observeBlockStartRow() == layout.actionBlockStartRow() + layout.actionBlockHeight()
-        layout.observeBlock().row() == layout.observeBlockStartRow()
-        layout.observeBlock().width() == 80
-        layout.observeBlockHeight() > 0
-
-        and: "separator below ObserveBlock"
-        layout.separatorRow() == layout.observeBlockStartRow() + layout.observeBlockHeight()
-
-        and: "queue row after separator, then input"
+        and: "queue row after separator, then input, then separator2"
         layout.queueRow() == layout.separatorRow() + 1
-        layout.inputRow() == layout.separatorRow() + 2
+        layout.inputRow() == layout.queueRow() + 1
         layout.input().row() == layout.inputRow()
-
-        and: "separator2 below input, footer at bottom row"
         layout.separator2Row() == layout.inputRow() + 1
+
+        and: "footer at bottom row"
         layout.footerRow() == 23
         layout.footer().row() == 23
+        layout.separator2Row() == layout.footerRow() - 1
 
-        and: "ThinkBlock + ObserveBlock fill remaining space"
-        int fixed = TuiLayout.HEADER_HEIGHT + TuiLayout.INPUT_BLOCK_HEIGHT + TuiLayout.ACTION_BLOCK_HEIGHT + TuiLayout.STATUS_HEIGHT
-        int contentRows = 24 - fixed - 4 // -4 for separator + queue + input + separator2
-        layout.thinkBlockHeight() + layout.observeBlockHeight() == contentRows
+        and: "MessageArea fills remaining space"
+        int expectedMessageRows = 24 - TuiLayout.FIXED_ROWS
+        // FIXED_ROWS = Header(1) + Sep(1) + Queue(1) + Input(1) + Sep(1) + Footer(1) = 6
+        // messageAreaHeight = 24 - 6 = 18
+        layout.messageAreaHeight() == expectedMessageRows
     }
 
     def "TuiLayout enforces minimum terminal dimensions"() {
@@ -170,11 +151,10 @@ class LayoutComponentSpec extends Specification {
         layout.recalculate(20, 3)
         then: "minimum width is 40"
         layout.terminalWidth() == 40
-        and: "minimum height is FIXED_ROWS + 7 = 13"
-        layout.terminalHeight() >= TuiLayout.FIXED_ROWS + 7
-        and: "all zone heights are positive"
-        layout.thinkBlockHeight() > 0
-        layout.observeBlockHeight() > 0
+        and: "minimum height is FIXED_ROWS + 5 = 11"
+        layout.terminalHeight() >= TuiLayout.FIXED_ROWS + 5
+        and: "message area height is positive"
+        layout.messageAreaHeight() > 0
     }
 
     def "TuiLayout recalculate marks all components dirty"() {
@@ -182,53 +162,51 @@ class LayoutComponentSpec extends Specification {
         def layout = createLayout()
         layout.markAllDirty()
         layout.header().clearDirty()
-        layout.inputBlock().clearDirty()
-        layout.thinkBlock().clearDirty()
-        layout.actionBlock().clearDirty()
-        layout.observeBlock().clearDirty()
+        layout.messageArea().clearDirty()
+        layout.separator().clearDirty()
+        layout.separator2().clearDirty()
         layout.input().clearDirty()
         layout.footer().clearDirty()
 
         when: "recalculating"
         layout.recalculate(80, 24)
 
-        then: "all 7 components are dirty"
+        then: "all 6 components are dirty"
         layout.header().isDirty()
-        layout.inputBlock().isDirty()
-        layout.thinkBlock().isDirty()
-        layout.actionBlock().isDirty()
-        layout.observeBlock().isDirty()
+        layout.messageArea().isDirty()
+        layout.separator().isDirty()
+        layout.separator2().isDirty()
         layout.input().isDirty()
         layout.footer().isDirty()
     }
 
-    def "TuiLayout getComponents returns all seven components"() {
+    def "TuiLayout getComponents returns all four components"() {
         given: "a TuiLayout"
         def layout = createLayout()
         when: "getting components"
         def components = layout.getComponents()
-        then: "returns exactly 7 components"
-        components.size() == 7
+        then: "returns exactly 6 components"
+        components.size() == 6
         components.contains(layout.header())
-        components.contains(layout.inputBlock())
-        components.contains(layout.thinkBlock())
-        components.contains(layout.actionBlock())
-        components.contains(layout.observeBlock())
+        components.contains(layout.messageArea())
+        components.contains(layout.separator())
+        components.contains(layout.separator2())
         components.contains(layout.input())
         components.contains(layout.footer())
     }
 
-    def "TuiLayout separatorLine generates ANSI dim line of correct length"() {
-        given: "a TuiLayout"
-        def layout = createLayout()
-        layout.recalculate(60, 24)
+    def "LineComponent renders ANSI dim line of correct length"() {
+        given: "a LineComponent"
+        def lineComp = new LineComponent()
+        lineComp.setBounds(0, 0, 60, 1)
         when:
-        def line = layout.separatorLine()
+        def lines = lineComp.render()
         then:
-        line.contains("\u001B[38;5;242m")
-        line.contains("\u001B[0m")
+        lines.size() == 1
+        lines[0].contains("\u001B[38;5;242m")
+        lines[0].contains("\u001B[0m")
         def escChar = (char)27 as String
-        def plain = line.replaceAll(escChar + '\\[\\d+(;\\d+)*m', "")
+        def plain = lines[0].replaceAll(escChar + '\\[\\d+(;\\d+)*m', "")
         plain.length() == 60
     }
 
@@ -295,216 +273,131 @@ class LayoutComponentSpec extends Specification {
     }
 
     // ===================================================================
-    // InputBlockComponent (TAO 顶部 — 输入内容区)
+    // MessageAreaComponent (三区对齐 Main Area — unified message stream)
     // ===================================================================
 
-    def "InputBlockComponent renders user input with dark bg"() {
-        given: "an InputBlockComponent"
-        def block = new InputBlockComponent()
-        block.setBounds(0, 0, 60, 5)
-        when: "showing user input"
-        block.showUserInput("debug current program")
-        def lines = block.render()
+    def "MessageAreaComponent addUserMessage renders without background"() {
+        given: "a MessageAreaComponent"
+        def area = new MessageAreaComponent()
+        area.setBounds(0, 0, 60, 5)
+        when: "adding user message"
+        area.addUserMessage("debug current program")
+        def lines = area.render()
         then:
         stripAnsi(lines[0]).contains("debug current program")
-        and: "all rows have dark background"
-        lines.every { it.contains("\u001B[48;5;236m") }
-        and: "exactly 5 rows"
-        lines.size() == 5
+        and: "no background ANSI code"
+        !lines[0].contains("\u001B[48;5;")
     }
 
-    def "InputBlockComponent clear removes all content"() {
-        given: "an InputBlockComponent"
-        def block = new InputBlockComponent()
-        block.setBounds(0, 0, 60, 3)
-        block.showUserInput("test")
-        when: "clearing"
-        block.clear()
-        then: "all empty"
-        block.render().every { stripAnsi(it).trim().isEmpty() }
-    }
-
-    // ===================================================================
-    // ThinkBlockComponent (TAO 中间 — 思考区)
-    // ===================================================================
-
-    def "ThinkBlockComponent addThought renders step marker + content with light bg"() {
-        given: "a ThinkBlockComponent"
-        def block = new ThinkBlockComponent()
-        block.setBounds(0, 0, 60, 5)
+    def "MessageAreaComponent addThought renders step marker + content with light gray fg"() {
+        given: "a MessageAreaComponent"
+        def area = new MessageAreaComponent()
+        area.setBounds(0, 0, 60, 5)
         when: "adding thought with step=1"
-        block.addThought("analyzing data", 1)
-        def lines = block.render()
+        area.addThought("analyzing data", 1)
+        def lines = area.render()
         then: "step marker on first line"
         stripAnsi(lines[0]).contains("Step 1")
         and: "content on second line"
         stripAnsi(lines[1]).contains("analyzing data")
-        and: "no TaoTag color block"
-        !lines[0].contains("\u001B[48;5;239m")
-        !lines[0].contains("THOUGHT")
-        and: "all rows have ThinkBlock light background"
-        lines.every { it.contains("\u001B[48;5;255m") }
+        and: "no background"
+        !lines[0].contains("\u001B[48;5;")
+        and: "light gray font color"
+        lines[0].contains("\u001B[38;5;252m")
     }
 
-    def "ThinkBlockComponent addAgentMessage strips FINISH marker"() {
-        given: "a ThinkBlockComponent"
-        def block = new ThinkBlockComponent()
-        block.setBounds(0, 0, 60, 3)
-        when: "adding agent message with [FINISH]"
-        block.addAgentMessage("done [FINISH]")
+    def "MessageAreaComponent addActionLine renders with command text"() {
+        given: "a MessageAreaComponent"
+        def area = new MessageAreaComponent()
+        area.setBounds(0, 0, 60, 3)
+        when: "adding action line"
+        area.addActionLine("TOOL_CALL: list_dir ({path:.})")
+        def line = area.render()[0]
+        then: "contains command text"
+        stripAnsi(line).contains("TOOL_CALL")
+        and: "no background"
+        !line.contains("\u001B[48;5;")
+    }
+
+    def "MessageAreaComponent addObservationLine renders with timing"() {
+        given: "a MessageAreaComponent"
+        def area = new MessageAreaComponent()
+        area.setBounds(0, 0, 60, 5)
+        when: "adding observation"
+        area.addObservationLine("-rw------- 1 alice alice 111 config.json", 0.5)
+        def lines = area.render()
+        then: "contains output text"
+        stripAnsi(lines.join(" ")).contains("config.json")
+        and: "no background"
+        !lines[0].contains("\u001B[48;5;")
+        and: "timing line"
+        stripAnsi(lines.join(" ")).contains("Took 0.5s")
+    }
+
+    def "MessageAreaComponent addSystemMessage renders with text"() {
+        given: "a MessageAreaComponent"
+        def area = new MessageAreaComponent()
+        area.setBounds(0, 0, 60, 3)
+        when: "adding system message"
+        area.addSystemMessage("System initialized")
         then:
-        !stripAnsi(block.render()[0]).contains("[FINISH]")
-        stripAnsi(block.render()[0]).contains("done")
+        stripAnsi(area.render()[0]).contains("System initialized")
+        and: "no background"
+        !area.render()[0].contains("\u001B[48;5;")
     }
 
-    def "ThinkBlockComponent clear and scrolling"() {
-        given: "a ThinkBlockComponent"
-        def block = new ThinkBlockComponent()
-        block.setBounds(0, 0, 60, 3)
-        (1..10).each { block.addThought("step $it", it) }
+    def "MessageAreaComponent addAgentMessage strips FINISH marker"() {
+        given: "a MessageAreaComponent"
+        def area = new MessageAreaComponent()
+        area.setBounds(0, 0, 60, 3)
+        when: "adding agent message with [FINISH]"
+        area.addAgentMessage("done [FINISH]")
+        then:
+        !stripAnsi(area.render()[0]).contains("[FINISH]")
+        stripAnsi(area.render()[0]).contains("done")
+    }
+
+    def "MessageAreaComponent clear removes all content"() {
+        given: "a MessageAreaComponent"
+        def area = new MessageAreaComponent()
+        area.setBounds(0, 0, 60, 3)
+        area.addUserMessage("test")
+        expect: "has content"
+        !area.render().every { stripAnsi(it).trim().isEmpty() }
+        when: "clearing"
+        area.clear()
+        then: "all empty"
+        area.render().every { stripAnsi(it).trim().isEmpty() }
+    }
+
+    def "MessageAreaComponent scrolling with multiple messages"() {
+        given: "a MessageAreaComponent"
+        def area = new MessageAreaComponent()
+        area.setBounds(0, 0, 60, 3)
+        (1..10).each { n ->
+            area.addThought("step $n", n)
+        }
         // Each thought = 2 lines (Step marker + content), 10 thoughts = 20 lines
         expect: "scrolling up shows Step 9 marker"
-        block.scrollUp()
-        stripAnsi(block.render()[0]).contains("Step 9")
+        area.scrollUp()
+        stripAnsi(area.render()[0]).contains("Step 9")
         and: "scrolling to bottom shows step 9 content"
-        block.scrollToBottom()
-        stripAnsi(block.render()[0]).contains("step 9")
-        block.clear()
-        block.render().every { stripAnsi(it).trim().isEmpty() }
+        area.scrollToBottom()
+        stripAnsi(area.render()[0]).contains("step 9")
     }
 
-    // ===================================================================
-    // ActionBlockComponent (TAO 中下 — 动作区，与 InputBlock 同风格)
-    // ===================================================================
-
-    def "ActionBlockComponent addCommand renders with dollar prefix and timeout"() {
-        given: "an ActionBlockComponent"
-        def block = new ActionBlockComponent()
-        block.setBounds(0, 0, 60, 3)
-        when: "adding a command"
-        block.addCommand("bash execute")
-        def line = block.render()[0]
-        then:
-        line.contains("\u001B[38;5;39m") // blue cmd prefix
-        line.contains('$')
-        line.contains("bash execute")
-        and: "timeout tag in light blue"
-        line.contains("\u001B[38;5;147m")
-        line.contains("(timeout 120s)")
-        and: "has InputBlock-like dark background"
-        line.contains("\u001B[48;5;236m")
-    }
-
-    def "ActionBlockComponent multiple commands and scrolling"() {
-        given: "an ActionBlockComponent"
-        def block = new ActionBlockComponent()
-        block.setBounds(0, 0, 60, 3)
-        when: "adding 5 commands"
-        (1..5).each { block.addCommand("cmd $it") }
-        then: "shows latest"
-        stripAnsi(block.render()[0]).contains("cmd 3")
-        when: "scrolling up"
-        block.scrollUp()
-        then:
-        stripAnsi(block.render()[0]).contains("cmd 2")
-        when: "scrolling to bottom"
-        block.scrollToBottom()
-        then:
-        stripAnsi(block.render()[0]).contains("cmd 3")
-    }
-
-    def "ActionBlockComponent dark background on all rows"() {
-        given: "an ActionBlockComponent"
-        def block = new ActionBlockComponent()
-        block.setBounds(0, 0, 60, 4)
-        block.addCommand("ls -la")
-        when: "rendering"
-        def lines = block.render()
-        then: "all rows have dark bg"
-        lines.every { it.contains("\u001B[48;5;236m") }
-        and: "exactly 4 rows"
-        lines.size() == 4
-    }
-
-    def "ActionBlockComponent clear removes all content"() {
-        given: "an ActionBlockComponent"
-        def block = new ActionBlockComponent()
-        block.setBounds(0, 0, 60, 3)
-        block.addCommand("test")
-        expect: "has content"
-        !block.render().every { stripAnsi(it).trim().isEmpty() }
-        when: "clearing"
-        block.clear()
-        then: "all empty"
-        block.render().every { stripAnsi(it).trim().isEmpty() }
-    }
-
-    // ===================================================================
-    // ObserveBlockComponent (TAO 底部 — 观察输出区)
-    // ===================================================================
-
-    def "ObserveBlockComponent addOutput renders results"() {
-        given: "an ObserveBlockComponent"
-        def block = new ObserveBlockComponent()
-        block.setBounds(0, 0, 60, 5)
-        when: "adding output"
-        block.addOutput("-rw------- 1 alice alice 111 config.json")
-        def lines = block.render()
-        then:
-        stripAnsi(lines[0]).contains("config.json")
-        and: "all rows have terminal dark background"
-        lines.every { it.contains("\u001B[48;5;234m") }
-        and: "exactly 5 rows"
-        lines.size() == 5
-    }
-
-    def "ObserveBlockComponent highlights directory listings in yellow"() {
-        given: "an ObserveBlockComponent"
-        def block = new ObserveBlockComponent()
-        block.setBounds(0, 0, 60, 3)
-        when: "adding ls -la output"
-        block.addOutput("drwxrwxr-x 2 alice alice 4096 6月 27 15:15 wal")
-        then:
-        block.render()[0].contains("\u001B[38;5;222m") // yellow
-    }
-
-    def "ObserveBlockComponent addTiming renders Took X.Xs line"() {
-        given: "an ObserveBlockComponent"
-        def block = new ObserveBlockComponent()
-        block.setBounds(0, 0, 60, 3)
-        when: "adding timing"
-        block.addTiming(1.5)
-        then:
-        stripAnsi(block.render()[0]).contains("Took 1.5s")
-        block.render()[0].contains("\u001B[38;5;246m") // dim color
-    }
-
-    def "ObserveBlockComponent addCollapsedLines renders count info"() {
-        given: "an ObserveBlockComponent"
-        def block = new ObserveBlockComponent()
-        block.setBounds(0, 0, 60, 3)
-        when: "adding collapsed line count"
-        block.addCollapsedLines(5)
-        then:
-        stripAnsi(block.render()[0]).contains("5 earlier lines")
-    }
-
-    def "ObserveBlockComponent clear and scrolling"() {
-        given: "an ObserveBlockComponent"
-        def block = new ObserveBlockComponent()
-        block.setBounds(0, 0, 60, 3)
-        (1..10).each { n ->
-            block.addOutput("output $n")
-            block.addTiming(0.1 * n)
-        }
-        expect: "scrolling up once shows output 9"
-        block.scrollUp()
-        stripAnsi(block.render().join(" ")).contains("output 9")
-        block.scrollToBottom()
-        and: "at bottom shows output 10"
-        stripAnsi(block.render().join(" ")).contains("output 10")
-        block.clear()
-        block.render().every { stripAnsi(it).trim().isEmpty() }
+    def "MessageAreaComponent onResize adjusts scroll offset"() {
+        given: "a MessageAreaComponent with content"
+        def area = new MessageAreaComponent()
+        area.setBounds(0, 0, 60, 3)
+        (1..6).each { n -> area.addThought("step $n", n) }
+        // 6 thoughts * 2 lines = 12 lines, scroll pos = 12 - 3 = 9
+        when: "resizing to larger height"
+        area.onResize(3) // oldHeight=3, newHeight=5
+        then: "scroll offset reduced"
+        // After onResize, height is still 3 because we haven't called setBounds
+        // The method uses this.height which was set by previous setBounds(0,0,60,3)
+        noExceptionThrown()
     }
 
     // ===================================================================

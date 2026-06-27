@@ -107,7 +107,7 @@ public class AliceTuiLauncher implements AutoCloseable {
     // 4. 设置回调
     setupCallbacks();
 
-    // 5. 设置初始模型到状态栏（header 已精简为仅显示名称+版本）
+    // 5. 设置初始模型到状态栏
     this.screenManager.layout().footer().setModel(config.defaultModelId());
   }
 
@@ -268,10 +268,7 @@ public class AliceTuiLauncher implements AutoCloseable {
       logger.warn("Agent clearMemory not fully implemented, clearing UI only", e);
     }
     eventBridge.onChatMessage("System", "上下文已清除");
-    screenManager.layout().inputBlock().clear();
-    screenManager.layout().thinkBlock().clear();
-    screenManager.layout().actionBlock().clear();
-    screenManager.layout().observeBlock().clear();
+    screenManager.layout().messageArea().clear();
     screenManager.markContentDirty();
     if (screenManager.state().isRunning()) {
       screenManager.state().transitionTo(TuiState.State.IDLE);

@@ -27,6 +27,20 @@ updated: "2026-06-27"
 
 ### BREAKING
 
+- **TUI 三区对齐布局 v4.0 (`alice-facade-tui`)**: 全面重构 TUI 布局，从 TAO 四段式 (InputBlock/ThinkBlock/ActionBlock/ObserveBlock) 改为三区对齐 (Main Area / Input Area / Footer)。
+  - **`MessageAreaComponent`** (新增) — 统一消息流组件，替代旧的 4 个独立区域组件。所有消息类型按时间序排列，均无背景色，仅通过字体颜色和前缀区分：
+    - 用户消息 — 默认终端色
+    - 思考推理 — `38;5;252` 浅灰字 + `╸ Step N ╸` 标记
+    - 动作执行 — `37` 亮白字 + `▮` 前缀
+    - 观察结果 — `37` 亮白字，目录行 `38;5;222` 亮黄
+    - 系统/Agent 消息 — 默认终端色
+  - **`LineComponent`** (新增) — 区域分割线组件，ANSI `38;5;242` 暗色 `─` 满行。取代旧的 inline `writeRow(separatorLine())` 调用，参与脏标记管线
+  - **`TuiLayout`**: 6 组件布局（Header + MessageArea + LineComponent×2 + Input + Footer），FIXED_ROWS=6，三区由 LineComponent 分隔
+  - **`Area` / `ColoredArea`** (新增) — 矩形区域基类和整块背景色区域组件。`ColoredArea` 使用 `AttributedStyle` 填充区域背景，子内容覆盖渲染
+  - 移除所有 `STYLE_BG_*` / `BG_DARK` / `BG_LIGHT` / `BG_TERMINAL` 背景常量和 `AttributedStyle`→ANSI 转换逻辑。所有消息类型使用 plain ANSI 字符串（同 FooterComponent 方式）
+  - `MessageLine` 存储简化：仅保留 `String content` + `String bgCode`（plain ANSI）
+  - 废弃的 4 个旧组件文件保留（`InputBlockComponent` / `ThinkBlockComponent` / `ActionBlockComponent` / `ObserveBlockComponent`），不再参与布局管线
+
 - **TUI TAO 四段式布局 v3.1 (`alice-facade-tui`)**: 全面重构 TUI 布局，以四个独立 TAO 区域组件替代单一 `ThoughtComponent`，实现 PPAO 执行流实时渲染。
   - **`InputBlockComponent`** (新增) — 顶部输入内容区，深色底 ANSI 236，纯文本展示用户最新输入，无会话启动前缀
   - **`ThinkBlockComponent`** (新增) — 中间思考推理区，亮色底 ANSI 255，每段推理前显示暗色 `┈ Step N ┈` 步骤标记
