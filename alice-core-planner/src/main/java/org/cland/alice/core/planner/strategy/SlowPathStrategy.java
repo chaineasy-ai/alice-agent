@@ -97,10 +97,14 @@ public final class SlowPathStrategy implements DecisionStrategy {
 
     // 如果路径中没有步骤，添加默认 LLM 推理
     if (bestPath.size() <= 1) {
+      String fallbackModelId =
+          modelSupplier != null && modelSupplier.getReasoningModel() != null
+              ? modelSupplier.getReasoningModel().modelId()
+              : "gpt-4o-mini";
       planBuilder.addStep(
           Plan.Step.of(
               "LLM_INFERENCE",
-              modelSupplier != null ? "gpt-4o" : "gpt-4o-mini",
+              fallbackModelId,
               Map.of("prompt", prompt),
               "MCTS selected direct LLM inference"));
     }
@@ -124,11 +128,15 @@ public final class SlowPathStrategy implements DecisionStrategy {
           List<ThinkingNode> candidates = new ArrayList<>();
 
           // 候选 1: LLM_INFERENCE
+          String reasoningModelId =
+              modelSupplier != null && modelSupplier.getReasoningModel() != null
+                  ? modelSupplier.getReasoningModel().modelId()
+                  : "gpt-4o-mini";
           candidates.add(
               ThinkingNode.builder()
                   .state(rootState)
                   .actionType("LLM_INFERENCE")
-                  .actionTarget(modelSupplier != null ? "gpt-4o" : "gpt-4o-mini")
+                  .actionTarget(reasoningModelId)
                   .actionParams(Map.of("prompt", rootState.getOrDefault("prompt", "")))
                   .thought("Generate reasoning via LLM")
                   .reward(0.0)

@@ -24,6 +24,13 @@ import org.cland.alice.core.agent.wal.FileWalStore;
 import org.cland.alice.core.agent.wal.RawMessage;
 import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
 import org.cland.alice.core.agent.wal.WalSession;
+import org.cland.alice.core.planner.PlannerService;
+import org.cland.alice.core.planner.sop.SopRegistry;
+import org.cland.alice.core.planner.sop.StaticPlanner;
+import org.cland.alice.core.planner.strategy.FastPathStrategy;
+import org.cland.alice.core.planner.strategy.SlowPathStrategy;
+import org.cland.alice.core.planner.strategy.StrategySelector;
+import org.cland.alice.core.planner.tree.ThinkingTree;
 import org.cland.alice.facade.tui.bridge.EventBridge;
 import org.cland.alice.facade.tui.state.TuiState;
 import org.cland.alice.model.ModelConfigLoader;
@@ -93,6 +100,33 @@ public class AliceTuiLauncher implements AutoCloseable {
 
     // 1b. 创建 Agent 并注入 WAL 和工具注册中心
     this.agent = new Agent(config).withWal(wal).withToolRegistry(toolRegistry);
+
+    // 1c. 初始化 PlannerService （双路径规划引擎）
+    var plannerSupplier =
+        DefaultPlannerModelSupplier.builder()
+            .provider(ModelProvider.getInstance())
+            .instructionModelId(config.defaultModelId())
+            .reasoningModelId(config.defaultModelId())
+            .build();
+    var fastPath = new FastPathStrategy(plannerSupplier);
+    var thinkingTree = new ThinkingTree(java.util.Map.of());
+    var slowPath =
+        SlowPathStrategy.builder()
+            .tree(thinkingTree)
+            .modelSupplier(plannerSupplier)
+            .mctsIterations(10)
+            .build();
+    var selector = StrategySelector.builder().fastPath(fastPath).slowPath(slowPath).build();
+    var sopRegistry = new SopRegistry();
+    var staticPlanner = new StaticPlanner(sopRegistry);
+    var planner =
+        PlannerService.builder().strategySelector(selector).staticPlanner(staticPlanner).build();
+    this.agent.withPlannerService(planner);
+    logger.info(
+        "[AliceTuiLauncher] PlannerService wired: fast={}, slow(MCTS)={}, sopRegistry={}",
+        config.defaultModelId(),
+        config.defaultModelId(),
+        sopRegistry.ids().size());
 
     // 2. 创建 EventBridge
     this.eventBridge = new EventBridge();

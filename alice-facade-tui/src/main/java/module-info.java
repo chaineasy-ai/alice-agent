@@ -12,6 +12,7 @@ module alice.agent.facade.tui.main {
 
   requires alice.agent.app.main;
   requires alice.agent.alice.core.agent.main;
+  requires alice.agent.alice.core.planner.main;
   requires alice.agent.alice.env.adapter.main;
   requires alice.agent.alice.model.main;
   requires alice.agent.alice.tool.gateway.main;

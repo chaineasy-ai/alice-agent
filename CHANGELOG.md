@@ -25,7 +25,30 @@ updated: "2026-06-27"
 
 ## Unreleased
 
-### BREAKING
+### Features
+
+- **PlannerService 双路径规划引擎全线接线 (`alice-facade-tui`, `alice-core-planner`)**: PlannerService（FastPath/SlowPath/MCTS）从代码库中存在但运行时未连接的状态修复为完整工作链路。
+  - `AliceTuiLauncher` 构造时装配 `DefaultPlannerModelSupplier` + `FastPathStrategy` + `SlowPathStrategy`(MCTS) + `StrategySelector` + `SopRegistry/StaticPlanner` → `PlannerService` → `agent.withPlannerService()`
+  - 新增 `DefaultPlannerModelSupplier` 桥接 `ModelProvider` 到 Planner 双路径模型
+  - `SlowPathStrategy` 硬编码 `"gpt-4o"` 修复为从 `modelSupplier.getReasoningModel().modelId()` 动态获取
+  - 导出 `org.cland.alice.core.planner.model` 包使外部可访问 `PlannerModelSupplier`/`ModelSession`
+
+- **Micro-ReAct Reason 阶段统一 (`alice-core-agent`)**: 移除原来 `plannerService != null` 分支中调用 `PlannerService.plan()` 作为微推理的错误逻辑。Micro-ReAct 的 Reason 阶段统一使用 tool_call 分发 + follow-up LLM 机制，不再依赖 PlannerService。PlannerService 仅用于 Macro Plan 阶段。
+  - 修复 `AgentContext.asMap()` 返回 `Map.copyOf()`(不可变 Map) 导致 `UnsupportedOperationException` 的问题
+
+- **PPAO Observe 多工具结果汇总 (`alice-core-agent`)**: Macro Observe 阶段现在从 `__action_log` 收集全部 N 个工具的执行结果，而不是仅取最后一个 step 的 Observation。
+  - `[Observe] Collected N tool results (X chars)` 日志记录
+  - `ctx.__system_event = "[System] N tool calls executed during this iteration"` — LLM 上下文可见系统事件
+  - `fireOnObserve("[System] N tool calls executed", ...)` — TUI ObserveBlock 显示系统提示
+
+- **Circuit Breaker 熔断保数据 (`alice-core-agent`)**: 熔断时不再丢弃已执行的工具结果。
+  - 收集 `__action_log` 存入 `ctx.result` + `ctx.lastObservation`
+  - 设置 `ctx.__system_event = "[System] Circuit breaker: max depth reached after N tool calls"`
+  - 返回 `Finish(actionLog, ...)` 使 PPAO Observe 阶段能获取完整数据
+
+- **Agent 事件系统文档 (`docs/alice-core-agent/event/README.md`)**: 新增事件系统文档，覆盖 `fireOnObserve`/`fireOnAction`/`fireOnThought` 三种事件、`__action_log`/`__system_event`/`lastObservation` LLM 上下文键、事件流图（正常 + 熔断）、TUI ObserveBlock 映射。
+
+- **Planner 测试案例文档 (`docs/alice-core-planner/test/case/fast.md`, `docs/alice-core-planner/test/case/slow.md`)**: 双路径测试案例文档。FastPath 12 条测试点 (FP-T01~T12)，SlowPath 14 条测试点 (SL-T01~T14)，含覆盖缺口分析和代码溯源。
 
 - **TUI 三区对齐布局 v4.0 (`alice-facade-tui`)**: 全面重构 TUI 布局，从 TAO 四段式 (InputBlock/ThinkBlock/ActionBlock/ObserveBlock) 改为三区对齐 (Main Area / Input Area / Footer)。
   - **`MessageAreaComponent`** (新增) — 统一消息流组件，替代旧的 4 个独立区域组件。所有消息类型按时间序排列，均无背景色，仅通过字体颜色和前缀区分：

@@ -27,6 +27,7 @@ dependencies {
     // Internal modules
     implementation project(':alice-bootstrap')
     implementation project(':alice-core-agent')
+    implementation project(':alice-core-planner')
     implementation project(':alice-env-adapter')
     implementation project(':alice-memory-vault')
     implementation project(':alice-model')

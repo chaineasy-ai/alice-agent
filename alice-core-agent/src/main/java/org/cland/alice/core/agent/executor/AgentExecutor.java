@@ -487,6 +487,40 @@ public class AgentExecutor {
             ctx.sessionId(), "CIRCUIT_BREAKER", "Micro-ReAct circuit breaker at depth " + depth);
       }
 
+      // 收集已执行工具的累积结果，避免熔断后丢失进度
+      String actionLog = ctx.containsKey("__action_log") ? ctx.get("__action_log").toString() : "";
+      if (!actionLog.isBlank()) {
+        ctx.put(
+            "__system_event",
+            "[System] Circuit breaker: max depth ("
+                + maxDepth
+                + ") reached after "
+                + actionLog.split("\n\n").length
+                + " tool calls");
+        ctx.appendThought("[System] Circuit breaker at depth " + depth);
+        Observation progressObs = Observation.success(actionLog);
+        ctx.put("lastObservation", progressObs);
+        ctx.put("lastActionResult", "Micro-ReAct completed with " + depth + " steps");
+        ctx.put("result", actionLog);
+        logger.info(
+            "[Micro-ReAct] Circuit breaker preserved {} chars of tool results", actionLog.length());
+
+        if (wal != null) {
+          wal.checkpointOnReActEnd(ctx.sessionId(), "ACTING_FINISHED", ctx.asMap(), actionLog);
+        }
+
+        return Future.succeededFuture(
+            new StepWithContext(
+                ctx,
+                new StepResult.Finish(
+                    actionLog,
+                    "Micro-ReAct circuit breaker at depth "
+                        + depth
+                        + " with "
+                        + actionLog.length()
+                        + " chars of results")));
+      }
+
       return Future.succeededFuture(
           new StepWithContext(ctx, new StepResult.Continue(Action.finish())));
     }
@@ -522,185 +556,150 @@ public class AgentExecutor {
           }
 
           // === Reason (基于观察推理下一步微意图) ===
-          if (agent.plannerService() == null) {
-            // === Reason without PlannerService ===
-            // Priority:
-            // 1) If dispatch returned Continue with an embedded nextAction (e.g. tool→LLM),
-            //    dispatch it directly.
-            // 2) Otherwise check finish_reason and structured tool_calls.
-            // 3) Otherwise finish micro loop.
+          // === Reason (基于观察推理下一步微意图) ===
+          // Micro-ReAct 的 Reason 阶段直接分派 tool_call / follow-up LLM。
+          // PlannerService 只用于 Macro Plan 阶段（plan() 方法），不参与 Micro 循环。
 
-            Action continueAction = result instanceof StepResult.Continue c ? c.nextAction() : null;
+          Action continueAction = result instanceof StepResult.Continue c ? c.nextAction() : null;
 
+          logger.warn(
+              "[Micro-ReAct/Reason] exit: stepResult type={} continueAction={}",
+              result.getClass().getSimpleName(),
+              continueAction != null
+                  ? continueAction.type() + "/" + continueAction.target()
+                  : "null");
+
+          if (continueAction != null
+              && continueAction.type() != Action.Type.FINISH
+              && continueAction.type() != Action.Type.REVISION) {
+            // Clean up stale state from previous LLM iteration to prevent
+            // stale tool_calls/__finish_reason from leaking into the follow-up.
+            updatedCtx.remove("__tool_calls");
+            updatedCtx.remove("__tool_call_index");
+            updatedCtx.remove("__finish_reason");
+            updatedCtx.remove("__turn_end");
+            updatedCtx.remove("__true_start");
+            // Dispatch follow-up LLM action directly (tool result inserted into prompt)
             logger.warn(
-                "[Micro-ReAct/Reason] exit: stepResult type={} continueAction={}",
-                result.getClass().getSimpleName(),
-                continueAction != null
-                    ? continueAction.type() + "/" + continueAction.target()
-                    : "null");
-
-            if (continueAction != null
-                && continueAction.type() != Action.Type.FINISH
-                && continueAction.type() != Action.Type.REVISION) {
-              // Clean up stale state from previous LLM iteration to prevent
-              // stale tool_calls/__finish_reason from leaking into the follow-up.
-              updatedCtx.remove("__tool_calls");
-              updatedCtx.remove("__tool_call_index");
-              updatedCtx.remove("__finish_reason");
-              updatedCtx.remove("__turn_end");
-              updatedCtx.remove("__true_start");
-              // Dispatch follow-up LLM action directly (tool result inserted into prompt)
-              logger.warn(
-                  "[Micro-ReAct/Reason] dispatching follow-up LLM: type={} target={} depth={}",
-                  continueAction.type(),
-                  continueAction.target(),
-                  depth);
-              return microReActStep(
-                  updatedCtx, continueAction, originalPrompt, depth + 1, maxDepth);
-            }
-
-            // 1. Dispatch structured tool_calls from Function Calling
-            Object rawToolCalls = updatedCtx.get("__tool_calls");
-            String finishReason =
-                updatedCtx.containsKey("__finish_reason")
-                    ? updatedCtx.get("__finish_reason").toString()
-                    : "stop";
-
-            if (rawToolCalls instanceof java.util.List<?> tcList && !tcList.isEmpty()) {
-              @SuppressWarnings("unchecked")
-              java.util.List<Call.ToolCall> toolCalls = (java.util.List<Call.ToolCall>) tcList;
-              int idx =
-                  updatedCtx.containsKey("__tool_call_index")
-                      ? Integer.parseInt(updatedCtx.get("__tool_call_index").toString())
-                      : 0;
-
-              if (idx < toolCalls.size()) {
-                Call.ToolCall tc = toolCalls.get(idx);
-                updatedCtx.put("__tool_call_index", String.valueOf(idx + 1));
-                logger.info(
-                    "[Micro-ReAct/Reason] Dispatching tool_call #{}/{}: {} depth={}",
-                    idx + 1,
-                    toolCalls.size(),
-                    tc.name(),
-                    depth);
-
-                java.util.Map<String, Object> params = new java.util.LinkedHashMap<>();
-                if (tc.arguments() != null && !tc.arguments().isBlank()) {
-                  params.putAll(parseToolArgsJson(tc.arguments()));
-                }
-                logger.debug(
-                    "[Micro-ReAct/Reason] Parsed tool call args: name={} params={}",
-                    tc.name(),
-                    params);
-
-                Action toolAction = Action.toolCall(tc.name(), params);
-                return microReActStep(updatedCtx, toolAction, originalPrompt, depth + 1, maxDepth);
-              }
-              // All tool calls consumed - the dispatchToolCall should have queued a
-              // follow-up LLM action via __next_action_type. Let the outer compose
-              // check finish_reason or __next_action_type to decide next step.
-              updatedCtx.remove("__tool_calls");
-              updatedCtx.remove("__tool_call_index");
-              updatedCtx.remove("__finish_reason");
-              updatedCtx.remove("__turn_end");
-              updatedCtx.remove("__true_start");
-              logger.info(
-                  "[Micro-ReAct/Reason] All tool calls executed, checking for queued follow-up");
-              return Future.succeededFuture(
-                  new StepWithContext(updatedCtx, new StepResult.Continue(null)));
-            }
-
-            // 2. No tool calls - determine next action from finish_reason
-            logger.info(
-                "[Micro-ReAct/Reason] finish_reason={} responseLength={} depth={}",
-                finishReason,
-                updatedCtx.containsKey("result") ? updatedCtx.get("result").toString().length() : 0,
+                "[Micro-ReAct/Reason] dispatching follow-up LLM: type={} target={} depth={}",
+                continueAction.type(),
+                continueAction.target(),
                 depth);
-
-            if ("stop".equals(finishReason) || "tool_calls".equals(finishReason)) {
-              // Natural completion - agent is done
-              String llmOutput =
-                  updatedCtx.containsKey("result") ? updatedCtx.get("result").toString() : "";
-              if (!llmOutput.isEmpty()) {
-                Observation finalObs = Observation.success(llmOutput);
-                updatedCtx.put("lastObservation", finalObs);
-                updatedCtx.put("lastActionResult", llmOutput);
-              }
-              if (wal != null) {
-                wal.checkpointOnReActEnd(
-                    updatedCtx.sessionId(), "ACTING_FINISHED", updatedCtx.asMap(), "");
-              }
-              return Future.succeededFuture(
-                  new StepWithContext(
-                      updatedCtx,
-                      new StepResult.Finish(
-                          llmOutput, "Micro-ReAct completed: finish_reason=" + finishReason)));
-            }
-
-            // Handle error finish reasons (length, content_filter, error)
-            logger.warn(
-                "[Micro-ReAct/Reason] Non-success finish_reason={}, finishing with error",
-                finishReason);
-            String llmOutput =
-                updatedCtx.containsKey("result") ? updatedCtx.get("result").toString() : "";
-            if (wal != null) {
-              wal.checkpointOnError(
-                  updatedCtx.sessionId(), "FINISH_REASON_" + finishReason.toUpperCase(), llmOutput);
-            }
-            return Future.succeededFuture(
-                new StepWithContext(
-                    updatedCtx,
-                    new StepResult.Failure("LLM finished with reason: " + finishReason)));
+            return microReActStep(updatedCtx, continueAction, originalPrompt, depth + 1, maxDepth);
           }
 
-          // 构建 Micro 上下文：包含上一次行动的结果
-          Map<String, Object> microCtx = updatedCtx.asMap();
-          microCtx.put("__micro_depth", depth);
-          microCtx.put("__micro_original_prompt", originalPrompt);
+          // 1. Dispatch structured tool_calls from Function Calling
+          Object rawToolCalls = updatedCtx.get("__tool_calls");
+          String finishReason =
+              updatedCtx.containsKey("__finish_reason")
+                  ? updatedCtx.get("__finish_reason").toString()
+                  : "stop";
 
-          // PlannerService.plan() 作为 Reason：基于观察结果生成下一步微意图
-          Plan microPlan = agent.plannerService().plan(microCtx);
-          Map<String, Object> nextIntent = planToIntent(microPlan, microCtx);
-          Action nextAction = mapToAction(nextIntent);
+          if (rawToolCalls instanceof java.util.List<?> tcList && !tcList.isEmpty()) {
+            @SuppressWarnings("unchecked")
+            java.util.List<Call.ToolCall> toolCalls = (java.util.List<Call.ToolCall>) tcList;
+            int idx =
+                updatedCtx.containsKey("__tool_call_index")
+                    ? Integer.parseInt(updatedCtx.get("__tool_call_index").toString())
+                    : 0;
 
-          // 检查是否应退出 Micro-ReAct
-          if (nextAction.type() == Action.Type.FINISH) {
-            logger.debug("[Micro-ReAct] FINISH received, exiting micro loop");
-            updatedCtx.put(
-                "result", obs != null ? obs.summary() : "Sub-goal completed via Micro-ReAct");
+            if (idx < toolCalls.size()) {
+              Call.ToolCall tc = toolCalls.get(idx);
+              updatedCtx.put("__tool_call_index", String.valueOf(idx + 1));
 
-            // WAL: Micro-ReAct 结束 Checkpoint
+              java.util.Map<String, Object> params = new java.util.LinkedHashMap<>();
+              if (tc.arguments() != null && !tc.arguments().isBlank()) {
+                params.putAll(parseToolArgsJson(tc.arguments()));
+              }
+              logger.info(
+                  "[Micro-ReAct/Reason] Dispatching tool_call #{}/{}: {} depth={}",
+                  idx + 1,
+                  toolCalls.size(),
+                  tc.name(),
+                  depth);
+              logger.debug(
+                  "[Micro-ReAct/Reason] Parsed tool call args: name={} params={}",
+                  tc.name(),
+                  params);
+
+              Action toolAction = Action.toolCall(tc.name(), params);
+              return microReActStep(updatedCtx, toolAction, originalPrompt, depth + 1, maxDepth);
+            }
+
+            // All tool calls consumed - check if there are tool results to feed back
+            updatedCtx.remove("__tool_calls");
+            updatedCtx.remove("__tool_call_index");
+            updatedCtx.remove("__finish_reason");
+            updatedCtx.remove("__turn_end");
+            updatedCtx.remove("__true_start");
+
+            // 检查是否有累积的工具执行结果需要送回 LLM 做后续推理
+            String actionLog =
+                updatedCtx.containsKey("__action_log")
+                    ? updatedCtx.get("__action_log").toString()
+                    : null;
+            if (actionLog != null && !actionLog.isBlank()) {
+              logger.info(
+                  "[Micro-ReAct/Reason] Dispatching follow-up LLM with tool results, depth={}",
+                  depth);
+              String rawPrompt =
+                  updatedCtx.containsKey("prompt") ? updatedCtx.get("prompt").toString() : "";
+              String fullPrompt =
+                  org.cland.alice.core.agent.prompt.PromptManager.buildMicroLoopPrompt(
+                      actionLog, rawPrompt);
+              return microReActStep(
+                  updatedCtx,
+                  Action.llmInference(config.defaultModelId(), fullPrompt),
+                  originalPrompt,
+                  depth + 1,
+                  maxDepth);
+            }
+
+            logger.info("[Micro-ReAct/Reason] All tool calls executed, no results to feed back");
+            return Future.succeededFuture(
+                new StepWithContext(updatedCtx, new StepResult.Continue(null)));
+          }
+
+          // 2. No tool calls - determine next action from finish_reason
+          logger.info(
+              "[Micro-ReAct/Reason] finish_reason={} responseLength={} depth={}",
+              finishReason,
+              updatedCtx.containsKey("result") ? updatedCtx.get("result").toString().length() : 0,
+              depth);
+
+          if ("stop".equals(finishReason) || "tool_calls".equals(finishReason)) {
+            // Natural completion - agent is done
+            String llmOutput =
+                updatedCtx.containsKey("result") ? updatedCtx.get("result").toString() : "";
+            if (!llmOutput.isEmpty()) {
+              Observation finalObs = Observation.success(llmOutput);
+              updatedCtx.put("lastObservation", finalObs);
+              updatedCtx.put("lastActionResult", llmOutput);
+            }
             if (wal != null) {
               wal.checkpointOnReActEnd(
                   updatedCtx.sessionId(), "ACTING_FINISHED", updatedCtx.asMap(), "");
             }
-
             return Future.succeededFuture(
                 new StepWithContext(
                     updatedCtx,
                     new StepResult.Finish(
-                        obs != null ? obs.summary() : "",
-                        "Micro-ReAct loop completed at depth " + depth)));
+                        llmOutput, "Micro-ReAct completed: finish_reason=" + finishReason)));
           }
 
-          if (nextAction.type() == Action.Type.REVISION) {
-            // Revision 需要跳出 Micro-ReAct 回到 Macro Reflect 阶段
-            String feedback =
-                nextAction.parameters().getOrDefault("feedback", "Micro revision").toString();
-            updatedCtx.put("lastFeedback", feedback);
-            updatedCtx.appendThought("[Micro-ReAct] Revision: " + feedback);
-
-            // WAL: Revision Checkpoint
-            if (wal != null) {
-              wal.checkpointOnReActEnd(updatedCtx.sessionId(), "REVISION", updatedCtx.asMap(), "");
-            }
-
-            return Future.succeededFuture(
-                new StepWithContext(updatedCtx, new StepResult.Continue(nextAction)));
+          // Handle error finish reasons (length, content_filter, error)
+          logger.warn(
+              "[Micro-ReAct/Reason] Non-success finish_reason={}, finishing with error",
+              finishReason);
+          String llmOutput =
+              updatedCtx.containsKey("result") ? updatedCtx.get("result").toString() : "";
+          if (wal != null) {
+            wal.checkpointOnError(
+                updatedCtx.sessionId(), "FINISH_REASON_" + finishReason.toUpperCase(), llmOutput);
           }
-
-          // === 递归：继续下一轮 Micro-ReAct ===
-          return microReActStep(updatedCtx, nextAction, originalPrompt, depth + 1, maxDepth);
+          return Future.succeededFuture(
+              new StepWithContext(
+                  updatedCtx, new StepResult.Failure("LLM finished with reason: " + finishReason)));
         });
   }
 
@@ -1062,11 +1061,34 @@ public class AgentExecutor {
     logger.debug("[Observe] result={}", result);
     ctx.transitionTo(AgentContext.Phase.OBSERVING);
 
-    // 提取 Observation
-    Observation obs = stepWithCtx.observation();
-    if (obs != null) {
-      ctx.appendThought("Observed: " + obs.summary());
-      ctx.put("lastObservation", obs);
+    // 提取 Observation — 优先使用 __action_log（累积的多步工具结果）
+    String actionLog = ctx.containsKey("__action_log") ? ctx.get("__action_log").toString() : null;
+    if (actionLog != null && !actionLog.isBlank()) {
+      int toolCount = actionLog.split("\n\n").length;
+      String systemMsg = "[System] " + toolCount + " tool calls executed during this iteration";
+      ctx.put("__system_event", systemMsg);
+      ctx.appendThought(systemMsg);
+      Observation combinedObs = Observation.success(actionLog);
+      ctx.appendThought(
+          "Observed: " + actionLog.length() + " chars from " + toolCount + " tool results");
+      ctx.put("lastObservation", combinedObs);
+      ctx.put("lastActionResult", "Tool results: " + actionLog.length() + " chars");
+      logger.info(
+          "[Observe] Collected {} tool results ({} chars)",
+          actionLog.split("\n\n").length,
+          actionLog.length());
+
+      // fire observe event: 系统提示，不传递原始工具结果
+      fireOnObserve(
+          "[System] " + actionLog.split("\n\n").length + " tool calls executed",
+          actionLog.length() + " chars from " + actionLog.split("\n\n").length + " tool results",
+          0L);
+    } else {
+      Observation obs = stepWithCtx.observation();
+      if (obs != null) {
+        ctx.appendThought("Observed: " + obs.summary());
+        ctx.put("lastObservation", obs);
+      }
     }
 
     // 持久化到 Memory
