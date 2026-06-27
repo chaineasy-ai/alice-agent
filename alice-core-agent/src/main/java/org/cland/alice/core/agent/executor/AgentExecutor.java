@@ -1459,7 +1459,7 @@ public class AgentExecutor {
           } else if (val.isBoolean()) {
             result.put(key, val.asText());
           } else if (val.isNull()) {
-            result.put(key, null);
+            // Skip null values: Map.copyOf() in Action.<init> rejects them
           } else {
             result.put(key, val.toString());
           }

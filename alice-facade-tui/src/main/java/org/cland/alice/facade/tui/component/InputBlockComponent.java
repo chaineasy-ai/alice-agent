@@ -138,9 +138,17 @@ public class InputBlockComponent extends Component {
 
   @Override
   public List<String> render() {
-    if (!visible || width <= 0 || height <= 0 || logLines.isEmpty()) {
+    if (!visible || width <= 0 || height <= 0) {
       clearDirty();
       return List.of();
+    }
+    if (logLines.isEmpty()) {
+      clearDirty();
+      java.util.List<String> empty = new java.util.ArrayList<>(height);
+      for (int i = 0; i < height; i++) {
+        empty.add(ANSI_BG_DARK + " ".repeat(width) + ANSI_RESET);
+      }
+      return empty;
     }
     clearDirty();
 

@@ -44,7 +44,18 @@ public final class Action {
   private Action(Builder builder) {
     this.type = Objects.requireNonNull(builder.type, "type must not be null");
     this.target = builder.target;
-    this.parameters = builder.parameters != null ? Map.copyOf(builder.parameters) : Map.of();
+    if (builder.parameters != null) {
+      // Filter out null values: Map.copyOf() rejects them via Object.requireNonNull
+      Map<String, Object> cleaned = new java.util.LinkedHashMap<>();
+      for (var entry : builder.parameters.entrySet()) {
+        if (entry.getValue() != null) {
+          cleaned.put(entry.getKey(), entry.getValue());
+        }
+      }
+      this.parameters = Map.copyOf(cleaned);
+    } else {
+      this.parameters = Map.of();
+    }
     this.thought = builder.thought;
     this.actionId =
         builder.actionId != null ? builder.actionId : SnowflakeIdGenerator.generateSessionId();

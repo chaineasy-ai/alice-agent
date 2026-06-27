@@ -446,7 +446,10 @@ public class ScreenManager implements AutoCloseable {
       // 已经知道保留行数，不会将 scroll region 设置到覆盖 footer。
       if (contentDirty.get()) {
         redrawScrollArea();
-        contentDirty.set(false);
+        // Intentionally NOT clearing contentDirty here — leave it for the renderLoop's
+        // atomic CAS. If we clear it, we risk losing concurrent contentDirty.set(true)
+        // calls from event listeners firing during redrawScrollArea().
+        // The renderLoop (run every 100ms) will pick it up atomically.
       }
 
       // LINE_OFFSET：保留 input 组件下方所有行不被 JLine 覆盖（separator2 + Footer）。
@@ -492,7 +495,7 @@ public class ScreenManager implements AutoCloseable {
       if (pendingRedraw.compareAndSet(true, false)) {
         contentDirty.set(true);
         redrawScrollArea();
-        contentDirty.set(false);
+        // Same rationale: leave contentDirty for renderLoop's atomic CAS.
       }
 
       // JLine 补全菜单可能覆盖分割线和状态行，readLine 返回后显式恢复
