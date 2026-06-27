@@ -3,9 +3,11 @@ package org.cland.alice.core.agent.executor;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
 import org.cland.alice.core.agent.AgentContext;
@@ -55,8 +57,8 @@ public class AgentExecutor {
   /** 可选的 WAL 会话，注入后启用双轨制持久化与崩溃恢复 */
   private WalSession wal;
 
-  /** PPAO 事件消费者（用于 TUI 实时渲染） */
-  private volatile java.util.function.Consumer<PPAOEvent> ppaoConsumer;
+  /** Agent 执行流事件监听器列表（Observer 模式） */
+  private final List<AgentEventListener> listeners = new CopyOnWriteArrayList<>();
 
   public AgentExecutor(Vertx vertx, Agent agent) {
     this.vertx = Objects.requireNonNull(vertx, "vertx must not be null");
@@ -94,29 +96,18 @@ public class AgentExecutor {
   }
 
   /**
-   * 注册 PPAO 事件消费者，在 Micro-ReAct 循环的 Reasoning/Action/Observe 节点触发。
+   * 注册 Agent 执行流事件监听器（Observer 模式）。
    *
-   * @param consumer 事件消费者
+   * <p>监听 Micro-ReAct 循环中的 PPAO 事件序列：thought → action → observe。 支持多个监听器并发注册。
+   *
+   * @param listener 事件监听器
    * @return this（链式调用）
    */
-  public AgentExecutor onPPAOEvent(java.util.function.Consumer<PPAOEvent> consumer) {
-    this.ppaoConsumer = consumer;
+  public AgentExecutor addListener(AgentEventListener listener) {
+    if (listener != null) {
+      this.listeners.add(listener);
+    }
     return this;
-  }
-
-  /** PPAO 事件类型 — 用于 TUI 实时渲染 TAO 四段式流程。 */
-  public record PPAOEvent(String type, String content, String metadata) {
-    public static PPAOEvent thought(String content) {
-      return new PPAOEvent("thought", content, "");
-    }
-
-    public static PPAOEvent action(String content) {
-      return new PPAOEvent("action", content, "");
-    }
-
-    public static PPAOEvent observe(String content) {
-      return new PPAOEvent("observe", content, "");
-    }
   }
 
   /** 检查 WAL 是否已注入。 */
@@ -793,9 +784,9 @@ public class AgentExecutor {
                   }
                   ctx.put("__llm_response", content != null ? content : "");
                   ctx.put("__llm_reasoning", extractReasoningFromRaw(response));
-                  // PPAO: emit thought event for TUI ThinkBlock
+                  // PPAO: fire thought event for TUI ThinkBlock
                   Object reasoning = ctx.get("__llm_reasoning");
-                  emitPPAO(PPAOEvent.thought(reasoning != null ? reasoning.toString() : ""));
+                  fireOnThought(reasoning != null ? reasoning.toString() : "");
                   String finishReason = extractFinishReasonFromRaw(response);
                   ctx.put("__finish_reason", finishReason);
                   ctx.put("__turn_end", "stop".equals(finishReason));
@@ -887,8 +878,8 @@ public class AgentExecutor {
   // ========================================================================
 
   private Future<StepWithContext> dispatchToolCall(AgentContext ctx, Action action) {
-    // PPAO: emit action event for TUI ActionBlock
-    emitPPAO(PPAOEvent.action(action.target() + "(" + action.parameters() + ")"));
+    // PPAO: fire action event for TUI ActionBlock
+    fireOnAction(action.target(), action.parameters());
 
     logger.info("[Dispatch/TOOL_CALL] target={} params={}", action.target(), action.parameters());
 
@@ -948,12 +939,13 @@ public class AgentExecutor {
                         ? result.summary().substring(0, Math.min(200, result.summary().length()))
                         : "null");
 
-                // PPAO: emit observe event for TUI ObserveBlock (使用 rawData 以获取完整工具输出)
-                emitPPAO(
-                    PPAOEvent.observe(
-                        result.rawData() != null && !result.rawData().isBlank()
-                            ? result.rawData()
-                            : (result.summary() != null ? result.summary() : "(empty)")));
+                // PPAO: fire observe event for TUI ObserveBlock (使用 rawData 以获取完整工具输出)
+                fireOnObserve(
+                    result.rawData() != null && !result.rawData().isBlank()
+                        ? result.rawData()
+                        : (result.summary() != null ? result.summary() : "(empty)"),
+                    result.summary() != null ? result.summary() : "",
+                    0L);
 
                 // WAL: 记录工具执行结果（含实际返回数据）
                 if (wal != null) {
@@ -1368,14 +1360,36 @@ public class AgentExecutor {
     };
   }
 
-  /** 发射 PPAO 事件给已注册的消费者。 */
-  private void emitPPAO(PPAOEvent event) {
-    var c = ppaoConsumer;
-    if (c != null) {
+  // ========================================================================
+  // PPAO 事件分发（Observer 模式）
+  // ========================================================================
+
+  private void fireOnThought(String reasoning) {
+    for (var listener : listeners) {
       try {
-        c.accept(event);
+        listener.onThought(reasoning);
       } catch (Exception e) {
-        logger.warn("PPAO event consumer threw exception", e);
+        logger.warn("AgentEventListener.onThought threw exception", e);
+      }
+    }
+  }
+
+  private void fireOnAction(String target, Map<String, Object> params) {
+    for (var listener : listeners) {
+      try {
+        listener.onAction(target, params);
+      } catch (Exception e) {
+        logger.warn("AgentEventListener.onAction threw exception", e);
+      }
+    }
+  }
+
+  private void fireOnObserve(String rawData, String summary, long elapsedMs) {
+    for (var listener : listeners) {
+      try {
+        listener.onObserve(rawData, summary, elapsedMs);
+      } catch (Exception e) {
+        logger.warn("AgentEventListener.onObserve threw exception", e);
       }
     }
   }

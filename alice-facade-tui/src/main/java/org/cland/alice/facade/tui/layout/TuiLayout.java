@@ -19,6 +19,7 @@ import org.cland.alice.facade.tui.component.*;
  *  -rw------- 1 alice alice 111 config.json               ← ObserveBlock (~55% 内容区)
  *  Took 0.0s
  * ──────────────────────────────────────────────────────  ← 分割线 (1行)
+ *  📋 2 queued messages                                    ← 队列状态行 (1行, 有消息时显示)
  *  █                                                     ← 输入区 (1行)
  *  [48;5;208m💰 $0.041[0m  [48;5;35m📊 125 t/s[0m ...  ← Footer (1行, 终端最底行)
  * </pre>
@@ -37,6 +38,9 @@ public class TuiLayout {
   /** 固定非内容行数 */
   public static final int FIXED_ROWS =
       HEADER_HEIGHT + INPUT_BLOCK_HEIGHT + ACTION_BLOCK_HEIGHT + STATUS_HEIGHT;
+
+  /** 队列状态行高度 */
+  public static final int QUEUE_HEIGHT = 1;
 
   /** 分割线字符 (ANSI 暗色) */
   static final char SEPARATOR_CHAR = '\u2500'; // ─
@@ -69,7 +73,11 @@ public class TuiLayout {
   private int observeBlockHeight;
   private int inputRow;
   private int separatorRow;
+  private int queueRow;
   private int footerRow;
+
+  /** 当前队列中待处理的消息数量 */
+  private volatile int queueCount;
 
   public TuiLayout(
       HeaderComponent header,
@@ -112,6 +120,7 @@ public class TuiLayout {
             - currentRow
             - ACTION_BLOCK_HEIGHT // ActionBlock (2行)
             - 1 // 分割线
+            - QUEUE_HEIGHT // 队列状态行 (1行)
             - 1 // 输入行
             - STATUS_HEIGHT; // Footer
     thinkBlockHeight = (int) Math.floor(remainingBeforeAction * 0.45);
@@ -132,6 +141,7 @@ public class TuiLayout {
         this.terminalHeight
             - currentRow
             - 1 // 分割线
+            - QUEUE_HEIGHT // 队列状态行 (1行)
             - 1 // 输入行
             - STATUS_HEIGHT; // Footer
     observeBlockHeight = Math.max(remainingAfterAction, 1);
@@ -144,11 +154,14 @@ public class TuiLayout {
     // 6. 分割线 (内容区和输入区之间)
     separatorRow = currentRow;
 
-    // 7. 输入区 (1行)
-    inputRow = separatorRow + 1;
+    // 7. 队列状态行 (有消息时显示, 无消息时留空)
+    queueRow = separatorRow + 1;
+
+    // 8. 输入区 (1行)
+    inputRow = queueRow + 1;
     input.setBounds(inputRow, 0, this.terminalWidth, 1);
 
-    // 8. Footer (终端最底行)
+    // 9. Footer (终端最底行)
     footerRow = this.terminalHeight - 1;
     footer.setBounds(footerRow, 0, this.terminalWidth, STATUS_HEIGHT);
 
@@ -191,6 +204,27 @@ public class TuiLayout {
 
   public int separatorRow() {
     return separatorRow;
+  }
+
+  /** 队列状态行（位于分割线与输入区之间）。满行显示 "📋 N queued messages"，空时显示空行。 */
+  public int queueRow() {
+    return queueRow;
+  }
+
+  /** 更新队列中待处理消息数量（由 ScreenManager 在入队/出队时调用）。 */
+  public void setQueueCount(int count) {
+    this.queueCount = Math.max(count, 0);
+  }
+
+  /** 队列中待处理消息数量。 */
+  public int queueCount() {
+    return queueCount;
+  }
+
+  /** 生成队列状态行文本（无消息时返回空字符串）。 */
+  public String queueLine() {
+    if (queueCount <= 0) return "";
+    return ANSI_DIM_SEP + "\uD83D\uDCCB " + queueCount + " queued messages" + ANSI_RESET;
   }
 
   public int inputRow() {

@@ -95,13 +95,25 @@ public abstract sealed class TuiEvent {
   /** 观测结果（Action 执行后的反馈） */
   public static final class ObservationResult extends TuiEvent {
     private final String summary;
+    private final double elapsedSec;
 
     public ObservationResult(String summary) {
       this.summary = summary;
+      this.elapsedSec = 0.0;
+    }
+
+    public ObservationResult(String summary, double elapsedSec) {
+      this.summary = summary;
+      this.elapsedSec = elapsedSec;
     }
 
     public String summary() {
       return summary;
+    }
+
+    /** 工具执行耗时（秒），由 AgentExecutor 或 TuiAgentListener 计时提供。 */
+    public double elapsedSec() {
+      return elapsedSec;
     }
   }
 

@@ -120,7 +120,12 @@ public class EventBridge implements AutoCloseable {
 
   /** 当观测结果返回时调用 */
   public void onObserved(String summary) {
-    emit(new TuiEvent.ObservationResult(summary));
+    emit(new TuiEvent.ObservationResult(summary, 0.0));
+  }
+
+  /** 当观测结果返回时调用（含执行耗时） */
+  public void onObserved(String summary, double elapsedSec) {
+    emit(new TuiEvent.ObservationResult(summary, elapsedSec));
   }
 
   /** 任务完成时调用 */

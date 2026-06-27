@@ -133,51 +133,14 @@ public class AliceTuiLauncher implements AutoCloseable {
   }
 
   /**
-   * 钩子：将 Agent 核心事件连接到 EventBridge。
+   * 钩子：注册 {@link TuiAgentListener} 将 AgentExecutor 的 PPAO 事件流实时转发到 EventBridge。
    *
-   * <p>此处通过拦截 AgentExecutor 产生的 StepResult 来生成 TUI 事件。 更完整的实现应使用 Agent 内部的监听器模式。
+   * <p>使用 Observer 模式，AgentExecutor 内部维持监听器列表，事件按 PPAO 序列（thought → action → observe） 同步投递，保证 TUI
+   * 渲染顺序与执行顺序一致。
    */
   private void hookAgentEvents() {
-    // PPAO 推理步骤计数器
-    var thoughtStep = new java.util.concurrent.atomic.AtomicInteger(0);
-    // 追踪最后发出的 action，用于 observe 事件配对
-    var lastAction = new java.util.concurrent.atomic.AtomicReference<String>();
-
-    // 注册 PPAO 事件消费者：将 AgentExecutor 的推理/动作/观察流实时转发到 TUI EventBridge
-    agent
-        .getExecutor()
-        .onPPAOEvent(
-            event -> {
-              switch (event.type()) {
-                case "thought" -> {
-                  var content = event.content();
-                  if (content != null && !content.isBlank() && content.length() >= 10) {
-                    eventBridge.onNewThought(content, thoughtStep.incrementAndGet());
-                  }
-                }
-                case "action" -> {
-                  if (event.content() != null && !event.content().isBlank()) {
-                    lastAction.set(event.content());
-                    // 构建 Action 对象用于 TUI ActionBlock 渲染
-                    var ac =
-                        org.cland.alice.core.agent.lifecycle.Action.builder()
-                            .type(org.cland.alice.core.agent.lifecycle.Action.Type.TOOL_CALL)
-                            .target(event.content())
-                            .build();
-                    eventBridge.onActionExecuting(ac);
-                  }
-                }
-                case "observe" -> {
-                  var content = event.content();
-                  if (content == null || content.isBlank()) break;
-                  // 在观察输出前插入对应的 action 命令，形成完整的 PAO 执行流记录
-                  var action = lastAction.getAndSet(null);
-                  var observeContent = action != null ? "$ " + action + "\n" + content : content;
-                  eventBridge.onObserved(observeContent);
-                }
-                default -> {}
-              }
-            });
+    var tuiListener = new TuiAgentListener(eventBridge);
+    agent.getExecutor().addListener(tuiListener);
   }
 
   // ========== 启动 ==========

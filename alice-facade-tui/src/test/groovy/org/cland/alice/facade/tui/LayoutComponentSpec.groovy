@@ -147,8 +147,9 @@ class LayoutComponentSpec extends Specification {
         and: "separator below ObserveBlock"
         layout.separatorRow() == layout.observeBlockStartRow() + layout.observeBlockHeight()
 
-        and: "input row after separator"
-        layout.inputRow() == layout.separatorRow() + 1
+        and: "queue row after separator, then input"
+        layout.queueRow() == layout.separatorRow() + 1
+        layout.inputRow() == layout.separatorRow() + 2
         layout.input().row() == layout.inputRow()
 
         and: "footer at bottom row"
@@ -157,7 +158,7 @@ class LayoutComponentSpec extends Specification {
 
         and: "ThinkBlock + ObserveBlock fill remaining space"
         int fixed = TuiLayout.HEADER_HEIGHT + TuiLayout.INPUT_BLOCK_HEIGHT + TuiLayout.ACTION_BLOCK_HEIGHT + TuiLayout.STATUS_HEIGHT
-        int contentRows = 24 - fixed - 2 // -2 for separator + input
+        int contentRows = 24 - fixed - 3 // -3 for separator + queue + input
         layout.thinkBlockHeight() + layout.observeBlockHeight() == contentRows
     }
 

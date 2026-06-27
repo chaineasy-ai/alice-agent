@@ -59,6 +59,7 @@ public class ScreenManager implements AutoCloseable {
   private final Object terminalLock = new Object();
 
   private final Deque<String> inputHistory;
+  private final Deque<String> inputQueue;
   private int historyIndex;
   private Consumer<String> onTaskSubmit;
   private Runnable onClear;
@@ -138,6 +139,7 @@ public class ScreenManager implements AutoCloseable {
     this.renderThread.setDaemon(true);
 
     this.inputHistory = new ArrayDeque<>();
+    this.inputQueue = new ArrayDeque<>();
     this.historyIndex = 0;
     this.contentDirty = new AtomicBoolean(true);
     this.inputActive = new AtomicBoolean(false);
@@ -237,7 +239,7 @@ public class ScreenManager implements AutoCloseable {
             }
             case TuiEvent.ObservationResult e -> {
               layout.observeBlock().addOutput(e.summary());
-              layout.observeBlock().addTiming(0.0);
+              layout.observeBlock().addTiming(e.elapsedSec());
               contentDirty.set(true);
             }
             case TuiEvent.ChatMessage e -> {
@@ -256,6 +258,7 @@ public class ScreenManager implements AutoCloseable {
                 layout.thinkBlock().addAgentMessage(result);
               }
               state.transitionTo(TuiState.State.IDLE);
+              dispatchNextFromQueue();
               contentDirty.set(true);
             }
             case TuiEvent.TaskError e -> {
@@ -375,7 +378,15 @@ public class ScreenManager implements AutoCloseable {
       writer.write(layout.separatorLine());
       writer.write(ANSI_CLEAR_LINE);
 
-      // 7. 输入区
+      // 7. 队列状态行 (有消息时显示, 无消息时留空)
+      cursorLine(layout.queueRow());
+      String queueLine = layout.queueLine();
+      if (!queueLine.isEmpty()) {
+        writer.write(queueLine);
+      }
+      writer.write(ANSI_CLEAR_LINE);
+
+      // 8. 输入区
       List<String> inputLines = layout.input().render();
       for (int i = 0; i < inputLines.size(); i++) {
         cursorLine(layout.inputRow() + i);
@@ -383,7 +394,7 @@ public class ScreenManager implements AutoCloseable {
         writer.write(ANSI_CLEAR_LINE);
       }
 
-      // 8. Footer
+      // 9. Footer
       List<String> footerLines = layout.footer().render();
       for (int i = 0; i < footerLines.size(); i++) {
         cursorLine(layout.footerRow() + i);
@@ -455,7 +466,15 @@ public class ScreenManager implements AutoCloseable {
         writer.write(layout.separatorLine());
         writer.write(ANSI_CLEAR_LINE);
 
-        // 7. Footer
+        // 7. 队列状态行 (有消息时显示, 无消息时留空)
+        cursorLine(layout.queueRow());
+        String queueLine = layout.queueLine();
+        if (!queueLine.isEmpty()) {
+          writer.write(queueLine);
+        }
+        writer.write(ANSI_CLEAR_LINE);
+
+        // 8. Footer
         List<String> footerLines = layout.footer().render();
         for (int i = 0; i < footerLines.size(); i++) {
           cursorLine(layout.footerRow() + i);
@@ -556,10 +575,9 @@ public class ScreenManager implements AutoCloseable {
       }
 
       if (state.isRunning()) {
-        layout
-            .thinkBlock()
-            .addSystemMessage(
-                "Agent \u6B63\u5728\u6267\u884C\u4E2D\uFF0C\u8BF7\u7B49\u5F85\u5B8C\u6210\u6216\u6309 F5 \u505C\u6B62\u3002");
+        // Agent 忙碌时入队，不阻塞用户输入
+        inputQueue.addLast(trimmed);
+        layout.setQueueCount(inputQueue.size());
         contentDirty.set(true);
         continue;
       }
@@ -577,13 +595,37 @@ public class ScreenManager implements AutoCloseable {
     synchronized (terminalLock) {
       java.io.Writer writer = terminal.writer();
       try {
+        // 1. 分割线
         cursorLine(layout.separatorRow());
         writer.write(layout.separatorLine());
         writer.write(ANSI_CLEAR_LINE);
+
+        // 2. 队列状态行
+        cursorLine(layout.queueRow());
+        String queueLine = layout.queueLine();
+        if (!queueLine.isEmpty()) {
+          writer.write(queueLine);
+        }
+        writer.write(ANSI_CLEAR_LINE);
+
         writer.flush();
       } catch (IOException e) {
         logger.warn("Failed to restore lower area after JLine completion menu", e);
       }
+    }
+  }
+
+  /** 从队列中取出下一个待处理输入并提交（由 TaskComplete/TaskError 回调调用）。 */
+  private void dispatchNextFromQueue() {
+    if (inputQueue.isEmpty()) return;
+    String next = inputQueue.pollFirst();
+    layout.setQueueCount(inputQueue.size());
+    if (next != null && !next.isBlank()) {
+      layout.inputBlock().showUserInput(next);
+      state.transitionTo(TuiState.State.RUNNING);
+      contentDirty.set(true);
+      if (onTaskSubmit != null) onTaskSubmit.accept(next);
+      eventBridge.onStartThinking(next);
     }
   }
 
