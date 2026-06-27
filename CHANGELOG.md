@@ -60,6 +60,11 @@ updated: "2026-06-27"
 - **alice-tool-gateway/BuiltinTools/grep**: `grep` 工具从仅支持单个文件扩展为支持目录路径递归搜索（类似 `grep -r`）。当 LLM 传入 `.` 等目录路径时自动遍历所有文件搜索匹配行，多文件场景在输出行前附加文件名前缀。
 - **alice-tool-gateway/ExecutionEngine/wrapError**: 修复工具执行异常时根因消息被双层异常包装（`ExecutionException -> RuntimeException`）掩盖的问题。新增 `deepestCauseMessage()` 深入异常链提取最内层原因消息，LLM 现在能收到如 `"Tool [grep] execution failed: Sandbox execution failed (cause: grep: path not found: .)"` 的有用信息。
 
+### Docs
+
+- **`docs/alice-facade-tui/Layout.md`**: 从 v2.6 更新为 v3.1 TAO 四段式布局工程设计文档。涵盖 8 组件布局、PPAO Observer 模式（`AgentEventListener`）、输入队列机制、实际耗时传递、线程模型全链路图、ANSI 配色速查表。
+- **`docs/alice-facade-tui/Layout_TAO.md`**: 新增 v3.1 规格文档，含四段式区域说明、PPAO 执行流图、事件路由映射表、布局计算公式、ANSI 配色速查、关键代码入口对照表。
+
 ## 20260627
 
 ### BREAKING
