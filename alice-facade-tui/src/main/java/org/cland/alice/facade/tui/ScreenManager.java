@@ -66,7 +66,13 @@ public class ScreenManager implements AutoCloseable {
   private Runnable onExit;
   private Consumer<String> onModelSwitch;
   private final AtomicBoolean contentDirty;
+
+  /** 输入活跃标记 — 主线程在 readLine 中时置为 true，阻止渲染线程竞争写入终端 */
   private final AtomicBoolean inputActive;
+
+  /** 输入期间积压的重绘标记 — inputActive 期间 contentDirty 被设置时记录，输入结束后处理 */
+  private final AtomicBoolean pendingRedraw;
+
   private final AtomicBoolean needsFullClear;
   private volatile int lastPollWidth;
   private volatile int lastPollHeight;
@@ -143,6 +149,7 @@ public class ScreenManager implements AutoCloseable {
     this.historyIndex = 0;
     this.contentDirty = new AtomicBoolean(true);
     this.inputActive = new AtomicBoolean(false);
+    this.pendingRedraw = new AtomicBoolean(false);
     this.needsFullClear = new AtomicBoolean(false);
     this.lastPollWidth = this.terminal.getWidth();
     this.lastPollHeight = this.terminal.getHeight();
@@ -394,7 +401,12 @@ public class ScreenManager implements AutoCloseable {
         writer.write(ANSI_CLEAR_LINE);
       }
 
-      // 9. Footer
+      // 9. 下分割线 (输入区和 Footer 之间)
+      cursorLine(layout.separator2Row());
+      writer.write(layout.separatorLine());
+      writer.write(ANSI_CLEAR_LINE);
+
+      // 10. Footer
       List<String> footerLines = layout.footer().render();
       for (int i = 0; i < footerLines.size(); i++) {
         cursorLine(layout.footerRow() + i);
@@ -474,7 +486,12 @@ public class ScreenManager implements AutoCloseable {
         }
         writer.write(ANSI_CLEAR_LINE);
 
-        // 8. Footer
+        // 8. 下分割线 (输入区和 Footer 之间)
+        cursorLine(layout.separator2Row());
+        writer.write(layout.separatorLine());
+        writer.write(ANSI_CLEAR_LINE);
+
+        // 9. Footer
         List<String> footerLines = layout.footer().render();
         for (int i = 0; i < footerLines.size(); i++) {
           cursorLine(layout.footerRow() + i);
@@ -492,7 +509,14 @@ public class ScreenManager implements AutoCloseable {
   private void renderLoop() {
     while (running.get()) {
       try {
-        if (contentDirty.compareAndSet(true, false)) {
+        if (inputActive.get()) {
+          // 输入活跃期间不写入终端，避免与 JLine 的 readLine() 竞争输出流。
+          // 积压的重绘由主线程在 readLine() 返回后处理。
+          if (contentDirty.get()) {
+            pendingRedraw.set(true);
+            contentDirty.set(false);
+          }
+        } else if (contentDirty.compareAndSet(true, false)) {
           redrawScrollArea();
         }
         frameCount++;
@@ -519,18 +543,25 @@ public class ScreenManager implements AutoCloseable {
     contentDirty.set(true);
 
     while (running.get()) {
-      if (contentDirty.get()) {
-        redrawScrollArea();
-        contentDirty.set(false);
-      }
-
       int inputRow = layout.inputRow();
+
+      // JLine 显示层 warmup：在同步块外提前调用 getHeight/getVariable 加入终端 I/O 间隔，
+      // 确保终端完成处理所有先前输出；raw ANSI 定位光标后 readLine 启动时光标已在正确行。
+      reader.getVariable(LineReader.LINE_OFFSET);
+
+      // 将 redrawScrollArea 与光标定位合并到同一 synchronized 块中，
+      // 确保后台渲染线程不插入中间写入，避免物理光标在 readLine 前被意外移动。
       synchronized (terminalLock) {
+        if (contentDirty.get()) {
+          redrawScrollArea();
+          contentDirty.set(false);
+        }
         terminal.writer().write(String.format(ANSI_CURSOR_LINE, inputRow + 1));
         terminal.writer().write("\033[2K");
         terminal.writer().flush();
       }
 
+      // LINE_OFFSET=2 保留 input 下方 2 行不被 JLine 覆盖（队列行 + Footer）
       reader.setVariable(LineReader.LINE_OFFSET, 2);
 
       inputActive.set(true);
@@ -554,6 +585,14 @@ public class ScreenManager implements AutoCloseable {
         inputActive.set(false);
       }
 
+      // 处理输入期间积压的 deferred 重绘
+      if (pendingRedraw.compareAndSet(true, false)) {
+        contentDirty.set(true);
+        redrawScrollArea();
+        contentDirty.set(false);
+      }
+
+      // JLine 补全菜单可能覆盖分割线和状态行，readLine 返回后显式恢复
       restoreLowerArea();
 
       if (line == null) break;
@@ -595,7 +634,7 @@ public class ScreenManager implements AutoCloseable {
     synchronized (terminalLock) {
       java.io.Writer writer = terminal.writer();
       try {
-        // 1. 分割线
+        // 1. 上分割线 (内容区和输入区之间)
         cursorLine(layout.separatorRow());
         writer.write(layout.separatorLine());
         writer.write(ANSI_CLEAR_LINE);
@@ -607,6 +646,19 @@ public class ScreenManager implements AutoCloseable {
           writer.write(queueLine);
         }
         writer.write(ANSI_CLEAR_LINE);
+
+        // 3. 下分割线 (输入区和 Footer 之间)
+        cursorLine(layout.separator2Row());
+        writer.write(layout.separatorLine());
+        writer.write(ANSI_CLEAR_LINE);
+
+        // 4. Footer
+        List<String> footerLines = layout.footer().render();
+        for (int i = 0; i < footerLines.size(); i++) {
+          cursorLine(layout.footerRow() + i);
+          writer.write(footerLines.get(i));
+          writer.write(ANSI_CLEAR_LINE);
+        }
 
         writer.flush();
       } catch (IOException e) {

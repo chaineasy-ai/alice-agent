@@ -152,13 +152,14 @@ class LayoutComponentSpec extends Specification {
         layout.inputRow() == layout.separatorRow() + 2
         layout.input().row() == layout.inputRow()
 
-        and: "footer at bottom row"
+        and: "separator2 below input, footer at bottom row"
+        layout.separator2Row() == layout.inputRow() + 1
         layout.footerRow() == 23
         layout.footer().row() == 23
 
         and: "ThinkBlock + ObserveBlock fill remaining space"
         int fixed = TuiLayout.HEADER_HEIGHT + TuiLayout.INPUT_BLOCK_HEIGHT + TuiLayout.ACTION_BLOCK_HEIGHT + TuiLayout.STATUS_HEIGHT
-        int contentRows = 24 - fixed - 3 // -3 for separator + queue + input
+        int contentRows = 24 - fixed - 4 // -4 for separator + queue + input + separator2
         layout.thinkBlockHeight() + layout.observeBlockHeight() == contentRows
     }
 
@@ -169,8 +170,8 @@ class LayoutComponentSpec extends Specification {
         layout.recalculate(20, 3)
         then: "minimum width is 40"
         layout.terminalWidth() == 40
-        and: "minimum height is FIXED_ROWS + 6 = 12"
-        layout.terminalHeight() >= TuiLayout.FIXED_ROWS + 6
+        and: "minimum height is FIXED_ROWS + 7 = 13"
+        layout.terminalHeight() >= TuiLayout.FIXED_ROWS + 7
         and: "all zone heights are positive"
         layout.thinkBlockHeight() > 0
         layout.observeBlockHeight() > 0
