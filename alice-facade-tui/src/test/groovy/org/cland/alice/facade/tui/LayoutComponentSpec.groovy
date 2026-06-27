@@ -246,9 +246,7 @@ class LayoutComponentSpec extends Specification {
         lines[0].contains('\$0.041')
         lines[0].contains('125 t/s')
         lines[0].contains("gpt-4o-mini")
-        lines[0].contains("\u001B[48;5;208m") // orange bg
-        lines[0].contains("\u001B[48;5;35m")  // green bg
-        lines[0].contains("\u001B[48;5;239m") // dark gray bg
+        lines[0].contains("\u001B[48;5;239m") // dark gray bg (all blocks unified)
         stripAnsi(lines[0]).length() == 80
     }
 

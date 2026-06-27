@@ -3,35 +3,21 @@ package org.cland.alice.facade.tui.component;
 import java.util.List;
 
 /**
- * 底部状态栏组件（单行）— TAO 实体仪表盘（v2.3）。
+ * 底部状态栏组件（单行）— 统一暗灰底色块。
  *
- * <p>对应 Layout.md §7.1 最底行，采用 ANSI 256 色背景实体色块渲染：
+ * <p>所有指标色块统一使用暗灰底(48;5;239) 白色文字(37)：
  *
  * <pre>
- *   \u001B[48;5;208m\u001B[30m  💰 $0.041  \u001B[0m  \u001B[48;5;35m\u001B[30m  📊 125 t/s  \u001B[0m  \u001B[48;5;239m\u001B[37m  🧠 gpt-4o  \u001B[0m ── 🔌 Active: cland-pay-mcp
+ *   \u001B[48;5;239m\u001B[37m  💰 $0.041  \u001B[0m  \u001B[48;5;239m\u001B[37m  📊 125 t/s  \u001B[0m  \u001B[48;5;239m\u001B[37m  🧠 gpt-4o  \u001B[0m ── 🔌 Active: cland-pay-mcp
  * </pre>
- *
- * <p>v2.3 进化点：
- *
- * <ul>
- *   <li>指标数据全部纯色背景包裹，形成物理隔离独立色块
- *   <li>废弃拼接符号和冗余提示文本
- *   <li>底部状态栏物理固定，终端 WINCH 缩放自适应重绘定位
- * </ul>
  */
 public class FooterComponent extends Component {
 
   /** ANSI 重置码 */
   private static final String ANSI_RESET = "\u001B[0m";
 
-  /** 色块前缀：费用 — 橙黄底(208) 黑色文字(30) */
-  private static final String BLOCK_COST_PRE = "\u001B[48;5;208m\u001B[30m  ";
-
-  /** 色块前缀：速率 — 绿色底(35) 黑色文字(30) */
-  private static final String BLOCK_SPEED_PRE = "\u001B[48;5;35m\u001B[30m  ";
-
-  /** 色块前缀：模型 — 暗灰底(239) 白色文字(37) */
-  private static final String BLOCK_MODEL_PRE = "\u001B[48;5;239m\u001B[37m  ";
+  /** 统一色块前缀：暗灰底(239) 白色文字(37) */
+  private static final String BLOCK_PRE = "\u001B[48;5;239m\u001B[37m  ";
 
   /** 色块后缀：每个色块闭合前留 2 空格内边距 */
   private static final String BLOCK_SUF = "  \u001B[0m";
@@ -102,21 +88,20 @@ public class FooterComponent extends Component {
     }
     clearDirty();
 
-    // v2.3 实体色块仪表盘格式：
-    //   [208:💰 $0.041]  [35:📊 125 t/s]  [239:🧠 gpt-4o] ── 🔌 Active: cland-pay-mcp
-    // 每个色块为 48;5;XXX 背景色 + 30/37 前景色 + 内容 + 重置
+    // 统一暗灰底(239) 白色文字(37) 色块格式：
+    //   [239:💰 $0.041]  [239:📊 125 t/s]  [239:🧠 gpt-4o] ── 🔌 Active: cland-pay-mcp
     String text =
-        BLOCK_COST_PRE
+        BLOCK_PRE
             + "\uD83D\uDCB0 "
             + costInfo
             + BLOCK_SUF
             + BLOCK_SEP
-            + BLOCK_SPEED_PRE
+            + BLOCK_PRE
             + "\uD83D\uDCCA "
             + speedInfo
             + BLOCK_SUF
             + BLOCK_SEP
-            + BLOCK_MODEL_PRE
+            + BLOCK_PRE
             + "\uD83E\uDDE0 "
             + modelInfo
             + BLOCK_SUF
