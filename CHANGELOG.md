@@ -25,8 +25,25 @@ updated: "2026-06-27"
 
 ## Unreleased
 
+### BREAKING
+
+- **TUI TAO 四段式布局 v3.1 (`alice-facade-tui`)**: 全面重构 TUI 布局，以四个独立 TAO 区域组件替代单一 `ThoughtComponent`，实现 PPAO 执行流实时渲染。
+  - **`InputBlockComponent`** (新增) — 顶部输入内容区，深色底 ANSI 236，纯文本展示用户最新输入，无会话启动前缀
+  - **`ThinkBlockComponent`** (新增) — 中间思考推理区，亮色底 ANSI 255，每段推理前显示暗色 `┈ Step N ┈` 步骤标记
+  - **`ActionBlockComponent`** (新增) — 动作命令区，深色底 ANSI 236（同 InputBlock 风格），`$ command (timeout 120s)` 终端格式
+  - **`ObserveBlockComponent`** (新增) — 观察输出区，终端深色底 ANSI 234，`ls -la` 风格行亮黄高亮，`Took X.XXs` 耗时统计
+  - **`TuiLayout`**: 7 组件布局（Header + 4 TAO Zone + Input + Footer），FIXED_ROWS=6，ThinkBlock(~45%)/ObserveBlock(~55%) 比例分配
+  - `TaoTag` 色块标签不再用于 ThinkBlock 内容，区域背景色自身提供视觉区分
+- **PPAO 事件流实时推送 (`alice-core-agent`, `alice-facade-tui`)**: AgentExecutor 的 Micro-ReAct 循环中推理/动作/观察事件实时转发到 TUI。
+  - `AgentExecutor`: 新增 `PPAOEvent` record + `onPPAOEvent(Consumer<PPAOEvent>)` 注册方法
+  - `dispatchLlmInference`: 提取 `__llm_reasoning` 后即发射 `thought` 事件
+  - `dispatchToolCall`: 执行前发射 `action` 事件，工具结果返回后发射 `observe` 事件（使用 `rawData` 而非 `summary` 去除 `"Tool [X] returned: "` 前缀）
+  - `Agent.java`: 新增 `getExecutor()` 公开 getter
+  - `AliceTuiLauncher.hookAgentEvents()`: 注册 PPAO consumer，跟踪 `lastAction` 配对 observe 上下文
+
 ### Fixes
 
+- **alice-facade-tui/双重复显示**: `StartThinking` 事件处理器不再重复调用 `InputBlock.showUserInput()`——已在 `runInputLoop()` 中直接写入。`ChatMessage(User)` 消息路由从 InputBlock 改为 ThinkBlock，作为对话历史展示。
 - **alice-facade-tui/TuiState**: Invalid TUI state transition `IDLE -> IDLE` 不再抛出 `IllegalStateException`。允许 `IDLE -> IDLE` 作为合法的空操作转换，消除 `TaskComplete` 事件或 `/reset` 命令在状态已为 `IDLE` 时触发的异常。
 - **alice-facade-tui/ScreenManager**: 修复终端关闭时 `reader.readLine()` 抛出 `Already closed`（`IllegalStateException`）的竞态条件。新增通用 `catch (Exception e)` 分支，在终端关闭时优雅退出输入循环而非崩溃。
 - **alice-tool-gateway/BuiltinTools/grep**: `grep` 工具从仅支持单个文件扩展为支持目录路径递归搜索（类似 `grep -r`）。当 LLM 传入 `.` 等目录路径时自动遍历所有文件搜索匹配行，多文件场景在输出行前附加文件名前缀。

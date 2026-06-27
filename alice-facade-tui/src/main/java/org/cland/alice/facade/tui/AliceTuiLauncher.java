@@ -138,7 +138,46 @@ public class AliceTuiLauncher implements AutoCloseable {
    * <p>此处通过拦截 AgentExecutor 产生的 StepResult 来生成 TUI 事件。 更完整的实现应使用 Agent 内部的监听器模式。
    */
   private void hookAgentEvents() {
-    // 待 AgentCore 发布完整事件后再完善
+    // PPAO 推理步骤计数器
+    var thoughtStep = new java.util.concurrent.atomic.AtomicInteger(0);
+    // 追踪最后发出的 action，用于 observe 事件配对
+    var lastAction = new java.util.concurrent.atomic.AtomicReference<String>();
+
+    // 注册 PPAO 事件消费者：将 AgentExecutor 的推理/动作/观察流实时转发到 TUI EventBridge
+    agent
+        .getExecutor()
+        .onPPAOEvent(
+            event -> {
+              switch (event.type()) {
+                case "thought" -> {
+                  var content = event.content();
+                  if (content != null && !content.isBlank() && content.length() >= 10) {
+                    eventBridge.onNewThought(content, thoughtStep.incrementAndGet());
+                  }
+                }
+                case "action" -> {
+                  if (event.content() != null && !event.content().isBlank()) {
+                    lastAction.set(event.content());
+                    // 构建 Action 对象用于 TUI ActionBlock 渲染
+                    var ac =
+                        org.cland.alice.core.agent.lifecycle.Action.builder()
+                            .type(org.cland.alice.core.agent.lifecycle.Action.Type.TOOL_CALL)
+                            .target(event.content())
+                            .build();
+                    eventBridge.onActionExecuting(ac);
+                  }
+                }
+                case "observe" -> {
+                  var content = event.content();
+                  if (content == null || content.isBlank()) break;
+                  // 在观察输出前插入对应的 action 命令，形成完整的 PAO 执行流记录
+                  var action = lastAction.getAndSet(null);
+                  var observeContent = action != null ? "$ " + action + "\n" + content : content;
+                  eventBridge.onObserved(observeContent);
+                }
+                default -> {}
+              }
+            });
   }
 
   // ========== 启动 ==========
@@ -209,11 +248,7 @@ public class AliceTuiLauncher implements AutoCloseable {
         () -> {
           try {
             String result = agent.ask(task);
-            // 渲染推理/思考过程
-            String reasoning = agent.getLastReasoning();
-            if (reasoning != null && !reasoning.isBlank()) {
-              eventBridge.onNewThought(reasoning, 0);
-            }
+            // 推理/动作/观察已由 PPAO 事件消费者在 Micro-ReAct 循环中实时转发
             if (result == null || result.isBlank()) {
               logger.warn("Agent returned empty result for task: {}", task);
               eventBridge.onTaskComplete("(Agent 返回了空结果，请检查模型配置或 API 状态)", "warning");
@@ -260,7 +295,10 @@ public class AliceTuiLauncher implements AutoCloseable {
       logger.warn("Agent clearMemory not fully implemented, clearing UI only", e);
     }
     eventBridge.onChatMessage("System", "上下文已清除");
-    screenManager.layout().thought().clear();
+    screenManager.layout().inputBlock().clear();
+    screenManager.layout().thinkBlock().clear();
+    screenManager.layout().actionBlock().clear();
+    screenManager.layout().observeBlock().clear();
     screenManager.markContentDirty();
     if (screenManager.state().isRunning()) {
       screenManager.state().transitionTo(TuiState.State.IDLE);

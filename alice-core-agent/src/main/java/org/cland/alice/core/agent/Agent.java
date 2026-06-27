@@ -303,6 +303,15 @@ public class Agent {
    *
    * @return 推理文本，若无则返回空字符串
    */
+  /**
+   * 获取 Agent 执行器，用于注册事件监听等。
+   *
+   * @return AgentExecutor 实例
+   */
+  public AgentExecutor getExecutor() {
+    return executor;
+  }
+
   public String getLastReasoning() {
     return lastReasoning != null ? lastReasoning : "";
   }
