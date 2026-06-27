@@ -409,13 +409,11 @@ public class ScreenManager implements AutoCloseable {
     while (running.get()) {
       try {
         if (contentDirty.compareAndSet(true, false)) {
-          if (inputActive.get()) {
-            // 输入活跃期间不触碰终端（避免干扰 JLine 光标管理），仅标记 deferred redraw。
-            // readLine 返回后由主线程通过 pendingRedraw 处理。
-            pendingRedraw.set(true);
-          } else {
-            redrawScrollArea();
-          }
+          // safe: redrawScrollArea() only writes to rows above the input line
+          // (header, inputBlock, thinkBlock, actionBlock, observeBlock, separator,
+          // queue, separator2, footer). It never touches the JLine-managed input
+          // row (inputRow), so no interference with reader.readLine().
+          redrawScrollArea();
         }
         frameCount++;
         if (frameCount % SIZE_POLL_INTERVAL_FRAMES == 0) {
