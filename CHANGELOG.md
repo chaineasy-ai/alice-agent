@@ -45,6 +45,24 @@ updated: "2026-06-27"
 
 ### Features
 
+- **TUI traceId 追踪 (`alice-facade-tui`)**: PPAO 事件携带 traceId，在 ThinkBlock step 标记中显示 traceId 短哈希。
+  - `TuiEvent.NewThought`/`ActionExecuting`/`ObservationResult`: 新增 `traceId` 字段
+  - `AliceTuiLauncher.submitTaskToAgent()`: 每次用户提交生成新 traceId
+  - `TuiAgentListener.newTrace(traceId)`: 重置步数计数器，后续 t/a/o 事件携带此 traceId
+  - `ThinkBlockComponent.addThought(thought, step, traceId)`: step 标记后附加 `[traceShort]`
+
+- **TUI ThinkBlock 时间序 PAO 渲染 (`alice-facade-tui`)**: ActionExecuting 和 ObservationResult 事件同步路由到 ThinkBlock，在思考内容之间插入 action/observe 行。
+  - `ScreenManager.setupEventListeners()`: ActionExecuting → `thinkBlock.addActionLine()`; ObservationResult → `thinkBlock.addObservationLine()`
+  - `ThinkBlockComponent.addActionLine(desc)`: 插入 TaoTag.ACTION 色块 + 命令描述
+  - `ThinkBlockComponent.addObservationLine(obs, sec)`: 插入 TaoTag.OBSERVE 色块 + 前 3 行摘要 + 耗时
+  - `ACTION_CMD_PREFIX` 正则过滤 observe 数据中的 `$ command` 引导行（已由 action 行展示）
+  - TaoTag 色块重用 JLine AttributedStyle true color API 替代原始 ANSI 字符串
+
+- **TUI 组件自渲染 (`alice-facade-tui`)**: 每个 Component 通过 `renderTo(writer)` 自行处理光标定位和行尾清除。
+  - `Component.renderTo(Writer)`: 默认方法，遍历 `render()` 结果逐行写入终端
+  - `ScreenManager.fullRedraw()`/`redrawScrollArea()`/`restoreLowerArea()`: 统一为调用 `component.renderTo(writer)` + `writeRow()` 辅助方法
+  - 消除 ~150 行重复的 cursorLine + writer.write + ANSI_CLEAR_LINE 模板代码
+
 - **TUI 输入队列 (`alice-facade-tui`)**: Agent 忙碌时用户输入自动入队等待，完成后逐一自动提交。
   - `ScreenManager.inputQueue` (`Deque<String>`): FIFO 队列缓存忙碌期间的输入
   - `runInputLoop()`: Agent 忙碌时不再显示 `Agent 正在执行中，请等待` 错误消息，改为静默入队
@@ -53,6 +71,12 @@ updated: "2026-06-27"
   - `restoreLowerArea()`/`fullRedraw()`/`redrawScrollArea()`: 同步渲染队列状态行
 
 ### Fixes
+
+- **alice-facade-tui/渲染循环输入活跃期误写终端 — 导致二次交互时光标下移**: 渲染线程在 `inputActive=true` 时仍调用 `redrawScrollArea()` 写入终端，与 JLine `readLine()` 竞争光标控制权。第二次 `readLine()` 调用时光标已偏离 inputRow。
+  - `renderLoop()`: inputActive 时不再调用 `redrawScrollArea()`，仅标记 `pendingRedraw`，由主线程在 `readLine()` 返回后处理
+  - `runInputLoop()`: `inputActive.set(true)` 移至光标定位之前，提前屏蔽渲染线程的终端写入
+
+- **alice-facade-tui/TaoTag 色块使用 AttributedStyle 替代原始 ANSI**: 之前 `ACTION_TAG`/`OBSERVE_TAG` 使用硬编码 `\u001B[48;5;Nm` 256 色 ANSI 字符串。现改用 JLine `AttributedStyle.background(r,g,b)` true color API，终端兼容性更广。色块后追加 `ANSI_BG_LIGHT + ANSI_FG_DARK` 恢复 ThinkBlock 背景，避免色块 reset 后内容文本失去底色。
 
 - **alice-facade-tui/双重复显示**: `StartThinking` 事件处理器不再重复调用 `InputBlock.showUserInput()`——已在 `runInputLoop()` 中直接写入。`ChatMessage(User)` 消息路由从 InputBlock 改为 ThinkBlock，作为对话历史展示。
 - **alice-facade-tui/TuiState**: Invalid TUI state transition `IDLE -> IDLE` 不再抛出 `IllegalStateException`。允许 `IDLE -> IDLE` 作为合法的空操作转换，消除 `TaskComplete` 事件或 `/reset` 命令在状态已为 `IDLE` 时触发的异常。
