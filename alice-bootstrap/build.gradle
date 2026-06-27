@@ -90,6 +90,7 @@ java {
 // ── JVM 运行编码 ──
 tasks.withType(JavaExec).configureEach {
     jvmArgs("-Dfile.encoding=UTF-8")
+    standardInput = System.in
 }
 
 application {
