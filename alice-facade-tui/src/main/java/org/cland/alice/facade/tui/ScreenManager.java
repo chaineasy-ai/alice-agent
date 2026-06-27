@@ -367,6 +367,9 @@ public class ScreenManager implements AutoCloseable {
       writeRow(writer, layout.separator2Row(), layout.separatorLine());
       layout.footer().renderTo(writer);
 
+      // Restore cursor to input row
+      writer.write(String.format(ANSI_CURSOR_LINE, layout.inputRow() + 1));
+      writer.write("\033[2K");
       writer.flush();
     } catch (IOException e) {
       logger.error("Full redraw failed", e);
@@ -398,6 +401,14 @@ public class ScreenManager implements AutoCloseable {
         writeRow(writer, layout.separator2Row(), layout.separatorLine());
         layout.footer().renderTo(writer);
 
+        // Restore cursor to input row: every ANSI cursor_address from
+        // component.renderTo() (\033[%d;1H) moves the physical terminal
+        // cursor. JLine tracks cursor position internally and does NOT
+        // know about our writes — it expects the cursor at the input row.
+        // Without restoration, the physical cursor stays at footer, and
+        // JLine's next readLine() outputs characters at the wrong position.
+        writer.write(String.format(ANSI_CURSOR_LINE, layout.inputRow() + 1));
+        writer.write("\033[2K");
         writer.flush();
       } catch (IOException e) {
         logger.error("Scroll area redraw failed", e);
@@ -542,6 +553,9 @@ public class ScreenManager implements AutoCloseable {
         writeRow(writer, layout.queueRow(), layout.queueLine());
         writeRow(writer, layout.separator2Row(), layout.separatorLine());
         layout.footer().renderTo(writer);
+        // Restore cursor to input row
+        writer.write(String.format(ANSI_CURSOR_LINE, layout.inputRow() + 1));
+        writer.write("\033[2K");
         writer.flush();
       } catch (IOException e) {
         logger.warn("Failed to restore lower area after JLine completion menu", e);
