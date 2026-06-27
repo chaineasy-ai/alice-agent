@@ -279,7 +279,10 @@ public class ScreenManager implements AutoCloseable {
               int h = e.height();
               logger.info("TerminalResize event: {}x{}", w, h);
               layout.recalculate(w, h);
-              reader.setVariable(LineReader.LINE_OFFSET, layout.inputRow());
+              reader.setVariable(
+                  LineReader.LINE_OFFSET,
+                  Math.max(
+                      1, layout.footerRow() + layout.footer().height() - layout.inputRow() - 1));
               lastPollWidth = w;
               lastPollHeight = h;
               needsFullClear.set(true);
@@ -543,26 +546,30 @@ public class ScreenManager implements AutoCloseable {
     contentDirty.set(true);
 
     while (running.get()) {
+      // 同步块外：先重绘静态内容区，然后设置 JLine 保留行数。
+      // LINE_OFFSET 必须在光标定位之前设置，确保 JLine 在显示初始化时
+      // 已经知道保留行数，不会将 scroll region 设置到覆盖 footer。
+      if (contentDirty.get()) {
+        redrawScrollArea();
+        contentDirty.set(false);
+      }
+
+      // LINE_OFFSET：保留 input 组件下方所有行不被 JLine 覆盖（separator2 + Footer）。
+      // 从 input 组件底部到 Footer 底部之间的行数为保留行数。
       int inputRow = layout.inputRow();
+      int linesBelow = layout.footerRow() + layout.footer().height() - inputRow - 1;
+      reader.setVariable(LineReader.LINE_OFFSET, Math.max(1, linesBelow));
 
-      // JLine 显示层 warmup：在同步块外提前调用 getHeight/getVariable 加入终端 I/O 间隔，
-      // 确保终端完成处理所有先前输出；raw ANSI 定位光标后 readLine 启动时光标已在正确行。
-      reader.getVariable(LineReader.LINE_OFFSET);
+      // 终端 I/O 同步点：getHeight() 使终端完成处理所有先前输出的缓冲区。
+      terminal.getHeight();
 
-      // 将 redrawScrollArea 与光标定位合并到同一 synchronized 块中，
-      // 确保后台渲染线程不插入中间写入，避免物理光标在 readLine 前被意外移动。
+      // 光标定位：使用 raw ANSI 直接写入 terminal.writer()，
+      // 避免 terminal.puts() 可能产生的 JLine 内部状态干扰。
       synchronized (terminalLock) {
-        if (contentDirty.get()) {
-          redrawScrollArea();
-          contentDirty.set(false);
-        }
         terminal.writer().write(String.format(ANSI_CURSOR_LINE, inputRow + 1));
         terminal.writer().write("\033[2K");
         terminal.writer().flush();
       }
-
-      // LINE_OFFSET=2 保留 input 下方 2 行不被 JLine 覆盖（队列行 + Footer）
-      reader.setVariable(LineReader.LINE_OFFSET, 2);
 
       inputActive.set(true);
       String line;
