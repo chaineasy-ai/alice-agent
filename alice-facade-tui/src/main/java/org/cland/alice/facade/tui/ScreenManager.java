@@ -15,10 +15,12 @@ import org.cland.alice.facade.tui.command.SlashCommand;
 import org.cland.alice.facade.tui.component.*;
 import org.cland.alice.facade.tui.layout.TuiLayout;
 import org.cland.alice.facade.tui.state.TuiState;
+import org.jline.keymap.KeyMap;
 import org.jline.reader.*;
 import org.jline.reader.impl.completer.StringsCompleter;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
+import org.jline.utils.InfoCmp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,6 +48,8 @@ public class ScreenManager implements AutoCloseable {
   private static final String ANSI_CLEAR_SCREEN = "\033[2J\033[H";
   private static final String ANSI_CLEAR_LINE = "\033[K";
   private static final String ANSI_CURSOR_LINE = "\033[%d;1H";
+  private static final String ANSI_ENTER_ALT_BUF = "\033[?1049h";
+  private static final String ANSI_EXIT_ALT_BUF = "\033[?1049l";
 
   private final Terminal terminal;
   private final LineReader reader;
@@ -137,6 +141,9 @@ public class ScreenManager implements AutoCloseable {
     this.layout = new TuiLayout(header, messageArea, separator, separator2, input, footer);
     this.state = new TuiState();
     this.commandHandler = new CommandHandler(eventBridge);
+
+    // ── 滚动静默：Page Up / Page Down 查看历史消息 ────────────────
+    setupScrollBindings();
     this.running = new AtomicBoolean(true);
     this.renderThread = new Thread(this::renderLoop, "alice-tui-render");
     this.renderThread.setDaemon(true);
@@ -167,7 +174,7 @@ public class ScreenManager implements AutoCloseable {
     int initW = this.terminal.getWidth();
     int initH = this.terminal.getHeight();
     logger.info("[ScreenManager] init terminal size: {}x{}", initW, initH);
-    layout.recalculate(initW, initH);
+    layout.recalculate(initW, initH, 0);
     logger.info(
         "[ScreenManager] 3-zone layout: messageArea=[{}-{}] sep={} input={} footer={}",
         layout.messageAreaStartRow(),
@@ -193,6 +200,9 @@ public class ScreenManager implements AutoCloseable {
 
   public void start() throws IOException {
     java.io.Writer writer = terminal.writer();
+    // Switch to alternate screen buffer (like vim/less) — prevents
+    // terminal scrollback from capturing TUI render history
+    writer.write(ANSI_ENTER_ALT_BUF);
     writer.write(ANSI_CLEAR_SCREEN);
     writer.flush();
     fullRedraw();
@@ -211,27 +221,34 @@ public class ScreenManager implements AutoCloseable {
    *   <li>Footer 更新 → FooterComponent
    * </ul>
    */
+  /** 追加内容到消息区域后，检查是否需要动态扩大消息区域高度。 当内容行数超过当前消息区域大小时，自动增长并下推输入/Footer。 */
+  private void afterContentAdded() {
+    layout.relayout();
+    reader.setVariable(LineReader.LINE_OFFSET, Math.max(1, layout.footerRow() - layout.inputRow()));
+    contentDirty.set(true);
+  }
+
   private void setupEventListeners() {
     eventBridge.addListener(
         event -> {
           switch (event) {
             case TuiEvent.StartThinking e -> {
-              contentDirty.set(true);
+              afterContentAdded();
             }
             case TuiEvent.NewThought e -> {
               layout.messageArea().addThought(e.thought(), e.step(), e.traceId());
-              contentDirty.set(true);
+              afterContentAdded();
             }
             case TuiEvent.ActionExecuting e -> {
               String desc =
                   e.action().type().name()
                       + (e.action().target() != null ? " (" + e.action().target() + ")" : "");
               layout.messageArea().addActionLine(desc, e.traceId());
-              contentDirty.set(true);
+              afterContentAdded();
             }
             case TuiEvent.ObservationResult e -> {
               layout.messageArea().addObservationLine(e.summary(), e.elapsedSec());
-              contentDirty.set(true);
+              afterContentAdded();
             }
             case TuiEvent.ChatMessage e -> {
               if ("User".equalsIgnoreCase(e.sender())) {
@@ -241,7 +258,7 @@ public class ScreenManager implements AutoCloseable {
               } else {
                 layout.messageArea().addAgentMessage(e.content());
               }
-              contentDirty.set(true);
+              afterContentAdded();
             }
             case TuiEvent.TaskComplete e -> {
               String result = e.result();
@@ -250,19 +267,22 @@ public class ScreenManager implements AutoCloseable {
               }
               state.transitionTo(TuiState.State.IDLE);
               dispatchNextFromQueue();
-              contentDirty.set(true);
+              afterContentAdded();
             }
             case TuiEvent.TaskError e -> {
               layout.messageArea().addSystemMessage("\u9519\u8BEF: " + e.errorMessage());
               state.transitionTo(TuiState.State.ERROR);
+              afterContentAdded();
+            }
+            case TuiEvent.TokenUpdate e -> {
+              // Not content-affecting, just refresh display
               contentDirty.set(true);
             }
-            case TuiEvent.TokenUpdate e -> contentDirty.set(true);
             case TuiEvent.TerminalResize e -> {
               int w = e.width();
               int h = e.height();
               logger.info("TerminalResize event: {}x{}", w, h);
-              layout.recalculate(w, h);
+              layout.recalculate(w, h, layout.messageArea().contentLineCount());
               reader.setVariable(
                   LineReader.LINE_OFFSET, Math.max(1, layout.footerRow() - layout.inputRow()));
               lastPollWidth = w;
@@ -305,6 +325,76 @@ public class ScreenManager implements AutoCloseable {
             });
   }
 
+  // ========== 滚动静默 ==========
+
+  /**
+   * 注册 Page Up / Page Down / Alt+P / Alt+N 翻页静默， 允许用户在消息区内上下滚动查看历史。
+   *
+   * <p>使用 JLine 4 Widget 系统：静默在 {@code readLine()} 期间捕获按键， 调用 {@link
+   * MessageAreaComponent#pageUp()}/{@link MessageAreaComponent#pageDown()}。
+   *
+   * <p>Page Up/Down 使用终端 native 键序列（通过 {@link InfoCmp.Capability} 获取）， 确保在各终端上正确识别。Alt+P / Alt+N
+   * 作为备选绑定。
+   */
+  private void setupScrollBindings() {
+    try {
+      var widgets = reader.getWidgets();
+
+      // ── 注册 Widget ────────────────────────────────────────────────
+      widgets.put(
+          "alice-page-up",
+          () -> {
+            layout.messageArea().pageUp();
+            contentDirty.set(true);
+            return true;
+          });
+      widgets.put(
+          "alice-page-down",
+          () -> {
+            layout.messageArea().pageDown();
+            contentDirty.set(true);
+            return true;
+          });
+      widgets.put(
+          "alice-scroll-up",
+          () -> {
+            layout.messageArea().scrollUp();
+            contentDirty.set(true);
+            return true;
+          });
+      widgets.put(
+          "alice-scroll-down",
+          () -> {
+            layout.messageArea().scrollDown();
+            contentDirty.set(true);
+            return true;
+          });
+
+      // ── 绑定按键 ────────────────────────────────────────────────────
+      var mainMap = reader.getKeyMaps().get(LineReader.MAIN);
+      if (mainMap != null) {
+        // Page Up: 使用终端 native 键序列，避免 JLine 默认 history-search 冲突
+        String pageUpSeq = KeyMap.key(terminal, InfoCmp.Capability.key_ppage);
+        String pageDownSeq = KeyMap.key(terminal, InfoCmp.Capability.key_npage);
+
+        if (pageUpSeq != null && !pageUpSeq.isEmpty()) {
+          mainMap.unbind(pageUpSeq);
+          mainMap.bind(widgets.get("alice-page-up"), pageUpSeq);
+        }
+        if (pageDownSeq != null && !pageDownSeq.isEmpty()) {
+          mainMap.unbind(pageDownSeq);
+          mainMap.bind(widgets.get("alice-page-down"), pageDownSeq);
+        }
+
+        // Alt+P / Alt+N 备选翻页（不冲突 JLine 默认绑定）
+        mainMap.bind(widgets.get("alice-page-up"), KeyMap.translate("\\M-p"));
+        mainMap.bind(widgets.get("alice-page-down"), KeyMap.translate("\\M-n"));
+      }
+    } catch (Exception e) {
+      logger.warn("Failed to set up scroll key bindings", e);
+    }
+  }
+
   // ========== 渲染 ==========
 
   private void cursorLine(int row) {
@@ -319,24 +409,24 @@ public class ScreenManager implements AutoCloseable {
     writer.write(ANSI_CLEAR_LINE);
   }
 
-  /** 全屏重绘 — 三区对齐：Main Area / Input Area / Footer。 */
+  /** 渲染队列行。始终写入队列行以清除旧内容，仅在 queueCount > 0 时写入实际文本。 */
+  private void renderQueueLine(java.io.Writer writer) throws java.io.IOException {
+    String ql = layout.queueCount() > 0 ? layout.queueLine() : "";
+    writeRow(writer, layout.queueRow(), ql);
+  }
+
+  /** 全屏重绘 — Header -> Main Area -> QueueMsg -> Line1 -> Input -> Line2 -> Footer。 */
   private void fullRedraw() {
     java.io.Writer writer = terminal.writer();
     try {
-      // ── Main Area ──────────────────────────────────────────────
       layout.header().renderTo(writer);
       layout.messageArea().renderTo(writer);
-
-      // ── Input Area ─────────────────────────────────────────────
+      renderQueueLine(writer);
       layout.separator().renderTo(writer);
-      writeRow(writer, layout.queueRow(), layout.queueLine());
       layout.input().renderTo(writer);
-
-      // ── separator2 + Footer ────────────────────────────────────
       layout.separator2().renderTo(writer);
       layout.footer().renderTo(writer);
 
-      // Restore cursor to input row
       writer.write(String.format(ANSI_CURSOR_LINE, layout.inputRow() + 1));
       writer.write("\033[2K");
       writer.flush();
@@ -346,9 +436,10 @@ public class ScreenManager implements AutoCloseable {
   }
 
   /**
-   * 重绘所有静态区域 — 三区对齐。
+   * 重绘所有静态区域。
    *
-   * <p>不触碰输入行（由 LineReader 管理）。
+   * <p>序列：Header -> Main Area -> QueueMsg -> Line1 -> Input -> Line2 -> Footer。 不触碰输入行（由 LineReader
+   * 管理）。
    */
   private void redrawScrollArea() {
     synchronized (terminalLock) {
@@ -358,16 +449,11 @@ public class ScreenManager implements AutoCloseable {
           writer.write(ANSI_CLEAR_SCREEN);
         }
 
-        // ── Main Area ────────────────────────────────────────────
         layout.header().renderTo(writer);
         layout.messageArea().renderTo(writer);
-
-        // ── Input Area (separator + queue + input) ───────────────
+        renderQueueLine(writer);
         layout.separator().renderTo(writer);
-        writeRow(writer, layout.queueRow(), layout.queueLine());
         layout.input().renderTo(writer);
-
-        // ── separator2 + Footer ───────────────────────────────────
         layout.separator2().renderTo(writer);
         layout.footer().renderTo(writer);
 
@@ -495,8 +581,9 @@ public class ScreenManager implements AutoCloseable {
     synchronized (terminalLock) {
       java.io.Writer writer = terminal.writer();
       try {
+        renderQueueLine(writer);
         layout.separator().renderTo(writer);
-        writeRow(writer, layout.queueRow(), layout.queueLine());
+        layout.input().renderTo(writer);
         layout.separator2().renderTo(writer);
         layout.footer().renderTo(writer);
         // JLine manages input row, just restore cursor
@@ -585,7 +672,10 @@ public class ScreenManager implements AutoCloseable {
       Thread.currentThread().interrupt();
     }
     try {
+      // Switch back to main screen buffer — restores terminal content
+      // before the TUI started (clear screen first, then exit alt buf)
       terminal.writer().write(ANSI_CLEAR_SCREEN);
+      terminal.writer().write(ANSI_EXIT_ALT_BUF);
       terminal.writer().flush();
     } catch (Exception e) {
       logger.warn("Error clearing screen on close", e);

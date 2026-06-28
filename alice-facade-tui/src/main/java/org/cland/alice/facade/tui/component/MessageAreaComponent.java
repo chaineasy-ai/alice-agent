@@ -179,6 +179,14 @@ public class MessageAreaComponent extends Component {
     markDirty();
   }
 
+  /**
+   * Returns the actual number of stored content lines. Used by {@link
+   * org.cland.alice.facade.tui.layout.TuiLayout} to dynamically grow the message area.
+   */
+  public int contentLineCount() {
+    return logLines.size();
+  }
+
   /** Clear all messages. */
   public void clear() {
     logLines.clear();

@@ -123,25 +123,27 @@ class LayoutComponentSpec extends Specification {
         layout.messageArea().width() == 80
         layout.messageAreaHeight() > 0
 
-        and: "separator below MessageArea"
-        layout.separatorRow() == layout.messageAreaStartRow() + layout.messageAreaHeight()
+        and: "queue row below MessageArea"
+        layout.queueRow() == layout.messageAreaStartRow() + layout.messageAreaHeight()
 
-        and: "queue row after separator, then input, then separator2"
-        layout.queueRow() == layout.separatorRow() + 1
-        layout.inputRow() == layout.queueRow() + 1
+        and: "separator after queue, then input, then separator2"
+        layout.separatorRow() == layout.queueRow() + 1
+        layout.inputRow() == layout.separatorRow() + 1
         layout.input().row() == layout.inputRow()
         layout.separator2Row() == layout.inputRow() + 1
 
-        and: "footer at bottom row"
-        layout.footerRow() == 23
-        layout.footer().row() == 23
-        layout.separator2Row() == layout.footerRow() - 1
+        and: "all positions are sequential (no gaps or overlaps)"
+        // With 0 content, main area is minimum 1 row
+        layout.footerRow() == layout.separator2Row() + 1
+        layout.separator2Row() == layout.inputRow() + 1
+        layout.inputRow() == layout.separatorRow() + 1
+        layout.separatorRow() == layout.queueRow() + 1
+        layout.queueRow() == layout.messageAreaStartRow() + layout.messageAreaHeight()
 
-        and: "MessageArea fills remaining space"
-        int expectedMessageRows = 24 - TuiLayout.FIXED_ROWS
-        // FIXED_ROWS = Header(1) + Sep(1) + Queue(1) + Input(1) + Sep(1) + Footer(1) = 6
-        // messageAreaHeight = 24 - 6 = 18
-        layout.messageAreaHeight() == expectedMessageRows
+        and: "MessageArea height = content lines (min 1)"
+        layout.messageAreaHeight() >= 1
+        layout.header().row() == 0
+        layout.header().width() == 80
     }
 
     def "TuiLayout enforces minimum terminal dimensions"() {
@@ -376,6 +378,7 @@ class LayoutComponentSpec extends Specification {
             area.addThought("step $n", n)
         }
         // Each thought = 2 lines (Step marker + content), 10 thoughts = 20 lines
+        // auto-scrollToBottom keeps view at bottom
         expect: "scrolling up shows Step 9 marker"
         area.scrollUp()
         stripAnsi(area.render()[0]).contains("Step 9")

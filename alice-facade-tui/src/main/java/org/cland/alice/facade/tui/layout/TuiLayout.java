@@ -4,30 +4,21 @@ import java.util.List;
 import org.cland.alice.facade.tui.component.*;
 
 /**
- * TUI 布局管理器 — 三区对齐布局 (v4.1)。
+ * TUI 布局管理器 — 动态增长布局 (v5.0)。
  *
- * <p>将终端窗口划分为三个清晰对齐的区域, 每个区域之间由 {@link LineComponent} 分隔:
+ * <p>布局序列（从上到下）：
  *
  * <pre>
- *  ┌─ Main Area ───────────────────────────────────────────┐
- *  │  🤖 alice-agent v0.60.0 ───────────────────────────── │  ← Header (1行, row 0)
- *  │                                                       │
- *  │  together debug current program...                    │
- *  │  ╸ Step 1 ╸                                          │
- *  │  analyzing the request...                             │
- *  │  ⮞ TOOL_CALL: execute (cmd=ls)                      │
- *  │  ⮞ -rw------- 1 alice alice 111 config.json         │
- *  │  ⮞ (Took 0.0s)                                       │
- *  ├────────────────────────────────────────────────────── │  ← LineComponent 1
- *  │  📋 2 queued messages                                 │  ← 队列状态 (1行)
- *  │  █                                                    │  ← InputComponent (1行)
- *  ├────────────────────────────────────────────────────── │  ← LineComponent 2
- *  │  [💰 $0.041]  [📊 125 t/s]  [🧠 gpt-4o] ── 🔌 none │  ← FooterComponent (1行)
- *  └───────────────────────────────────────────────────────┘
+ *  Header          (固定 1 行)
+ *  Main Area       [0..N] 动态 — 行数等于实际内容行数
+ *  QueueMsg        [0..1] 仅队列非空时显示
+ *  Line1           分割线
+ *  Input           (1 行) — 警告光标
+ *  Line2           分割线
+ *  Footer          (固定 1 行)
  * </pre>
  *
- * <p>组件共 6 个: Header, MessageArea, LineComponent×2, Input, Footer <br>
- * 固定非内容行数 = Header(1) + 分割线(1) + 队列(1) + 输入(1) + 分割线(1) + Footer(1) = 6
+ * <p>Main Area 高度由 {@link MessageAreaComponent#contentLineCount()} 动态决定， 随内容增长自动增加，内容超出终端可用空间时自动滚动。
  */
 public class TuiLayout {
 
@@ -39,14 +30,11 @@ public class TuiLayout {
   public static final int INPUT_HEIGHT = 1;
   public static final int FOOTER_HEIGHT = 1;
 
-  /** 固定非内容行数 */
-  public static final int FIXED_ROWS =
-      HEADER_HEIGHT
-          + SEPARATOR_HEIGHT
-          + QUEUE_HEIGHT
-          + INPUT_HEIGHT
-          + SEPARATOR_HEIGHT
-          + FOOTER_HEIGHT;
+  /**
+   * 固定非内容行数（旧版兼容常量）。布局已改为动态计算，保留此常量供测试使用。 布局序列：Header(1) + Main Area [0..N] + QueueMsg [0..1] +
+   * Line1(1) + Input(1) + Line2(1) + Footer(1)
+   */
+  public static final int FIXED_ROWS = 6;
 
   /** 分割线 ANSI 暗色 */
   static final String ANSI_DIM_SEP = "\u001B[38;5;242m";
@@ -93,51 +81,92 @@ public class TuiLayout {
     this.footer = footer;
   }
 
-  /** 根据当前终端尺寸重新计算所有组件位置。通常在终端 resize 时调用。 */
-  public void recalculate(int terminalWidth, int terminalHeight) {
+  /**
+   * 根据当前终端尺寸 + 内容行数重新计算所有组件位置。
+   *
+   * <p>布局序列：Header -> Main Area [0..N] -> QueueMsg [0..1] -> Line1 -> Input -> Line2 -> Footer。
+   * 调用时机：终端 resize 或内容变化后。
+   *
+   * @param terminalWidth 终端宽度
+   * @param terminalHeight 终端高度
+   * @param contentLines 当前消息区实际内容行数
+   */
+  public void recalculate(int terminalWidth, int terminalHeight, int contentLines) {
     this.terminalWidth = Math.max(terminalWidth, 40);
     this.terminalHeight = Math.max(terminalHeight, FIXED_ROWS + 5);
 
-    // ── 三区对齐布局 (从顶到底) ──────────────────────────────────
+    // ── Header (固定 1 行，始终在最顶部) ─────────────────────────
     int currentRow = 0;
-
-    // ── 1. Main Area ─────────────────────────────────────────────
     header.setBounds(currentRow, 0, this.terminalWidth, HEADER_HEIGHT);
     currentRow += HEADER_HEIGHT;
 
-    int remainingForMessage =
-        this.terminalHeight
-            - HEADER_HEIGHT
-            - SEPARATOR_HEIGHT // separator (Main → Input)
-            - QUEUE_HEIGHT
-            - INPUT_HEIGHT
-            - SEPARATOR_HEIGHT // separator2 (Input → Footer)
-            - FOOTER_HEIGHT;
-    messageAreaHeight = Math.max(remainingForMessage, 1);
+    // ── Main Area [0..N] ─────────────────────────────────────────
+    // Main Area 填满 Header 与 Queue 之间的可用空间。
+    // 保留 Queue + Line1 + Input + Line2 + Footer 的空间（5 行）。
+    // 内容超出时自动滚动（scrollToBottom），最新消息始终可见。
+    int fixedBelow =
+        QUEUE_HEIGHT + SEPARATOR_HEIGHT + INPUT_HEIGHT + SEPARATOR_HEIGHT + FOOTER_HEIGHT;
+    int maxAvailable = this.terminalHeight - currentRow - fixedBelow;
+    // Main Area 填满 Header 与 Queue 之间的全部可用空间
+    int mainHeight = Math.max(maxAvailable, 1);
+
+    messageAreaHeight = mainHeight;
     messageAreaStartRow = currentRow;
     int oldMsgHeight = messageArea.height();
     messageArea.setBounds(messageAreaStartRow, 0, this.terminalWidth, messageAreaHeight);
     messageArea.onResize(oldMsgHeight);
     currentRow = messageAreaStartRow + messageAreaHeight;
 
-    // ── 2. Input Area ───────────────────────────────────────────
+    // ── QueueMsg [0..1] ─────────────────────────────────────────
+    // 始终预留队列行位置（ScreenManager 根据 queueCount 决定是否渲染）
+    queueRow = currentRow;
+    currentRow += QUEUE_HEIGHT;
+
+    // ── Line1 ────────────────────────────────────────────────────
     separatorRow = currentRow;
     separator.setBounds(separatorRow, 0, this.terminalWidth, SEPARATOR_HEIGHT);
+    currentRow += SEPARATOR_HEIGHT;
 
-    queueRow = separatorRow + 1;
-
-    inputRow = queueRow + 1;
+    // ── Input ────────────────────────────────────────────────────
+    inputRow = currentRow;
     input.setBounds(inputRow, 0, this.terminalWidth, INPUT_HEIGHT);
+    currentRow += INPUT_HEIGHT;
 
-    // ── separator2: between Input Area and Footer ────────────────
-    separator2Row = inputRow + 1;
+    // ── Line2 ────────────────────────────────────────────────────
+    separator2Row = currentRow;
     separator2.setBounds(separator2Row, 0, this.terminalWidth, SEPARATOR_HEIGHT);
+    separator2.setVisible(true);
+    currentRow += SEPARATOR_HEIGHT;
 
-    // ── 3. Footer ───────────────────────────────────────────────
-    footerRow = separator2Row + 1;
+    // ── Footer ───────────────────────────────────────────────────
+    footerRow = currentRow;
     footer.setBounds(footerRow, 0, this.terminalWidth, FOOTER_HEIGHT);
 
+    // 确保各组件可见
+    separator.setVisible(true);
+    input.setVisible(true);
+    footer.setVisible(true);
+
     markAllDirty();
+  }
+
+  /**
+   * 旧版 2 参数兼容方法。使用当前内容行数进行布局。
+   *
+   * @deprecated 请使用 {@link #recalculate(int, int, int)} 或 {@link #relayout()}
+   */
+  @Deprecated
+  public void recalculate(int terminalWidth, int terminalHeight) {
+    recalculate(terminalWidth, terminalHeight, messageArea.contentLineCount());
+  }
+
+  /**
+   * 内容变化后重新布局。根据当前内容行数和队列状态动态调整 Main Area 高度。
+   *
+   * <p>等价于以当前终端尺寸调用 {@link #recalculate(int, int, int)}。
+   */
+  public void relayout() {
+    recalculate(terminalWidth, terminalHeight, messageArea.contentLineCount());
   }
 
   // ========== 布局信息查询 ==========

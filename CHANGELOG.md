@@ -27,6 +27,17 @@ updated: "2026-06-28"
 
 ### Features
 
+- **TUI 动态增长布局 v5.0 (`alice-facade-tui`)**: 全面重构 TUI 布局序列和滚动机制。
+  - **布局序列变更**: `Header → Main Area [0..N] → QueueMsg [0..1] → Line1 → Input → Line2 → Footer`
+  - **Main Area 动态填满**: 高度 = `max(terminalHeight - 6, 1)`，始终填满 Header 与 Queue 之间的可用空间
+  - **`TuiLayout.recalculate(w, h, contentLines)`**: 新增 `contentLines` 参数，内容变更后通过 `relayout()` 自动重算所有组件位置
+  - **`afterContentAdded()`**: 每次内容追加后调用 `layout.relayout()` + 更新 JLine LINE_OFFSET
+  - **交替屏幕缓冲**: 启动 `\033[?1049h` 进入交替缓冲，关闭 `\033[?1049l` 恢复主缓冲，防止终端滚动缓冲区捕获渲染历史
+  - **翻页静默**: Page Up / Page Down / Alt+P / Alt+N 通过 JLine 4 Widget 系统绑定，调用 `MessageAreaComponent.pageUp()/pageDown()`。先 `unbind()` 移除 JLine 默认 history-search，再 `bind()` 到自定义 scroll widget
+  - **Row 序列精简化**: Queue 从 Separator 下方移至 Separator 上方（Main → Queue → Line1 → Input → Line2 → Footer）
+  - **`LineComponent`**: 移除 `suffix` 字段（Queue 不再合并到 Separator，使用独立行）
+  - **文档更新**: `docs/alice-facade-tui/Layout.md`、`docs/alice-facade-tui/Layout_TAO.md` 全面更新为 v5.0
+
 - **PlannerService 双路径规划引擎全线接线 (`alice-facade-tui`, `alice-core-planner`)**: PlannerService（FastPath/SlowPath/MCTS）从代码库中存在但运行时未连接的状态修复为完整工作链路。
   - `AliceTuiLauncher` 构造时装配 `DefaultPlannerModelSupplier` + `FastPathStrategy` + `SlowPathStrategy`(MCTS) + `StrategySelector` + `SopRegistry/StaticPlanner` → `PlannerService` → `agent.withPlannerService()`
   - 新增 `DefaultPlannerModelSupplier` 桥接 `ModelProvider` 到 Planner 双路径模型
