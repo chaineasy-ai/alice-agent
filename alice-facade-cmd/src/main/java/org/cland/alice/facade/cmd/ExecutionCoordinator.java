@@ -6,6 +6,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
 import org.cland.alice.core.agent.AgentContext;
+import org.cland.alice.core.agent.guardrail.GuardrailVerificatorAdapter;
 import org.cland.alice.core.agent.result.StepResult;
 import org.cland.alice.core.agent.wal.FileWalStore;
 import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
@@ -132,7 +133,10 @@ public final class ExecutionCoordinator {
               new FileWalStore(
                   java.nio.file.Paths.get(
                       System.getProperty("user.home"), ".alice", "wal", sessionId)));
-      Agent agent = new Agent(null, sessionId, agentConfig).withWal(wal);
+      Agent agent =
+          new Agent(null, sessionId, agentConfig)
+              .withWal(wal)
+              .withGuardrail(new GuardrailVerificatorAdapter());
       logger.debug("Agent created: {} session={} walDir={}", agent.agentId(), sessionId, sessionId);
 
       // 4. 注册内置工具（read_file, write_file, grep, run）到 ToolRegistry

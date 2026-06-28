@@ -28,6 +28,7 @@ dependencies {
     // 本地子模块依赖
     implementation project(':alice-bootstrap')
     implementation project(':alice-core-agent')
+    implementation project(':alice-guardrail')
     implementation project(':alice-memory-vault')
     implementation project(':alice-model')
     implementation project(':alice-agent-command')

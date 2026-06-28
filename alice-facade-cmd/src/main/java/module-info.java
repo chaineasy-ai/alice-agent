@@ -11,6 +11,7 @@ module alice.agent.facade.cmd.main {
 
   requires alice.agent.app.main;
   requires alice.agent.alice.core.agent.main;
+  requires alice.agent.alice.guardrail.main;
   requires alice.agent.alice.model.main;
   requires alice.agent.command.main;
   requires alice.agent.alice.tool.gateway.main;

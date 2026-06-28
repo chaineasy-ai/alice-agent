@@ -27,6 +27,13 @@ updated: "2026-06-28"
 
 ### Features
 
+- **Guardrail 验证链全线接线 (`alice-core-agent`, `alice-facade-tui`, `alice-facade-cmd`)**: 新增 `GuardrailVerificatorAdapter` 桥接 Agent 的 `Verificator` 接口与 `GuardrailService` 的 `PreValidator`/`PostValidator` 链，实现 PPAO Verify(Pre) 和 Verify(Post) 的真实验证逻辑。
+  - 构造时自动注册 3 个内置验证器：`LogicSanityValidator` (死循环检测)、`PermissionSandboxValidator` (系统路径/命令黑名单)、`HallucinationDetector` (空结果/错误模式/类型一致性)
+  - `intercept(Map)` → 转 `Plan` → `GuardrailService.verifyPlan()` → 状态机决策 (ALLOW/REJECT/MANUAL_CONFIRM)
+  - `audit(Object)` → `StepResult` 转 `observationMap` → `GuardrailService.verifyResult()` → 后置审计
+  - TUI (`AliceTuiLauncher`)、CLI (`ExecutionCoordinator`, `JLineChatSession`) 三处入口统一通过 `.withGuardrail(new GuardrailVerificatorAdapter())` 接入
+  - 导出 `org.cland.alice.core.agent.guardrail` 包；更新 `alice-facade-tui`/`alice-facade-cmd` 的 `module-info.java` 及 `build.gradle` 依赖
+
 - **TUI 动态增长布局 v5.0 (`alice-facade-tui`)**: 全面重构 TUI 布局序列和滚动机制。
   - **布局序列变更**: `Header → Main Area [0..N] → QueueMsg [0..1] → Line1 → Input → Line2 → Footer`
   - **Main Area 动态填满**: 高度 = `max(terminalHeight - 6, 1)`，始终填满 Header 与 Queue 之间的可用空间

@@ -20,6 +20,7 @@ import org.cland.alice.agent.subagent.SubAgentManager;
 import org.cland.alice.agent.subagent.SubAgentRecord;
 import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
+import org.cland.alice.core.agent.guardrail.GuardrailVerificatorAdapter;
 import org.cland.alice.core.agent.wal.FileWalStore;
 import org.cland.alice.core.agent.wal.RawMessage;
 import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
@@ -75,7 +76,8 @@ public class AliceTuiLauncher implements AutoCloseable {
             new FileWalStore(
                 java.nio.file.Paths.get(
                     System.getProperty("user.home"), ".alice", "wal", sessionId)));
-    this.agent = Agent.createDefault(config).withWal(wal);
+    this.agent =
+        Agent.createDefault(config).withWal(wal).withGuardrail(new GuardrailVerificatorAdapter());
     logger.info(
         "[AliceTuiLauncher] Agent created via factory: model={}, session={}",
         config.defaultModelId(),

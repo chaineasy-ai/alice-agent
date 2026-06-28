@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.cland.alice.agent.command.AgentCommand;
 import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
+import org.cland.alice.core.agent.guardrail.GuardrailVerificatorAdapter;
 import org.cland.alice.core.agent.wal.FileWalStore;
 import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
 import org.cland.alice.core.agent.wal.WalSession;
@@ -66,7 +67,7 @@ public class JLineChatSession implements AutoCloseable {
                     ".alice",
                     "wal",
                     SnowflakeIdGenerator.generateSessionId())));
-    this.agent = new Agent(config).withWal(wal);
+    this.agent = new Agent(config).withWal(wal).withGuardrail(new GuardrailVerificatorAdapter());
 
     // 3. 构建 LineReader
     this.reader = buildLineReader();

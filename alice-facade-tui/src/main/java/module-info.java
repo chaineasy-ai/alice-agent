@@ -12,6 +12,7 @@ module alice.agent.facade.tui.main {
 
   requires alice.agent.app.main;
   requires alice.agent.alice.core.agent.main;
+  requires alice.agent.alice.guardrail.main;
   requires alice.agent.command.main;
 
   // JLine 4: 三层单线分割布局 + 原生向上顶出补全（AUTO_MENU）

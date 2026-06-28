@@ -7,6 +7,7 @@ module alice.agent.alice.core.agent.main {
   exports org.cland.alice.core.agent.memory;
   exports org.cland.alice.core.agent.wal;
   exports org.cland.alice.agent.subagent;
+  exports org.cland.alice.core.agent.guardrail;
 
   requires alice.agent.alice.model.main;
   requires alice.agent.alice.core.planner.main;
