@@ -18,12 +18,22 @@ import org.cland.alice.core.agent.wal.RawMessage;
 import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
 import org.cland.alice.core.agent.wal.WalSession;
 import org.cland.alice.core.planner.PlannerService;
+import org.cland.alice.core.planner.sop.SopRegistry;
+import org.cland.alice.core.planner.sop.StaticPlanner;
+import org.cland.alice.core.planner.strategy.FastPathStrategy;
+import org.cland.alice.core.planner.strategy.SlowPathStrategy;
+import org.cland.alice.core.planner.strategy.StrategySelector;
+import org.cland.alice.core.planner.tree.ThinkingTree;
 import org.cland.alice.env.adapter.EnvEvent;
 import org.cland.alice.guardrail.Verificator;
 import org.cland.alice.model.Call;
 import org.cland.alice.model.CallStatus;
+import org.cland.alice.model.ModelConfigLoader;
 import org.cland.alice.model.ModelProvider;
 import org.cland.alice.tool.gateway.ToolRegistry;
+import org.cland.alice.tool.gateway.ToolRegistryHolder;
+import org.cland.alice.tool.gateway.builtin.BuiltinTools;
+import org.cland.alice.tool.gateway.engine.ToolDiscovery;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -599,5 +609,110 @@ public class Agent {
             : "N/A");
 
     return result.result().content();
+  }
+
+  // ================================================================
+  // 静态工厂方法 — 供 TUI/CLI 外观模块使用，避免外观直接依赖子模块
+  // ================================================================
+
+  /**
+   * 初始化 ModelProvider：从 {@code ~/.alice/model.json} 加载配置，注册提供商和内置模型枚举。
+   *
+   * <p>此方法负责：
+   *
+   * <ul>
+   *   <li>加载 {@code ~/.alice/model.json} 配置文件
+   *   <li>将配置中的提供商注册到 {@link ModelProvider}
+   *   <li>注册内置模型枚举
+   *   <li>如果环境变量中存在 DEEPSEEK_API_KEY，注册 DeepSeek 供应商
+   * </ul>
+   *
+   * @return 默认模型 ID（配置中指定），若无则返回 {@code null}
+   */
+  public static String initModelProvider() {
+    ModelConfigLoader configLoader = new ModelConfigLoader();
+    try {
+      configLoader.load();
+      configLoader.registerTo(ModelProvider.getInstance());
+      logger.info(
+          "[Agent] Loaded {} model provider(s) from config", configLoader.getProviders().size());
+    } catch (Exception e) {
+      logger.warn("[Agent] Failed to load model config, using defaults: {}", e.getMessage());
+    }
+
+    // 注册内置模型枚举
+    ModelProvider.getInstance().registerBuiltinModels();
+
+    // 确定默认模型
+    String defaultModel = configLoader.getDefaultModel();
+    if (defaultModel == null || defaultModel.isBlank()) {
+      defaultModel = "gpt-4o-mini";
+      logger.info(
+          "[Agent] No default_model in ~/.alice/model.json, using built-in: {}", defaultModel);
+    } else {
+      logger.info("[Agent] Using default model from config: {}", defaultModel);
+    }
+
+    // 注册 DeepSeek 供应商（如果环境变量存在且尚未注册）
+    String deepseekKey = System.getenv("DEEPSEEK_API_KEY");
+    if (deepseekKey != null && !deepseekKey.isEmpty()) {
+      if (ModelProvider.getInstance().getSupplier("deepseek-v4-flash") == null) {
+        ModelProvider.getInstance()
+            .registerSupplier(
+                new org.cland.alice.model.supplier.OpenAiSupplier(
+                    "deepseek", deepseekKey, "https://api.deepseek.com/v1/chat/completions"));
+        logger.info("[Agent] Registered DeepSeek supplier via OpenAiSupplier (OpenAI-compatible)");
+      }
+    }
+
+    return defaultModel;
+  }
+
+  /**
+   * 创建完全初始化的 Agent 实例，自动装配所有子模块（PlannerService、ToolRegistry 等）。
+   *
+   * <p>外观模块可以直接使用此工厂方法创建 Agent，无需直接依赖 planner/tool-gateway/model 模块。
+   *
+   * @param config Agent 配置
+   * @return 已装配所有子模块的 Agent 实例
+   */
+  public static Agent createDefault(AgentConfig config) {
+    Agent agent = new Agent(config);
+
+    // 1. 初始化工具注册中心并发现内置工具
+    ToolRegistry toolRegistry = ToolRegistryHolder.INSTANCE.registry();
+    try {
+      int count = new ToolDiscovery(toolRegistry).scanAndRegister(List.of(new BuiltinTools()));
+      logger.info("[Agent] Registered {} builtin tool(s)", count);
+    } catch (Exception e) {
+      logger.warn("[Agent] Failed to discover builtin tools", e);
+    }
+    agent.withToolRegistry(toolRegistry);
+
+    // 2. 初始化 PlannerService（双路径规划引擎）
+    var plannerSupplier =
+        DefaultPlannerModelSupplier.builder()
+            .provider(ModelProvider.getInstance())
+            .instructionModelId(config.defaultModelId())
+            .reasoningModelId(config.defaultModelId())
+            .build();
+    var fastPath = new FastPathStrategy(plannerSupplier);
+    var thinkingTree = new ThinkingTree(Map.of());
+    var slowPath =
+        SlowPathStrategy.builder()
+            .tree(thinkingTree)
+            .modelSupplier(plannerSupplier)
+            .mctsIterations(10)
+            .build();
+    var selector = StrategySelector.builder().fastPath(fastPath).slowPath(slowPath).build();
+    var sopRegistry = new SopRegistry();
+    var staticPlanner = new StaticPlanner(sopRegistry);
+    var planner =
+        PlannerService.builder().strategySelector(selector).staticPlanner(staticPlanner).build();
+    agent.withPlannerService(planner);
+
+    logger.info("[Agent] Default Agent created: model={}", config.defaultModelId());
+
+    return agent;
   }
 }

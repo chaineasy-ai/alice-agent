@@ -1,4 +1,4 @@
-package org.cland.alice.facade.tui;
+package org.cland.alice.core.agent;
 
 import java.util.Map;
 import java.util.Objects;

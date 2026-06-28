@@ -24,21 +24,8 @@ import org.cland.alice.core.agent.wal.FileWalStore;
 import org.cland.alice.core.agent.wal.RawMessage;
 import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
 import org.cland.alice.core.agent.wal.WalSession;
-import org.cland.alice.core.planner.PlannerService;
-import org.cland.alice.core.planner.sop.SopRegistry;
-import org.cland.alice.core.planner.sop.StaticPlanner;
-import org.cland.alice.core.planner.strategy.FastPathStrategy;
-import org.cland.alice.core.planner.strategy.SlowPathStrategy;
-import org.cland.alice.core.planner.strategy.StrategySelector;
-import org.cland.alice.core.planner.tree.ThinkingTree;
 import org.cland.alice.facade.tui.bridge.EventBridge;
 import org.cland.alice.facade.tui.state.TuiState;
-import org.cland.alice.model.ModelConfigLoader;
-import org.cland.alice.model.ModelProvider;
-import org.cland.alice.tool.gateway.ToolRegistry;
-import org.cland.alice.tool.gateway.ToolRegistryHolder;
-import org.cland.alice.tool.gateway.builtin.BuiltinTools;
-import org.cland.alice.tool.gateway.engine.ToolDiscovery;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,51 +69,17 @@ public class AliceTuiLauncher implements AutoCloseable {
   public AliceTuiLauncher(AgentConfig config) throws IOException {
     this.sessionId = SnowflakeIdGenerator.generateSessionId();
 
-    // 1. 创建 Agent 并注入 WAL
+    // 1. 创建完全初始化的 Agent（通过 Agent 工厂方法，无需直接依赖子模块）
     WalSession wal =
         new WalSession(
             new FileWalStore(
                 java.nio.file.Paths.get(
                     System.getProperty("user.home"), ".alice", "wal", sessionId)));
-    // 1a. 初始化工具注册中心并发现内置工具
-    ToolRegistry toolRegistry = ToolRegistryHolder.INSTANCE.registry();
-    try {
-      int count =
-          new ToolDiscovery(toolRegistry).scanAndRegister(java.util.List.of(new BuiltinTools()));
-      logger.info("[AliceTuiLauncher] Registered {} builtin tool(s)", count);
-    } catch (Exception e) {
-      logger.warn("[AliceTuiLauncher] Failed to discover builtin tools", e);
-    }
-
-    // 1b. 创建 Agent 并注入 WAL 和工具注册中心
-    this.agent = new Agent(config).withWal(wal).withToolRegistry(toolRegistry);
-
-    // 1c. 初始化 PlannerService （双路径规划引擎）
-    var plannerSupplier =
-        DefaultPlannerModelSupplier.builder()
-            .provider(ModelProvider.getInstance())
-            .instructionModelId(config.defaultModelId())
-            .reasoningModelId(config.defaultModelId())
-            .build();
-    var fastPath = new FastPathStrategy(plannerSupplier);
-    var thinkingTree = new ThinkingTree(java.util.Map.of());
-    var slowPath =
-        SlowPathStrategy.builder()
-            .tree(thinkingTree)
-            .modelSupplier(plannerSupplier)
-            .mctsIterations(10)
-            .build();
-    var selector = StrategySelector.builder().fastPath(fastPath).slowPath(slowPath).build();
-    var sopRegistry = new SopRegistry();
-    var staticPlanner = new StaticPlanner(sopRegistry);
-    var planner =
-        PlannerService.builder().strategySelector(selector).staticPlanner(staticPlanner).build();
-    this.agent.withPlannerService(planner);
+    this.agent = Agent.createDefault(config).withWal(wal);
     logger.info(
-        "[AliceTuiLauncher] PlannerService wired: fast={}, slow(MCTS)={}, sopRegistry={}",
+        "[AliceTuiLauncher] Agent created via factory: model={}, session={}",
         config.defaultModelId(),
-        config.defaultModelId(),
-        sopRegistry.ids().size());
+        sessionId);
 
     // 2. 创建 EventBridge
     this.eventBridge = new EventBridge();
@@ -707,44 +660,13 @@ public class AliceTuiLauncher implements AutoCloseable {
     }
 
     try {
-      // 4. 加载模型配置（~/.alice/model.json）
-      ModelConfigLoader configLoader = new ModelConfigLoader();
-      try {
-        configLoader.load();
-        configLoader.registerTo(ModelProvider.getInstance());
-        logger.info("Loaded {} model provider(s) from config", configLoader.getProviders().size());
-      } catch (Exception e) {
-        logger.warn("Failed to load model config, using defaults: {}", e.getMessage());
-      }
-
-      // 5. 注册内置模型枚举
-      ModelProvider.getInstance().registerBuiltinModels();
-
-      // 6. 确定默认模型
-      String defaultModel = configLoader.getDefaultModel();
-      if (defaultModel == null || defaultModel.isBlank()) {
-        defaultModel = "gpt-4o-mini";
-        logger.info("No default_model in ~/.alice/model.json, using built-in: {}", defaultModel);
-      } else {
-        logger.info("Using default model from config: {}", defaultModel);
-      }
+      // 4. 初始化 ModelProvider（通过 Agent 工厂方法，无需直接依赖 alice-model）
+      String defaultModel = Agent.initModelProvider();
 
       String apiKey = System.getenv("OPENAI_API_KEY");
       if (apiKey == null || apiKey.isEmpty()) {
         logger.warn(
             "OPENAI_API_KEY not set. OpenAI models will be unavailable, but other providers may work.");
-      }
-
-      String deepseekKey = System.getenv("DEEPSEEK_API_KEY");
-      if (deepseekKey != null && !deepseekKey.isEmpty()) {
-        // 如果配置加载没有注册 DeepSeek，手动注册一个（DeepSeek API 与 OpenAI 兼容）
-        if (ModelProvider.getInstance().getSupplier("deepseek-v4-flash") == null) {
-          ModelProvider.getInstance()
-              .registerSupplier(
-                  new org.cland.alice.model.supplier.OpenAiSupplier(
-                      "deepseek", deepseekKey, "https://api.deepseek.com/v1/chat/completions"));
-          logger.info("Registered DeepSeek supplier via OpenAiSupplier (OpenAI-compatible)");
-        }
       }
 
       AgentConfig config =

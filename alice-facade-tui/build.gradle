@@ -24,15 +24,10 @@ dependencies {
     implementation 'ch.qos.logback:logback-classic:1.5.16'
     implementation 'ch.qos.logback:logback-core:1.5.16'
 
-    // Internal modules
+    // Internal modules — TUI only depends on core-agent and command
     implementation project(':alice-bootstrap')
     implementation project(':alice-core-agent')
-    implementation project(':alice-core-planner')
-    implementation project(':alice-env-adapter')
-    implementation project(':alice-memory-vault')
-    implementation project(':alice-model')
     implementation project(':alice-agent-command')
-    implementation project(':alice-tool-gateway')
 
     // JLine 4: 纯硬编码三层单线分割布局（TAO Standard Mode）
     // 参考 docs/alice-facade-tui/Layout.md：依赖 JLine 4 原生 AUTO_MENU 实现向上顶出补全
@@ -55,8 +50,6 @@ dependencies {
 
     // Test dependencies for internal modules
     testImplementation project(':alice-core-agent')
-    testImplementation project(':alice-env-adapter')
-    testImplementation project(':alice-model')
 
     // Groovy：升级到适配 Java 25 的最新稳定版（4.0.30 修复高版本 Java 兼容问题）
     testImplementation 'org.apache.groovy:groovy:4.0.30'

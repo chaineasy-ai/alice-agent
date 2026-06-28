@@ -3,7 +3,6 @@ package org.cland.alice.facade.tui.bridge;
 import java.time.Instant;
 import java.util.Objects;
 import org.cland.alice.core.agent.lifecycle.Action;
-import org.cland.alice.env.adapter.EnvEvent;
 
 /**
  * TUI 事件类型，用于 EventBridge 在 Agent 与 UI 组件之间传递消息。
@@ -175,19 +174,6 @@ public abstract sealed class TuiEvent {
 
     public String errorMessage() {
       return errorMessage;
-    }
-  }
-
-  /** 来自 EnvEvent 的通用事件（桥接） */
-  public static final class EnvBridgeEvent extends TuiEvent {
-    private final EnvEvent envEvent;
-
-    public EnvBridgeEvent(EnvEvent envEvent) {
-      this.envEvent = envEvent;
-    }
-
-    public EnvEvent envEvent() {
-      return envEvent;
     }
   }
 

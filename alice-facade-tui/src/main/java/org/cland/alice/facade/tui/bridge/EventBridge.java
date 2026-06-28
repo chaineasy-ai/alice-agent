@@ -7,7 +7,6 @@ import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.lifecycle.Action;
-import org.cland.alice.env.adapter.EnvEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -170,11 +169,6 @@ public class EventBridge implements AutoCloseable {
   /** 终端尺寸变更（同步发送，需立即更新 UI） */
   public void onTerminalResize(int width, int height) {
     emitSync(new TuiEvent.TerminalResize(width, height));
-  }
-
-  /** 桥接 EnvEvent */
-  public void onEnvEvent(EnvEvent envEvent) {
-    emit(new TuiEvent.EnvBridgeEvent(envEvent));
   }
 
   // ========== 终止 ==========
