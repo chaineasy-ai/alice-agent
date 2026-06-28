@@ -18,7 +18,7 @@ scope:
   - "alice-facade-tui"
   - "alice-facade-web"
 status: "active"
-updated: "2026-06-27"
+updated: "2026-06-28"
 ---
 
 # Changelog
@@ -125,6 +125,41 @@ updated: "2026-06-27"
 
 - **`docs/alice-facade-tui/Layout.md`**: 从 v2.6 更新为 v3.1 TAO 四段式布局工程设计文档。涵盖 8 组件布局、PPAO Observer 模式（`AgentEventListener`）、输入队列机制、实际耗时传递、线程模型全链路图、ANSI 配色速查表。
 - **`docs/alice-facade-tui/Layout_TAO.md`**: 新增 v3.1 规格文档，含四段式区域说明、PPAO 执行流图、事件路由映射表、布局计算公式、ANSI 配色速查、关键代码入口对照表。
+
+### Features
+
+- **Micro-ReAct 深度与宏迭代解耦 (`alice-core-agent`)**: 新增 `AgentConfig.maxMicroDepth` 独立配置，默认值 30，与 `maxIterations` 解耦。Micro-ReAct 熔断阈值从此不再受 PPAO 外层迭代次数限制，支持需要大量工具调用的分析类任务。
+  - `AgentConfig.java`: 新增 `DEFAULT_MAX_MICRO_DEPTH = 30`、`maxMicroDepth` 字段、getter、builder setter
+  - `AgentExecutor.java`: `microReActLoop()` 改用 `config.maxMicroDepth()`
+  - `~/.alice/config.json` / `docs/config/config.json`: 新增 `"max_micro_depth": 30`
+  - `~/.alice/example.yaml`: 新增配置键参考
+  - `docs/config/README.md`: 配置表更新
+
+- **重复 `read_file` 代码层拦截 (`alice-core-agent`)**: 每次 `dispatchToolCall()` 执行前检查目标路径是否已在 `ctx.__read_files` 集合中，已读路径返回 `[CACHED]` 跳过沙箱执行。
+  - 执行前拦截：dispatchToolCall 中 pre-check，已读路径即时返回 `Future.succeededFuture([CACHED])`
+  - 路径跟踪：迁移至 `hasMoreMarkers` 检查之前，确保每批每个 tool call 都记录
+  - 两种上下文注入：`buildMicroUserContent()` 在 user role 中列出已读文件；`dispatchLlmInference()` 检查 `__micro_system_prompt` 传入 system role
+
+- **Prompt 分拆为 system/user 双 role (`alice-core-agent`, `alice-model`)**: LLM 请求体从单一 `{"role":"user"}` 消息重构为 `[{"role":"system"}, {"role":"user"}]` 双消息结构。
+  - `core_loop.ftl` / `micro_loop.ftl`: 完全静态化，移除所有 FreeMarker 变量
+  - `PromptManager.java`: 新增 `buildMicroLoopSystemPrompt()`（缓存静态 system 内容）、`buildMicroUserContent()`（动态组装变量）
+  - `Call.java`: `Payload` 新增 `systemPrompt` 字段（nullable，向后兼容）
+  - `ModelProvider.java`: 新增 `dispatch(modelId, systemPrompt, prompt, params)` 重载
+  - `AgentExecutor.java`: `microReActLoop()` 设 `__micro_system_prompt`；`dispatchLlmInference()` 传入 system prompt
+
+- **OpenAiSupplier Jackson 重写 (`alice-model`)**: 废弃手拼 JSON 字符串的 `buildRequestBody()`，改用 Jackson `ObjectMapper` 构建请求体。
+  - 正确处理 `messages[]` 数组：有 systemPrompt 时 `[{"role":"system"},{"role":"user"}]`，无则仅 `[{"role":"user"}]`
+  - 响应解析改用 Jackson `JsonNode`，废弃手写 `extractJsonField()` 和 `formatToolsArray()`
+
+- **调试日志 (`alice-core-agent`, `alice-model`)**: 新增 `[Micro-ReAct/LLM] Using system prompt (N chars) + user prompt (M chars)`、`[OpenAiSupplier] Request body (first 500 chars): ...` 日志
+
+### Fixes
+
+- **路径跟踪丢失 (`alice-core-agent`)**: `hasMoreMarkers=true` 时 `dispatchToolCall` 的 success 回调提前 return，跳过路径记录代码。修复：将 `read_file` 路径记录迁移到 `hasMoreMarkers` 检查之前。
+
+- **`__micro_system_prompt` 未设置 (`alice-core-agent`)**: 前次 overlapping edits 冲突解决时 `microReActLoop()` 中 `ctx.put("__micro_system_prompt", ...)` 静默丢失。修复：补回该行代码。
+
+- **`buildRequestBody()` JSON 语法错误 (`alice-model`)**: 手拼 JSON 字符串出现转义错误导致 `"}"}` 非法。修复：全局替换为 Jackson ObjectMapper。
 
 ## 20260627
 

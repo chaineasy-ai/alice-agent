@@ -21,11 +21,15 @@ public final class AgentConfig {
   /** 默认最大迭代次数 */
   public static final int DEFAULT_MAX_ITERATIONS = 10;
 
+  /** 默认 Micro-ReAct 最大深度（熔断阈值），高于 Macro 迭代以支持多步骤工具链 */
+  public static final int DEFAULT_MAX_MICRO_DEPTH = 30;
+
   /** 默认 Action 超时（30 秒） */
   public static final long DEFAULT_ACTION_TIMEOUT_MS = 30_000;
 
   private final String defaultModelId;
   private final int maxIterations;
+  private final int maxMicroDepth;
   private final long actionTimeoutMs;
   private final boolean preVerifyEnabled;
   private final boolean postVerifyEnabled;
@@ -34,6 +38,8 @@ public final class AgentConfig {
   private AgentConfig(Builder builder) {
     this.defaultModelId = builder.defaultModelId != null ? builder.defaultModelId : DEFAULT_MODEL;
     this.maxIterations = builder.maxIterations > 0 ? builder.maxIterations : DEFAULT_MAX_ITERATIONS;
+    this.maxMicroDepth =
+        builder.maxMicroDepth > 0 ? builder.maxMicroDepth : DEFAULT_MAX_MICRO_DEPTH;
     this.actionTimeoutMs =
         builder.actionTimeoutMs > 0 ? builder.actionTimeoutMs : DEFAULT_ACTION_TIMEOUT_MS;
     this.preVerifyEnabled = builder.preVerifyEnabled;
@@ -60,6 +66,10 @@ public final class AgentConfig {
     return maxIterations;
   }
 
+  public int maxMicroDepth() {
+    return maxMicroDepth;
+  }
+
   public long actionTimeoutMs() {
     return actionTimeoutMs;
   }
@@ -81,6 +91,7 @@ public final class AgentConfig {
   public static final class Builder {
     private String defaultModelId;
     private int maxIterations;
+    private int maxMicroDepth;
     private long actionTimeoutMs;
     private boolean preVerifyEnabled = true;
     private boolean postVerifyEnabled = true;
@@ -95,6 +106,11 @@ public final class AgentConfig {
 
     public Builder maxIterations(int maxIterations) {
       this.maxIterations = maxIterations;
+      return this;
+    }
+
+    public Builder maxMicroDepth(int maxMicroDepth) {
+      this.maxMicroDepth = maxMicroDepth;
       return this;
     }
 

@@ -67,6 +67,7 @@ public final class PromptManager {
   }
 
   private static String systemPromptCache; // lazily extracted from core_loop.ftl
+  private static String microLoopSystemCache; // lazily rendered from micro_loop.ftl
 
   private PromptManager() {}
 
@@ -135,39 +136,82 @@ public final class PromptManager {
   }
 
   // ========================================================================
-  // Micro Loop Prompt (Micro-ReAct 微观循环)
+  // Micro Loop System Prompt (静态 system role 内容)
   // ========================================================================
 
   /**
-   * 构建 Micro-ReAct 微观循环的 prompt。
+   * 构建 Micro-ReAct 微观循环的 system prompt（静态内容，无变量）。
    *
-   * @param toolResult 工具执行结果（文件内容、命令输出等）
-   * @param userTask 原始用户任务（当前未使用，保留接口一致性）
-   * @return 完整 prompt
+   * <p>返回 micro_loop.ftl 渲染结果，用作 {@code role: "system"} 消息。 模板中不含 FreeMarker 变量，渲染一次后缓存。
+   *
+   * @return 完整的 micro loop system prompt 文本
    */
-  public static String buildMicroLoopPrompt(String toolResult, String userTask) {
-    Map<String, Object> data = new HashMap<>();
-    data.put("toolResult", toolResult != null && !toolResult.isBlank() ? toolResult : "<empty>");
-    if (userTask != null && !userTask.isBlank()) {
-      data.put("userTask", userTask);
+  public static String buildMicroLoopSystemPrompt() {
+    if (microLoopSystemCache != null) {
+      return microLoopSystemCache;
     }
-    return render(MICRO_LOOP, data);
+    try (StringWriter out = new StringWriter()) {
+      MICRO_LOOP.process(Map.of(), out);
+      microLoopSystemCache = out.toString().trim();
+    } catch (TemplateException | IOException e) {
+      log.warn("[PromptManager] Failed to render micro_loop.ftl, falling back", e);
+      microLoopSystemCache = "<rules><rule>Use tools to complete the task.</rule></rules>";
+    }
+    return microLoopSystemCache;
+  }
+
+  // ========================================================================
+  // Micro Loop User Content (user role 内容，含变量)
+  // ========================================================================
+
+  /**
+   * 构建 Micro-ReAct 的 user role 内容（含已读文件列表、工具结果等变量）。
+   *
+   * @param toolResult 工具执行结果
+   * @param userTask 原始用户任务
+   * @param alreadyReadFiles 已读取过的文件路径列表
+   * @return user role 内容字符串
+   */
+  public static String buildMicroUserContent(
+      String toolResult, String userTask, java.util.Set<String> alreadyReadFiles) {
+    StringBuilder sb = new StringBuilder();
+    if (alreadyReadFiles != null && !alreadyReadFiles.isEmpty()) {
+      sb.append("<read_files>\n");
+      for (String f : alreadyReadFiles) {
+        sb.append(f).append('\n');
+      }
+      sb.append("</read_files>\n\n");
+    }
+    if (userTask != null && !userTask.isBlank()) {
+      sb.append("<user_task>\n").append(userTask).append("\n</user_task>\n\n");
+    }
+    sb.append("<tool_result>\n");
+    sb.append(toolResult != null && !toolResult.isBlank() ? toolResult : "<empty>");
+    sb.append("\n</tool_result>");
+    return sb.toString();
   }
 
   /**
-   * 构建工具执行失败后的 Micro-ReAct 循环 prompt。
+   * 构建工具执行失败后的 user role 内容。
    *
    * @param toolName 失败的工具名
    * @param errorMessage 错误消息
-   * @param userTask 原始用户任务（当前未使用，保留接口一致性）
-   * @return 完整 prompt
+   * @param userTask 原始用户任务
+   * @return user role 内容字符串
    */
-  public static String buildMicroLoopErrorPrompt(
+  public static String buildMicroLoopErrorContent(
       String toolName, String errorMessage, String userTask) {
-    Map<String, Object> data = new HashMap<>();
-    data.put("toolName", toolName != null ? toolName : "unknown");
-    data.put("errorMessage", errorMessage != null ? errorMessage : "unknown error");
-    return render(MICRO_LOOP_ERROR, data);
+    StringBuilder sb = new StringBuilder();
+    if (userTask != null && !userTask.isBlank()) {
+      sb.append("<user_task>\n").append(userTask).append("\n</user_task>\n\n");
+    }
+    sb.append("<tool_error>\n");
+    sb.append("  <tool>").append(toolName != null ? toolName : "unknown").append("</tool>\n");
+    sb.append("  <message>")
+        .append(errorMessage != null ? errorMessage : "unknown error")
+        .append("</message>\n");
+    sb.append("</tool_error>");
+    return sb.toString();
   }
 
   // ========================================================================

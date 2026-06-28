@@ -2,5 +2,6 @@
   "default_timeout": 180,
   "default_verbose": false,
   "max_iterations": 10,
+  "max_micro_depth": 30,
   "action_timeout_ms": 30000
 }

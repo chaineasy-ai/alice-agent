@@ -455,8 +455,13 @@ public class AgentExecutor {
    */
   private Future<StepWithContext> microReActLoop(AgentContext ctx, Action initialAction) {
     // Micro-ReAct 熔断参数
-    final int maxMicroIterations = config.maxIterations(); // 复用全局配置
+    final int maxMicroIterations = config.maxMicroDepth();
     final String originalPrompt = ctx.containsKey("prompt") ? ctx.get("prompt").toString() : "";
+
+    // 缓存 Micro-ReAct 系统 prompt（静态，用于 system role）
+    ctx.put(
+        "__micro_system_prompt",
+        org.cland.alice.core.agent.prompt.PromptManager.buildMicroLoopSystemPrompt());
 
     return microReActStep(ctx, initialAction, originalPrompt, 0, maxMicroIterations);
   }
@@ -644,12 +649,15 @@ public class AgentExecutor {
                   depth);
               String rawPrompt =
                   updatedCtx.containsKey("prompt") ? updatedCtx.get("prompt").toString() : "";
-              String fullPrompt =
-                  org.cland.alice.core.agent.prompt.PromptManager.buildMicroLoopPrompt(
-                      actionLog, rawPrompt);
+              @SuppressWarnings("unchecked")
+              java.util.Set<String> readFiles =
+                  (java.util.Set<String>) updatedCtx.get("__read_files");
+              String userContent =
+                  org.cland.alice.core.agent.prompt.PromptManager.buildMicroUserContent(
+                      actionLog, rawPrompt, readFiles);
               return microReActStep(
                   updatedCtx,
-                  Action.llmInference(config.defaultModelId(), fullPrompt),
+                  Action.llmInference(config.defaultModelId(), userContent),
                   originalPrompt,
                   depth + 1,
                   maxDepth);
@@ -753,7 +761,21 @@ public class AgentExecutor {
                   }
                 }
 
-                Call call = provider.dispatch(modelId, prompt, callParams);
+                // 如果有 Micro-ReAct system prompt，通过 system role 传递
+                String microSystemPrompt =
+                    ctx.containsKey("__micro_system_prompt")
+                        ? ctx.get("__micro_system_prompt").toString()
+                        : null;
+                if (microSystemPrompt != null) {
+                  logger.debug(
+                      "[Micro-ReAct/LLM] Using system prompt ({} chars) + user prompt ({} chars)",
+                      microSystemPrompt.length(),
+                      prompt.length());
+                }
+                Call call =
+                    microSystemPrompt != null
+                        ? provider.dispatch(modelId, microSystemPrompt, prompt, callParams)
+                        : provider.dispatch(modelId, prompt, callParams);
 
                 if (call.status() == org.cland.alice.model.CallStatus.FINISHED
                     && call.result() != null) {
@@ -903,6 +925,25 @@ public class AgentExecutor {
                   action.actionId(), action.target(), action.parameters())));
     }
 
+    // 执行前拦截：read_file 路径已读取过则跳过，避免重复执行
+    if ("read_file".equals(action.target())) {
+      Object pathObj = action.parameters().get("path");
+      if (pathObj instanceof String path && !path.isBlank()) {
+        @SuppressWarnings("unchecked")
+        java.util.Set<String> readFiles = (java.util.Set<String>) ctx.get("__read_files");
+        if (readFiles != null && readFiles.contains(path)) {
+          logger.info("[Dispatch/TOOL_CALL] read_file skipped (already read): {}", path);
+          return Future.succeededFuture(
+              new StepWithContext(
+                  ctx,
+                  new StepResult.Continue(
+                      null,
+                      Observation.success(
+                          "[CACHED] " + path + " was already read in a previous step."))));
+        }
+      }
+    }
+
     vertx
         .<StepResult>executeBlocking(
             () -> {
@@ -970,6 +1011,21 @@ public class AgentExecutor {
                     hasMoreMarkers = currentIdx < tcList.size();
                   }
 
+                  // 跟踪已读取的文件路径（必须在 hasMoreMarkers 检查之前，确保每个 tool call 都记录）
+                  if ("read_file".equals(action.target())) {
+                    Object pathObj = action.parameters().get("path");
+                    if (pathObj instanceof String path && !path.isBlank()) {
+                      @SuppressWarnings("unchecked")
+                      java.util.Set<String> readFiles =
+                          (java.util.Set<String>) ctx.get("__read_files");
+                      if (readFiles == null) {
+                        readFiles = new java.util.HashSet<>();
+                        ctx.put("__read_files", readFiles);
+                      }
+                      readFiles.add(path);
+                    }
+                  }
+
                   if (hasMoreMarkers) {
                     // 仍有未消耗的标记，不调用 LLM，直接让 Reason 解析原始回复
                     return new StepResult.Continue(
@@ -1006,12 +1062,15 @@ public class AgentExecutor {
                   }
                   ctx.put("__action_log", actionLogBuilder.toString());
 
-                  // 通过 PromptManager 构建 Micro Loop Prompt，传入累积的日志
+                  // 通过 PromptManager 构建 Micro User Content（user role 部分）
                   String rawPrompt = ctx.containsKey("prompt") ? ctx.get("prompt").toString() : "";
-                  String fullPrompt =
-                      PromptManager.buildMicroLoopPrompt(actionLogBuilder.toString(), rawPrompt);
+                  @SuppressWarnings("unchecked")
+                  java.util.Set<String> readFiles = (java.util.Set<String>) ctx.get("__read_files");
+                  String userContent =
+                      PromptManager.buildMicroUserContent(
+                          actionLogBuilder.toString(), rawPrompt, readFiles);
                   return new StepResult.Continue(
-                      Action.llmInference(config.defaultModelId(), fullPrompt),
+                      Action.llmInference(config.defaultModelId(), userContent),
                       Observation.success(
                           "Tool "
                               + action.target()

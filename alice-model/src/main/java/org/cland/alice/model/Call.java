@@ -91,11 +91,18 @@ public final class Call {
   // ========== 内部类型 ==========
 
   /** 请求负载 */
-  public record Payload(String modelId, String prompt, Map<String, Object> parameters) {
+  public record Payload(
+      String modelId, String prompt, String systemPrompt, Map<String, Object> parameters) {
     public Payload {
       Objects.requireNonNull(modelId, "modelId must not be null");
       Objects.requireNonNull(prompt, "prompt must not be null");
+      systemPrompt = systemPrompt != null && !systemPrompt.isBlank() ? systemPrompt : null;
       parameters = parameters == null ? Map.of() : Map.copyOf(parameters);
+    }
+
+    /** 向后兼容：无 systemPrompt 的构造 */
+    public Payload(String modelId, String prompt, Map<String, Object> parameters) {
+      this(modelId, prompt, null, parameters);
     }
   }
 

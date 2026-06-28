@@ -23,6 +23,10 @@
         </encoder>
     </appender>
 
+    <!-- 临时: 查看 LLM 请求 body -->
+    <logger name="org.cland.alice.model.supplier.OpenAiSupplier" level="DEBUG" />
+    <logger name="org.cland.alice.core.agent.executor.AgentExecutor" level="DEBUG" />
+
     <root level="INFO">
         <appender-ref ref="FILE" />
     </root>

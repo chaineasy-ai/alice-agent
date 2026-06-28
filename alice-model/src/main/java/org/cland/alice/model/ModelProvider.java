@@ -122,6 +122,39 @@ public final class ModelProvider {
     return dispatch(modelId, prompt, Map.of());
   }
 
+  /**
+   * 执行一次模型调用，带 system prompt。
+   *
+   * @param modelId 目标模型 ID
+   * @param systemPrompt 系统提示词（用于 system role）
+   * @param prompt 用户提示词（用于 user role）
+   * @param parameters 附加参数
+   * @return 已完成（或失败）的 Call 对象
+   */
+  public Call dispatch(
+      String modelId, String systemPrompt, String prompt, Map<String, Object> parameters) {
+    ModelSupplier supplier = getSupplier(modelId);
+    if (supplier == null) {
+      throw new IllegalStateException("No supplier found for modelId: " + modelId);
+    }
+    Call.Payload payload = new Call.Payload(modelId, prompt, systemPrompt, parameters);
+    Call call = Call.builder().payload(payload).build();
+    call.transitionTo(CallStatus.PENDING);
+    call.transitionTo(CallStatus.RUNNING);
+    call.metrics().start();
+    try {
+      Call.Response response = supplier.request(call);
+      call.updateResult(response);
+      call.metrics().stop();
+      call.transitionTo(CallStatus.FINISHED);
+    } catch (Exception e) {
+      call.metrics().stop();
+      call.transitionTo(CallStatus.FAILED);
+      throw new RuntimeException("Model call failed: " + modelId, e);
+    }
+    return call;
+  }
+
   /** 执行一次模型调用，附加参数。 */
   public Call dispatch(String modelId, String prompt, Map<String, Object> parameters) {
     // 1. 查找 ModelSupplier

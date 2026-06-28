@@ -85,6 +85,7 @@ Alice Agent uses **two configuration files** in `~/.alice/`:
 | `default.timeout` | `default_timeout` | int | `180` | 默认任务超时（秒） |
 | `default.verbose` | `default_verbose` | bool | `false` | 默认详细模式 |
 | `max_iterations` | `max_iterations` | int | `10` | 最大 PPAO 迭代次数 |
+| `max_micro_depth` | `max_micro_depth` | int | `30` | Micro-ReAct 最大递归深度（熔断阈值），高于 Macro 迭代以支持多步骤工具链 |
 | `action_timeout_ms` | `action_timeout_ms` | int | `30000` | Action 执行超时（毫秒） |
 
 #### Provider 配置
@@ -104,6 +105,7 @@ Alice Agent uses **two configuration files** in `~/.alice/`:
 |--------|---------|------|--------|
 | `default.model` | `default_model` | `gpt-4o-mini` | 默认使用的模型 ID |
 | `agent.max_iterations` | `max_iterations` | `10` | 最大迭代次数（同 `max_iterations`） |
+| `agent.max_micro_depth` | `max_micro_depth` | `30` | Micro-ReAct 最大递归深度 |
 
 ### 读取优先级
 
