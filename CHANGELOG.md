@@ -27,6 +27,12 @@ updated: "2026-06-28"
 
 ### Features
 
+- **双路径模型分离 (`alice-model`, `alice-core-agent`)**: FastPath (System 1) 与 SlowPath (System 2) 现在使用独立模型配置，避免简单任务调用昂贵推理模型。
+  - `~/.alice/model.json` 新增可选根字段 `instruction_model`，用于指定 FastPath 轻量指令模型
+  - `ModelConfigLoader` 新增 `getInstructionModel()` 方法，未设置 `instruction_model` 时回退到 `default_model`
+  - `Agent.createDefault()` 读取 `instruction_model` 供 `FastPathStrategy` 使用，`default_model` 供 `SlowPathStrategy` 使用
+  - 配置文档 `docs/config/README.md` 新增双路径模型选择说明
+
 - **Guardrail 验证链全线接线 (`alice-core-agent`, `alice-facade-tui`, `alice-facade-cmd`)**: 新增 `GuardrailVerificatorAdapter` 桥接 Agent 的 `Verificator` 接口与 `GuardrailService` 的 `PreValidator`/`PostValidator` 链，实现 PPAO Verify(Pre) 和 Verify(Post) 的真实验证逻辑。
   - 构造时自动注册 3 个内置验证器：`LogicSanityValidator` (死循环检测)、`PermissionSandboxValidator` (系统路径/命令黑名单)、`HallucinationDetector` (空结果/错误模式/类型一致性)
   - `intercept(Map)` → 转 `Plan` → `GuardrailService.verifyPlan()` → 状态机决策 (ALLOW/REJECT/MANUAL_CONFIRM)

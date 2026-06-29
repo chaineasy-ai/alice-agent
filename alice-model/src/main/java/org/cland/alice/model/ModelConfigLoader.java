@@ -36,6 +36,9 @@ public final class ModelConfigLoader {
   /** 解析后的默认模型 ID */
   private String defaultModel;
 
+  /** 解析后的指令模型 ID（FastPath 使用，可选） */
+  private String instructionModel;
+
   /** 解析后的提供商配置列表 */
   private List<ProviderConfig> providers;
 
@@ -77,6 +80,12 @@ public final class ModelConfigLoader {
       logger.info("Default model from config: {}", this.defaultModel);
     }
 
+    // 解析指令模型（FastPath 使用，可选 — 回退到 default_model）
+    this.instructionModel = extractStringField(rawJson, "instruction_model");
+    if (this.instructionModel != null && !this.instructionModel.isBlank()) {
+      logger.info("Instruction model from config: {}", this.instructionModel);
+    }
+
     // 手动解析 JSON（纯环境无需 JSON 库依赖）
     this.providers = parseProviders(rawJson);
 
@@ -89,6 +98,19 @@ public final class ModelConfigLoader {
   /** 获取配置中指定的默认模型 ID，未设置则返回 {@code null}。 */
   public String getDefaultModel() {
     return defaultModel;
+  }
+
+  /**
+   * 获取指令模型 ID（FastPath/System 1 使用）。
+   *
+   * <p>若配置中未设置 {@code instruction_model}，则回退到 {@link #getDefaultModel()}。
+   *
+   * @return 指令模型 ID，无可返回 {@code null}
+   */
+  public String getInstructionModel() {
+    return instructionModel != null && !instructionModel.isBlank()
+        ? instructionModel
+        : defaultModel;
   }
 
   /** 获取所有加载成功的提供商配置。 */

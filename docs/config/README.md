@@ -193,7 +193,8 @@ export OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
 
 | 层级 | 字段 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|------|------|--------|------|
-| 根 | `default_model` | string | ❌ | — | 默认模型 ID |
+| 根 | `default_model` | string | ❌ | — | 默认模型 ID（推理/慢路径 System 2 使用） |
+| 根 | `instruction_model` | string | ❌ | 同 `default_model` | 指令模型 ID（快路径 System 1 使用），用于快速简单任务；未设置时回退到 `default_model` |
 | 根 | `language_models` | object | ✅ | — | 语言模型配置根节点 |
 | 2 | `openai_compatible` | object | ✅ | — | OpenAI 兼容接口标识 |
 | 3 | `[provider_name]` | object | ✅ | — | 提供商自定义名称 |
@@ -219,6 +220,27 @@ Provider 名称决定使用的 `ModelSupplier` 实现：
 | `openai` | `OpenAiSupplier` | OpenAI Chat Completion API |
 | `gemma4`, `gemma` | `Gemma4Supplier` | 本地 Gemma 4 推理 |
 | 其他 (默认) | `OpenAiSupplier` | 所有 OpenAI 兼容 API（如 deepseek） |
+
+### 双路径模型选择
+
+PlannerService 根据任务复杂度自动选择路径：
+
+| 路径 | 系统 | 使用的模型配置 | 适用场景 |
+|------|------|----------------|----------|
+| **FastPath** (System 1) | 快速指令 | `instruction_model`（默认回退 `default_model`） | 简单查询、问候、短任务 |
+| **SlowPath** (System 2) | 深度推理 | `default_model` | 复杂分析、多步骤规划、MCTS 树搜索 |
+
+配置示例：
+
+```json
+{
+  "default_model": "deepseek-v4-flash",
+  "instruction_model": "gpt-4o-mini",
+  ...
+}
+```
+
+若仅设置 `default_model` 而未指定 `instruction_model`，则 FastPath 与 SlowPath 使用同一模型。
 
 ### 校验规则
 

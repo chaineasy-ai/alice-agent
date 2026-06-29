@@ -689,11 +689,27 @@ public class Agent {
     }
     agent.withToolRegistry(toolRegistry);
 
-    // 2. 初始化 PlannerService（双路径规划引擎）
+    // 2. 确定双路径模型：
+    //    - 推理/慢路径 (System 2)：使用 config.defaultModelId()
+    //    - 指令/快路径 (System 1)：从 model.json 的 instruction_model 读取，
+    //      未设置则回退到 defaultModelId()
+    String instructionModelId = config.defaultModelId();
+    try {
+      var configLoader = new org.cland.alice.model.ModelConfigLoader();
+      configLoader.load();
+      String configuredInstruction = configLoader.getInstructionModel();
+      if (configuredInstruction != null && !configuredInstruction.isBlank()) {
+        instructionModelId = configuredInstruction;
+      }
+    } catch (Exception e) {
+      logger.warn("[Agent] Failed to load model config for instruction model: {}", e.getMessage());
+    }
+
+    // 3. 初始化 PlannerService（双路径规划引擎）
     var plannerSupplier =
         DefaultPlannerModelSupplier.builder()
             .provider(ModelProvider.getInstance())
-            .instructionModelId(config.defaultModelId())
+            .instructionModelId(instructionModelId)
             .reasoningModelId(config.defaultModelId())
             .build();
     var fastPath = new FastPathStrategy(plannerSupplier);
@@ -711,7 +727,10 @@ public class Agent {
         PlannerService.builder().strategySelector(selector).staticPlanner(staticPlanner).build();
     agent.withPlannerService(planner);
 
-    logger.info("[Agent] Default Agent created: model={}", config.defaultModelId());
+    logger.info(
+        "[Agent] Default Agent created: reasoningModel={}, instructionModel={}",
+        config.defaultModelId(),
+        instructionModelId);
 
     return agent;
   }
