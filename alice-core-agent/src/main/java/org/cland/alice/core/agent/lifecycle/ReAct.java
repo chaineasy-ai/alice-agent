@@ -256,6 +256,13 @@ public interface ReAct {
                 .parameters()
                 .getOrDefault("prompt", context.getOrDefault("prompt", "Hello!")));
         if (firstStep.thought() != null) m.put("thought", firstStep.thought());
+        // 转发所有额外参数（enable_thinking, reasoning_effort 等）
+        for (var e : firstStep.parameters().entrySet()) {
+          String k = e.getKey();
+          if (!"prompt".equals(k) && !"thought".equals(k)) {
+            m.put(k, e.getValue());
+          }
+        }
         yield Map.copyOf(m);
       }
     };

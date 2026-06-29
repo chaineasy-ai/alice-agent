@@ -101,11 +101,24 @@ public final class SlowPathStrategy implements DecisionStrategy {
           modelSupplier != null && modelSupplier.getReasoningModel() != null
               ? modelSupplier.getReasoningModel().modelId()
               : "gpt-4o-mini";
+      java.util.Map<String, Object> fallbackParams = new java.util.LinkedHashMap<>();
+      fallbackParams.put("prompt", prompt);
+      if (modelSupplier != null && modelSupplier.getReasoningModel() != null) {
+        modelSupplier
+            .getReasoningModel()
+            .parameters()
+            .forEach(
+                (k, v) -> {
+                  if ("enable_thinking".equals(k) || "reasoning_effort".equals(k)) {
+                    fallbackParams.put(k, v);
+                  }
+                });
+      }
       planBuilder.addStep(
           Plan.Step.of(
               "LLM_INFERENCE",
               fallbackModelId,
-              Map.of("prompt", prompt),
+              fallbackParams,
               "MCTS selected direct LLM inference"));
     }
 
@@ -132,12 +145,25 @@ public final class SlowPathStrategy implements DecisionStrategy {
               modelSupplier != null && modelSupplier.getReasoningModel() != null
                   ? modelSupplier.getReasoningModel().modelId()
                   : "gpt-4o-mini";
+          java.util.Map<String, Object> llmParams = new java.util.LinkedHashMap<>();
+          llmParams.put("prompt", rootState.getOrDefault("prompt", ""));
+          if (modelSupplier != null && modelSupplier.getReasoningModel() != null) {
+            modelSupplier
+                .getReasoningModel()
+                .parameters()
+                .forEach(
+                    (k, v) -> {
+                      if ("enable_thinking".equals(k) || "reasoning_effort".equals(k)) {
+                        llmParams.put(k, v);
+                      }
+                    });
+          }
           candidates.add(
               ThinkingNode.builder()
                   .state(rootState)
                   .actionType("LLM_INFERENCE")
                   .actionTarget(reasoningModelId)
-                  .actionParams(Map.of("prompt", rootState.getOrDefault("prompt", "")))
+                  .actionParams(llmParams)
                   .thought("Generate reasoning via LLM")
                   .reward(0.0)
                   .visits(0)

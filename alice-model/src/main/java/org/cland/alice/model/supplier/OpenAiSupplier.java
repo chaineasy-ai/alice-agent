@@ -22,6 +22,14 @@ import org.slf4j.LoggerFactory;
  *
  * <p>支持 Function Calling (tools)：当 {@code payload.parameters()} 中包含 {@code "tools"} 键时， 自动将其作为
  * {@code tools} 参数传给 API，并在响应中解析 {@code tool_calls}。
+ *
+ * <h3>Thinking / Reasoning 支持（对应 DETAIL.md）</h3>
+ *
+ * <ul>
+ *   <li><b>DeepSeek 系列</b>：{@code enable_thinking=false} → 添加 {@code thinking:{"type":"disabled"}}
+ *   <li><b>DeepSeek 系列</b>：{@code enable_thinking=true} + {@code reasoning_effort} → 传递 effort
+ *   <li><b>OpenAI o 系列</b>：{@code enable_thinking=false} → 强制 {@code reasoning_effort="low"}
+ * </ul>
  */
 public class OpenAiSupplier implements ModelSupplier {
 
@@ -90,6 +98,28 @@ public class OpenAiSupplier implements ModelSupplier {
   // ========== 请求构建（Jackson ObjectMapper） ==========
 
   @SuppressWarnings("unchecked")
+  /**
+   * 判断当前供应商是否为 DeepSeek 系列。
+   *
+   * <p>基于 {@link #name()} 判断，当名称为 "deepseek" 时视为 DeepSeek 兼容 API。
+   */
+  private boolean isDeepSeek() {
+    return "deepseek".equalsIgnoreCase(name);
+  }
+
+  /**
+   * 判断模型是否为 OpenAI o 系列推理模型。
+   *
+   * <p>模型 ID 以 "o" 或 "o-" 开头（如 o1, o1-mini, o3-mini）。
+   */
+  private static boolean isOpenAiReasoningModel(String modelId) {
+    return modelId != null
+        && (modelId.startsWith("o")
+            || modelId.startsWith("o-")
+            || modelId.startsWith("o1")
+            || modelId.startsWith("o3"));
+  }
+
   private String buildRequestBody(Call.Payload payload) {
     ObjectNode root = MAPPER.createObjectNode();
     root.put("model", payload.modelId());
@@ -112,12 +142,51 @@ public class OpenAiSupplier implements ModelSupplier {
 
     root.put("temperature", 0.7);
 
-    // 附加参数（tools 等）
+    // 处理 Thinking / Reasoning 参数（DETAIL.md 映射规则）
     Map<String, Object> params = payload.parameters();
     if (params != null && !params.isEmpty()) {
+      // 消费 enable_thinking 和 reasoning_effort（不让它们直接传给 API）
+      Object enableThinkingVal = params.get("enable_thinking");
+      Object reasoningEffortVal = params.get("reasoning_effort");
+      if (enableThinkingVal != null || reasoningEffortVal != null) {
+        logger.debug(
+            "[OpenAiSupplier] thinking params received: enable_thinking={}, reasoning_effort={}, isDeepSeek={}",
+            enableThinkingVal,
+            reasoningEffortVal,
+            isDeepSeek());
+      }
+
+      if (isDeepSeek()) {
+        // DeepSeek 映射规则：
+        //   enable_thinking=false → thinking:{"type":"disabled"}
+        //   enable_thinking=true + reasoning_effort → 传递 effort
+        if (enableThinkingVal instanceof Boolean && !((Boolean) enableThinkingVal)) {
+          // enable_thinking=false → 禁用 thinking
+          ObjectNode thinkingNode = root.putObject("thinking");
+          thinkingNode.put("type", "disabled");
+        } else if (reasoningEffortVal instanceof String effort) {
+          // 有 reasoning_effort 时，传递 effort
+          ObjectNode thinkingNode = root.putObject("thinking");
+          thinkingNode.put("type", "enabled");
+          thinkingNode.put("effort", effort);
+        }
+      } else if (isOpenAiReasoningModel(payload.modelId())) {
+        // OpenAI o 系列映射规则：
+        //   enable_thinking=false → 强制 reasoning_effort=low（模拟快思考）
+        if (enableThinkingVal instanceof Boolean && !((Boolean) enableThinkingVal)) {
+          root.put("reasoning_effort", "low");
+        } else if (reasoningEffortVal instanceof String effort) {
+          root.put("reasoning_effort", effort);
+        }
+      }
+
+      // 其他参数（跳过已消费的 enable_thinking / reasoning_effort）
       for (var entry : params.entrySet()) {
         String key = entry.getKey();
         Object value = entry.getValue();
+        if ("enable_thinking".equals(key) || "reasoning_effort".equals(key)) {
+          continue; // 已处理，不传给 API
+        }
         if ("tools".equals(key) && value instanceof List list) {
           root.set("tools", toolsToJson(list));
         } else {

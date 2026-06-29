@@ -45,10 +45,25 @@ public final class FastPathStrategy implements DecisionStrategy {
     ModelSession session = modelSupplier.getInstructionModel();
     String modelId = session != null ? session.modelId() : "gpt-4o-mini";
 
+    // 从 ModelSession 获取 thinking 参数并注入步骤（关闭 LLM 思考）
+    Map<String, Object> llmParams = new java.util.LinkedHashMap<>();
+    llmParams.put("prompt", prompt);
+    if (session != null) {
+      // 将 enable_thinking / reasoning_effort 透传给 dispatch 层
+      session
+          .parameters()
+          .forEach(
+              (k, v) -> {
+                if ("enable_thinking".equals(k) || "reasoning_effort".equals(k)) {
+                  llmParams.put(k, v);
+                }
+              });
+    }
+
     return Plan.builder()
         .type(Plan.Type.FAST_PATH)
         .summary("Fast path direct LLM call")
-        .addStep(Plan.Step.of("LLM_INFERENCE", modelId, Map.of("prompt", prompt)))
+        .addStep(Plan.Step.of("LLM_INFERENCE", modelId, llmParams))
         .addStep(Plan.Step.of("FINISH", "FINISH"))
         .metadata(Map.of("path", "fast"))
         .build();

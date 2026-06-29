@@ -82,21 +82,25 @@ agent.max_micro_depth:
 #   ANTHROPIC_API_KEY — Anthropic API 密钥
 #   DEEPSEEK_API_KEY  — DeepSeek API 密钥
 #
-# 示例 model.json 结构：
+# 示例 model.json 结构（新格式）：
 # {
-#   "default_model": "deepseek-v4-flash",
-#   "language_models": {
-#     "openai_compatible": {
-#       "deepseek": {
-#         "base_url": "https://api.deepseek.com/v1",
-#         "api_key": "${DEEPSEEK_API_KEY}",
-#         "available_models": [ ... ]
-#       },
-#       "openai": {
-#         "base_url": "https://api.openai.com/v1",
-#         "api_key": "${OPENAI_API_KEY}",
-#         "available_models": [ ... ]
-#       }
+#   "default_model": { "provider":"deepseek", "model":"deepseek-v4-flash",
+#       "enable_thinking":true, "reasoning_effort":"high" },
+#   "planner": {
+#     "instruction_model_id": "deepseek-v4-flash",
+#     "reasoning_model_id": "deepseek-v4-flash",
+#     "instruction": { "enable_thinking":false, "reasoning_effort":"low" },
+#     "reasoning":   { "enable_thinking":true,  "reasoning_effort":"high" }
+#   },
+#   "providers": {
+#     "deepseek": {
+#       "base_url": "https://api.deepseek.com/v1",
+#       "api_key": "${DEEPSEEK_API_KEY}",
+#       "available_models": [
+#         { "name":"deepseek-v4-flash", "model":"deepseek-v4-flash",
+#           "max_tokens":131072, "max_output_tokens":32000,
+#           "capabilities": { "tools":true, "images":false, ... } }
+#       ]
 #     }
 #   }
 # }

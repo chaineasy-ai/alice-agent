@@ -118,18 +118,29 @@ public class ModelHoleTest {
 
   static void testConfigLoader() throws Exception {
     // Create a temp JSON config file
-    // Format: language_models.openai_compatible.<provider_name> = { base_url, available_models[] }
+    // Format: providers.<name> { base_url, api_key, available_models[{ name, model, max_tokens, ...
+    // }] }
     String json =
         "{\n"
-            + "  \"language_models\": {\n"
-            + "    \"openai_compatible\": {\n"
-            + "      \"openai\": {\n"
-            + "        \"base_url\": \"https://api.openai.com/v1\",\n"
-            + "        \"api_key\": \"${OPENAI_API_KEY}\",\n"
-            + "        \"available_models\": [\n"
-            + "          { \"name\": \"gpt-4o\", \"max_tokens\": 8192, \"max_output_tokens\": 4096, \"capabilities\": {\"tools\": true} }\n"
-            + "        ]\n"
-            + "      }\n"
+            + "  \"default_model\": {\n"
+            + "    \"provider\": \"openai\",\n"
+            + "    \"model\": \"gpt-4o\",\n"
+            + "    \"enable_thinking\": true,\n"
+            + "    \"reasoning_effort\": \"high\"\n"
+            + "  },\n"
+            + "  \"providers\": {\n"
+            + "    \"openai\": {\n"
+            + "      \"base_url\": \"https://api.openai.com/v1\",\n"
+            + "      \"api_key\": \"${OPENAI_API_KEY}\",\n"
+            + "      \"available_models\": [\n"
+            + "        {\n"
+            + "          \"name\": \"gpt-4o\",\n"
+            + "          \"model\": \"gpt-4o\",\n"
+            + "          \"max_tokens\": 8192,\n"
+            + "          \"max_output_tokens\": 4096,\n"
+            + "          \"capabilities\": {\"tools\": true}\n"
+            + "        }\n"
+            + "      ]\n"
             + "    }\n"
             + "  }\n"
             + "}";
@@ -142,8 +153,11 @@ public class ModelHoleTest {
     loader.load();
 
     assertTrue("providers loaded", loader.getProviders().size() == 1);
-    assertEq("provider name", "openai", loader.getProviders().get(0).name());
-    assertEq("model name", "gpt-4o", loader.getProviders().get(0).models().get(0).name());
+    assertTrue(
+        "available models loaded",
+        loader.getProviders().get("openai").availableModels().size() == 1);
+    assertEq("model name", "gpt-4o", loader.getModelPoolEntry("gpt-4o").model());
+    assertEq("default model", "gpt-4o", loader.getDefaultModel());
 
     // Cleanup
     Files.deleteIfExists(configFile);

@@ -623,6 +623,9 @@ public final class AliceCliLauncher {
   /** 从 ~/.alice/model.json 加载的默认模型 ID，供 config 命令和 run 流程使用。 */
   private static String loadedDefaultModel;
 
+  /** 从 ~/.alice/model.json 加载的默认模型配置对象（新格式），含 enable_thinking / reasoning_effort。 */
+  private static ModelConfigLoader.DefaultModelConfig loadedDefaultModelConfig;
+
   /**
    * 初始化模型提供器。
    *
@@ -639,11 +642,17 @@ public final class AliceCliLauncher {
         configLoader.load();
         configLoader.registerTo(provider);
         configDefaultModel = configLoader.getDefaultModel();
+        loadedDefaultModelConfig = configLoader.getDefaultModelConfig();
         logger.info(
-            "Loaded {} model provider(s) from ~/.alice/model.json",
-            configLoader.getProviders().size());
+            "Loaded {} provider(s) from ~/.alice/model.json", configLoader.getProviders().size());
         if (configDefaultModel != null) {
           logger.info("Default model from model.json: {}", configDefaultModel);
+        }
+        if (loadedDefaultModelConfig != null) {
+          logger.info(
+              "Default model config: enable_thinking={}, reasoning_effort={}",
+              loadedDefaultModelConfig.enableThinking(),
+              loadedDefaultModelConfig.reasoningEffort());
         }
       } catch (Exception e) {
         logger.debug("No model config found, using env vars: {}", e.getMessage());

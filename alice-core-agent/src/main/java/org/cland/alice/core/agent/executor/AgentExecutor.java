@@ -760,8 +760,22 @@ public class AgentExecutor {
                 logger.info(
                     "[Micro-ReAct/LLM] Calling model={} promptLength={}", modelId, prompt.length());
 
-                // 如果 ToolRegistry 可用，附加 tools 参数以实现 Function Calling
+                // 从 Action 参数中转发 thinking 参数（由 planner 注入）
                 java.util.Map<String, Object> callParams = new java.util.LinkedHashMap<>();
+                if (action.parameters() != null) {
+                  for (var entry : action.parameters().entrySet()) {
+                    String k = entry.getKey();
+                    if ("enable_thinking".equals(k) || "reasoning_effort".equals(k)) {
+                      callParams.put(k, entry.getValue());
+                      logger.info(
+                          "[Micro-ReAct/LLM] Forwarding thinking param: {}={}",
+                          k,
+                          entry.getValue());
+                    }
+                  }
+                }
+
+                // 如果 ToolRegistry 可用，附加 tools 参数以实现 Function Calling
                 if (agent.toolRegistry() != null) {
                   try {
                     var allTools = agent.toolRegistry().allTools();
@@ -1425,7 +1439,23 @@ public class AgentExecutor {
       }
       default -> { // LLM_INFERENCE 及其他
         String prompt = (String) plan.getOrDefault("prompt", "Hello!");
-        yield Action.llmInference(target, prompt);
+        var action = Action.builder().type(Action.Type.LLM_INFERENCE).target(target);
+        action.parameter("prompt", prompt);
+        // 转发额外参数（enable_thinking, reasoning_effort 等）
+        for (var e : plan.entrySet()) {
+          String k = e.getKey();
+          if (!"type".equals(k)
+              && !"target".equals(k)
+              && !"prompt".equals(k)
+              && !"thought".equals(k)) {
+            Object v = e.getValue();
+            if (v != null) action.parameter(k, v);
+          }
+        }
+        if (plan.containsKey("thought")) {
+          action.parameter("thought", plan.get("thought"));
+        }
+        yield action.build();
       }
     };
   }

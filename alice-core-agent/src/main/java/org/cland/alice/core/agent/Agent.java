@@ -634,8 +634,7 @@ public class Agent {
     try {
       configLoader.load();
       configLoader.registerTo(ModelProvider.getInstance());
-      logger.info(
-          "[Agent] Loaded {} model provider(s) from config", configLoader.getProviders().size());
+      logger.info("[Agent] Loaded {} model(s) from config", configLoader.getModelPool().size());
     } catch (Exception e) {
       logger.warn("[Agent] Failed to load model config, using defaults: {}", e.getMessage());
     }
@@ -691,18 +690,25 @@ public class Agent {
 
     // 2. 确定双路径模型：
     //    - 推理/慢路径 (System 2)：使用 config.defaultModelId()
-    //    - 指令/快路径 (System 1)：从 model.json 的 instruction_model 读取，
+    //    - 指令/快路径 (System 1)：从 model.json 的 planner.instruction_model_id 读取，
     //      未设置则回退到 defaultModelId()
-    String instructionModelId = config.defaultModelId();
+    String reasoningModelId = config.defaultModelId();
+    String instructionModelId = reasoningModelId;
+    org.cland.alice.model.ModelConfigLoader.PlannerConfig plannerCfg = null;
     try {
       var configLoader = new org.cland.alice.model.ModelConfigLoader();
       configLoader.load();
-      String configuredInstruction = configLoader.getInstructionModel();
-      if (configuredInstruction != null && !configuredInstruction.isBlank()) {
-        instructionModelId = configuredInstruction;
+      plannerCfg = configLoader.getPlannerConfig();
+      if (plannerCfg != null) {
+        if (plannerCfg.instructionModelId() != null) {
+          instructionModelId = plannerCfg.instructionModelId();
+        }
+        if (plannerCfg.reasoningModelId() != null) {
+          reasoningModelId = plannerCfg.reasoningModelId();
+        }
       }
     } catch (Exception e) {
-      logger.warn("[Agent] Failed to load model config for instruction model: {}", e.getMessage());
+      logger.warn("[Agent] Failed to load model config: {}", e.getMessage());
     }
 
     // 3. 初始化 PlannerService（双路径规划引擎）
@@ -710,7 +716,8 @@ public class Agent {
         DefaultPlannerModelSupplier.builder()
             .provider(ModelProvider.getInstance())
             .instructionModelId(instructionModelId)
-            .reasoningModelId(config.defaultModelId())
+            .reasoningModelId(reasoningModelId)
+            .plannerConfig(plannerCfg)
             .build();
     var fastPath = new FastPathStrategy(plannerSupplier);
     var thinkingTree = new ThinkingTree(Map.of());

@@ -127,53 +127,49 @@ alice config --help
 
 ## 2. Model Config (`~/.alice/model.json`)
 
-模型提供商与模型定义文件，由 `alice-model` 模块的 `ModelConfigLoader` 读取。
+模型提供商与模型定义文件，由 `alice-model` 模块的 `ModelConfigLoader`（Jackson 解析）读取。
 
 ### 完整配置模板
 
 ```json
 {
-  "default_model": "deepseek-chat",
-  "language_models": {
-    "openai_compatible": {
-      "deepseek": {
-        "base_url": "https://api.deepseek.com/v1",
-        "api_key": "${DEEPSEEK_API_KEY}",
-        "available_models": [
-          {
-            "name": "deepseek-chat",
-            "max_tokens": 200000,
-            "max_output_tokens": 32000,
-            "max_completion_tokens": 200000,
-            "capabilities": {
-              "tools": true,
-              "images": false,
-              "parallel_tool_calls": true,
-              "prompt_cache_key": true,
-              "chat_completions": true
-            }
+  "default_model": {
+    "provider": "deepseek",
+    "model": "deepseek-v4-flash",
+    "enable_thinking": true,
+    "reasoning_effort": "high"
+  },
+  "planner": {
+    "instruction_model_id": "deepseek-v4-flash",
+    "reasoning_model_id": "deepseek-v4-flash",
+    "instruction": {
+      "enable_thinking": false,
+      "reasoning_effort": "low"
+    },
+    "reasoning": {
+      "enable_thinking": true,
+      "reasoning_effort": "high"
+    }
+  },
+  "providers": {
+    "deepseek": {
+      "base_url": "https://api.deepseek.com/v1",
+      "api_key": "${DEEPSEEK_API_KEY}",
+      "available_models": [
+        {
+          "name": "deepseek-v4-flash",
+          "model": "deepseek-v4-flash",
+          "max_tokens": 131072,
+          "max_output_tokens": 32000,
+          "capabilities": {
+            "tools": true,
+            "images": false,
+            "parallel_tool_calls": true,
+            "prompt_cache_key": true,
+            "chat_completions": true
           }
-        ]
-      },
-      "openai": {
-        "base_url": "https://api.openai.com/v1",
-        "api_key": "${OPENAI_API_KEY}",
-        "available_models": [
-          {
-            "name": "gpt-4o-mini",
-            "max_tokens": 128000,
-            "max_output_tokens": 16384,
-            "max_completion_tokens": 128000,
-            "capabilities": {
-              "tools": true,
-              "images": true,
-              "parallel_tool_calls": true,
-              "prompt_cache_key": false,
-              "chat_completions": true
-            }
-          }
-        ]
-      }
+        }
+      ]
     }
   }
 }
@@ -184,32 +180,68 @@ alice config --help
 `api_key` 字段支持 `${ENV_VAR_NAME}` 语法。`ModelConfigLoader.expandEnvVar()` 在加载时自动读取 `System.getenv(envVar)` 替换：
 
 ```bash
-# ~/.bashrc 或 ~/.zshrc
 export DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
 export OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 ### 字段说明
 
-| 层级 | 字段 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|------|--------|------|
-| 根 | `default_model` | string | ❌ | — | 默认模型 ID（推理/慢路径 System 2 使用） |
-| 根 | `instruction_model` | string | ❌ | 同 `default_model` | 指令模型 ID（快路径 System 1 使用），用于快速简单任务；未设置时回退到 `default_model` |
-| 根 | `language_models` | object | ✅ | — | 语言模型配置根节点 |
-| 2 | `openai_compatible` | object | ✅ | — | OpenAI 兼容接口标识 |
-| 3 | `[provider_name]` | object | ✅ | — | 提供商自定义名称 |
-| 4 | `base_url` | string | ✅ | — | API 基础 URL（须以 `http://` 或 `https://` 开头） |
-| 4 | `api_key` | string | ❌ | `""` | API 密钥，支持 `${ENV_VAR}` 环境变量引用 |
-| 4 | `available_models` | array | ✅ | — | 支持的模型列表（至少 1 个） |
-| 5 | `name` | string | ✅ | — | 模型名称（调用时使用的标识符） |
-| 5 | `max_tokens` | int | ✅ | — | 最大上下文总长度（输入 + 输出 token） |
-| 5 | `max_output_tokens` | int | ✅ | — | 单次最大输出 token 数 |
-| 5 | `max_completion_tokens` | int | ✅ | 同 `max_tokens` | 补全接口最大 token 数 |
-| 6 | `capabilities.tools` | bool | ✅ | — | 是否支持工具/函数调用 |
-| 6 | `capabilities.images` | bool | ✅ | — | 是否支持图像输入（多模态） |
-| 6 | `capabilities.parallel_tool_calls` | bool | ✅ | — | 是否支持并行工具调用 |
-| 6 | `capabilities.prompt_cache_key` | bool | ✅ | — | 是否支持提示缓存 |
-| 6 | `capabilities.chat_completions` | bool | ✅ | — | 是否支持 `/chat/completions` 端点 |
+#### default_model
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `provider` | string | ✅ | 提供商名称，对应 `providers` 中的键 |
+| `model` | string | ✅ | 模型标识符，对应 `available_models[].name` |
+| `enable_thinking` | bool | ❌ | 全局思考开关。默认 `true` |
+| `reasoning_effort` | string | ❌ | 推理档位 `low/medium/high/xhigh`。默认 `high`（thinking=true）或 `low`（thinking=false） |
+
+#### planner
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `instruction_model_id` | string | 快路径模型 ID（FastPath），未设置回退到 `default_model` |
+| `reasoning_model_id` | string | 慢路径模型 ID（SlowPath），未设置回退到 `default_model` |
+| `instruction` | object | 快路径 thinking 参数 `{ enable_thinking, reasoning_effort }` |
+| `reasoning` | object | 慢路径 thinking 参数 `{ enable_thinking, reasoning_effort }` |
+
+#### providers.<name>
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `base_url` | string | ✅ | API 基础 URL（须以 `http://` 或 `https://` 开头） |
+| `api_key` | string | ❌ | API 密钥，支持 `${ENV_VAR}` 环境变量引用 |
+| `available_models` | array | ✅ | 可用模型列表 |
+
+#### available_models[]
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `name` | string | ✅ | 模型名称（调用标识符） |
+| `model` | string | ❌ | API 模型名，默认同 `name` |
+| `max_tokens` | int | ✅ | 最大上下文总长度 |
+| `max_output_tokens` | int | ❌ | 单次最大输出，默认同 `max_tokens` |
+| `capabilities` | object | ✅ | 模型能力标识集 |
+
+#### capabilities
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `tools` | bool | 是否支持工具/函数调用 |
+| `images` | bool | 是否支持图像输入 |
+| `parallel_tool_calls` | bool | 是否支持并行工具调用 |
+| `prompt_cache_key` | bool | 是否支持提示缓存 |
+| `chat_completions` | bool | 是否支持 `/chat/completions` 端点 |
+
+### 映射规则
+
+`enable_thinking` / `reasoning_effort` 在 `OpenAiSupplier` 中按供应商映射：
+
+| 供应商 | enable_thinking | API 行为 |
+|--------|----------------|----------|
+| DeepSeek | `false` | `thinking:{"type":"disabled"}` |
+| DeepSeek | `true` + `effort` | `thinking:{"type":"enabled", "effort":"..."}` |
+| OpenAI o 系列 | `false` | 强制 `reasoning_effort="low"` |
+| OpenAI o 系列 | `true` + `effort` | 透传 `reasoning_effort` |
 
 ### 提供商路由
 
@@ -223,35 +255,21 @@ Provider 名称决定使用的 `ModelSupplier` 实现：
 
 ### 双路径模型选择
 
-PlannerService 根据任务复杂度自动选择路径：
+`DefaultPlannerModelSupplier` 根据路径自动注入不同参数：
 
-| 路径 | 系统 | 使用的模型配置 | 适用场景 |
-|------|------|----------------|----------|
-| **FastPath** (System 1) | 快速指令 | `instruction_model`（默认回退 `default_model`） | 简单查询、问候、短任务 |
-| **SlowPath** (System 2) | 深度推理 | `default_model` | 复杂分析、多步骤规划、MCTS 树搜索 |
-
-配置示例：
-
-```json
-{
-  "default_model": "deepseek-v4-flash",
-  "instruction_model": "gpt-4o-mini",
-  ...
-}
-```
-
-若仅设置 `default_model` 而未指定 `instruction_model`，则 FastPath 与 SlowPath 使用同一模型。
+| 路径 | enable_thinking | reasoning_effort | 用途 |
+|------|----------------|------------------|------|
+| **FastPath** (指令模型) | `false` | `low` | 简单查询、快速响应，关闭 LLM 思考 |
+| **SlowPath** (推理模型) | `true` | `high` | 复杂分析、多步骤规划、MCTS 树搜索 |
 
 ### 校验规则
 
 | 校验项 | 规则 | 错误示例 |
 |--------|------|----------|
 | `max_tokens` | ≥ `max_output_tokens` | `max_tokens: 1000, max_output_tokens: 2000` ❌ |
-| `max_completion_tokens` | 建议等于 `max_tokens` | 相差较大时可能产生歧义 |
 | `base_url` | 必须以 `http://` 或 `https://` 开头 | `api.example.com/v1` ❌ |
 | `name` | 非空字符串 | `""` ❌ |
 | `available_models` | 至少 1 个模型 | `[]` ❌ |
-| `capabilities` | 所有布尔字段必须显式设置 | 缺失字段可能导致运行时错误 |
 
 ---
 
@@ -260,11 +278,8 @@ PlannerService 根据任务复杂度自动选择路径：
 | 文件 | 说明 |
 |------|------|
 | [config.json](./config.json) | 系统基础设置示例（扁平键） |
-| [model.json](./model.json) | Model 配置示例（旧版扁平结构 — 仅供参考） |
+| [model.json](./model.json) | Model 配置示例（新格式） |
 | [example.yaml](./example.yaml) | 配置键参考（YAML，文档用） |
-
-> **注意**：目录中的 [model.json](./model.json) 是旧版 `AliceConfigStore` 用的扁平结构，仅供参考。
-> 实际应使用 `~/.alice/model.json` 的 `language_models.openai_compatible` 结构（见上方）。
 
 ## 设计细节
 
