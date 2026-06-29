@@ -27,6 +27,14 @@ updated: "2026-06-28"
 
 ### Features
 
+- **Jackson 配置解析 + 双路径 Thinking 控制 (`alice-model`, `alice-core-agent`, `alice-core-planner`)**: 全面重构配置结构与 thinking 参数管线。
+  - Config schema 变更: `default_model` 改为对象 `{provider, model, enable_thinking, reasoning_effort}`; 新增 `planner` 节（双路径模型 ID + per-path thinking 参数）; `providers.<name>.available_models[]` 替代顶层 `model_pool`
+  - `ModelConfigLoader` 使用 Jackson ObjectMapper 重写，移除手写 JSON 解析器和旧格式兼容
+  - FastPath（指令模型）自动注入 `enable_thinking=false, reasoning_effort=low` → 关闭 LLM 内部推理
+  - SlowPath（推理模型）自动注入 `enable_thinking=true, reasoning_effort=high` → 深度推理
+  - 三层参数转发修复: `ReAct.planToIntent()` → `AgentExecutor.mapToAction()` → `AgentExecutor.dispatchLlmInference()`，确保 thinking 参数从 plan step 直达 API 请求
+  - `OpenAiSupplier`: DeepSeek `enable_thinking=false` → `thinking:{"type":"disabled"}`; OpenAI o 系列 `false` → `reasoning_effort="low"`
+
 - **双路径模型分离 (`alice-model`, `alice-core-agent`)**: FastPath (System 1) 与 SlowPath (System 2) 现在使用独立模型配置，避免简单任务调用昂贵推理模型。
   - `~/.alice/model.json` 新增可选根字段 `instruction_model`，用于指定 FastPath 轻量指令模型
   - `ModelConfigLoader` 新增 `getInstructionModel()` 方法，未设置 `instruction_model` 时回退到 `default_model`
