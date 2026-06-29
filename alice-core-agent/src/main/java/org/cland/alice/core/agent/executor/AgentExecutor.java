@@ -11,6 +11,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
 import org.cland.alice.core.agent.AgentContext;
+import org.cland.alice.core.agent.guardrail.GuardrailToolProxy;
 import org.cland.alice.core.agent.lifecycle.Action;
 import org.cland.alice.core.agent.lifecycle.Observation;
 import org.cland.alice.core.agent.prompt.PromptManager;
@@ -22,6 +23,7 @@ import org.cland.alice.core.planner.Plan;
 import org.cland.alice.model.Call;
 import org.cland.alice.model.ModelProvider;
 import org.cland.alice.tool.gateway.engine.ExecutionEngine;
+import org.cland.alice.tool.gateway.engine.ToolResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,6 +59,9 @@ public class AgentExecutor {
   /** 可选的 WAL 会话，注入后启用双轨制持久化与崩溃恢复 */
   private WalSession wal;
 
+  /** 可选的工具调用守卫代理，注入后每个 TOOL_CALL 会经过 Guardrail 预检/后检 */
+  private GuardrailToolProxy guardrailToolProxy;
+
   /** Agent 执行流事件监听器列表（Observer 模式） */
   private final List<AgentEventListener> listeners = new CopyOnWriteArrayList<>();
 
@@ -67,6 +72,31 @@ public class AgentExecutor {
     // ExecutionEngine 替换已过时的 ToolRegistry.execute()，提供沙箱/超时控制
     // 惰性初始化：允许 toolRegistry 在 Agent 创建后注入
     this.executionEngine = null;
+    this.guardrailToolProxy = null;
+  }
+
+  // ========================================================================
+  // GuardrailToolProxy 注入
+  // ========================================================================
+
+  /**
+   * 注入 {@link GuardrailToolProxy}，为每个 TOOL_CALL 启用 Guardrail 预检/后检。
+   *
+   * <p>注入后，Micro-ReAct 循环中的 {@link #dispatchToolCall} 会通过代理调用 {@link ExecutionEngine}，在工具执行前后自动运行
+   * PreValidator/PostValidator 链 （工具存在性检查、微循环检测、结果一致性校验等）。
+   *
+   * @param proxy 已配置的 GuardrailToolProxy 实例
+   * @return this（链式调用）
+   */
+  public AgentExecutor withGuardrailToolProxy(GuardrailToolProxy proxy) {
+    this.guardrailToolProxy = Objects.requireNonNull(proxy, "guardrailToolProxy must not be null");
+    logger.info("[GuardrailToolProxy] Guardrail tool proxy enabled for AgentExecutor");
+    return this;
+  }
+
+  /** 检查 GuardrailToolProxy 是否已注入。 */
+  public boolean isGuardrailToolProxyEnabled() {
+    return guardrailToolProxy != null;
   }
 
   // ========================================================================
@@ -966,7 +996,14 @@ public class AgentExecutor {
                   }
                 }
 
-                var result = executionEngine.invoke(action.target(), action.parameters());
+                // 通过 GuardrailToolProxy 执行（含预检/后检/历史记录），
+                // 未注入代理时回退到裸 ExecutionEngine
+                ToolResult result;
+                if (guardrailToolProxy != null) {
+                  result = guardrailToolProxy.invoke(action.target(), action.parameters());
+                } else {
+                  result = executionEngine.invoke(action.target(), action.parameters());
+                }
                 boolean success =
                     result.status()
                         == org.cland.alice.tool.gateway.engine.ToolResult.Status.SUCCESS;
