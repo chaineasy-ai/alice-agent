@@ -24,6 +24,9 @@ public final class ThinkingTree {
   private static final Logger logger = LoggerFactory.getLogger(ThinkingTree.class);
   private static final double DEFAULT_EXPLORATION_CONSTANT = Math.sqrt(2);
 
+  /** 高访问阈值：超过此值视为成熟分支 */
+  private static final int HIGH_VISIT_THRESHOLD = 5;
+
   /** 根节点 */
   private final ThinkingNode root;
 
@@ -174,6 +177,38 @@ public final class ThinkingTree {
   }
 
   /**
+   * 获取根节点平均分最高的子节点（按 avg_reward = total_reward / visit_count 排序）。 对应 MCTS 输出规范：选择根节点 avg_reward
+   * 最高的子步骤作为下一步执行动作。
+   *
+   * @return avg_reward 最高的子节点，若无子节点则返回 null
+   */
+  public ThinkingNode bestChildByAvgReward() {
+    List<ThinkingNode> rootChildren = getChildren(root);
+    if (rootChildren.isEmpty()) return null;
+
+    return rootChildren.stream()
+        .filter(n -> n.visits() > 0)
+        .max(Comparator.comparingDouble(n -> n.reward() / n.visits()))
+        .orElse(null);
+  }
+
+  /**
+   * 获取从根到指定节点的路径。
+   *
+   * @param node 目标节点
+   * @return 从根到 node 的节点列表
+   */
+  public List<ThinkingNode> pathFromRoot(ThinkingNode node) {
+    List<ThinkingNode> path = new ArrayList<>();
+    ThinkingNode current = node;
+    while (current != null) {
+      path.add(0, current);
+      current = current.parent();
+    }
+    return path;
+  }
+
+  /**
    * 选择最优子节点（基于 UCT）。
    *
    * @param parent 父节点
@@ -226,10 +261,14 @@ public final class ThinkingTree {
   /**
    * 执行一次完整的 MCTS 迭代： Selection -> Expansion -> Simulation -> Backpropagation。
    *
+   * @param iteration 当前迭代次数（1-indexed）
+   * @param maxIterations 总迭代次数
    * @param expander 展开函数：接收叶节点，返回候选子节点列表
    * @param simulator 模拟函数：接收节点状态，返回模拟奖励
    */
   public void mctsIteration(
+      int iteration,
+      int maxIterations,
       Function<ThinkingNode, List<ThinkingNode>> expander,
       Function<Map<String, Object>, Double> simulator) {
 
@@ -241,6 +280,9 @@ public final class ThinkingTree {
     // 1. Selection: 从根节点选择到最佳叶节点
     ThinkingNode selected = select(root);
     if (selected == null) return;
+
+    // 记录选中路径（用于日志）
+    List<ThinkingNode> selectedPath = pathFromRoot(selected);
 
     // 2. Expansion: 展开叶节点
     List<ThinkingNode> candidates = expander.apply(selected);
@@ -258,6 +300,9 @@ public final class ThinkingTree {
 
     tokenBudget.consume(selected);
 
+    // 5. 详细日志（per-iteration）
+    logIterationDetail(iteration, maxIterations, selectedPath, selected);
+
     logger.debug("[MCTS] iteration complete, nodes={}, depth={}", nodeCount.get(), depth);
   }
 
@@ -268,7 +313,7 @@ public final class ThinkingTree {
       Function<Map<String, Object>, Double> simulator) {
     for (int i = 0; i < iterations; i++) {
       if (tokenBudget.isExhausted()) break;
-      mctsIteration(expander, simulator);
+      mctsIteration(i + 1, iterations, expander, simulator);
     }
     logger.info(
         "[MCTS] {} iterations done, nodes={}, depth={}", iterations, nodeCount.get(), depth);
@@ -305,6 +350,120 @@ public final class ThinkingTree {
     children.put(root.nodeId(), new CopyOnWriteArrayList<>());
     nodeCount.set(1);
     depth = 0;
+  }
+
+  // ========== 日志方法 ==========
+
+  /**
+   * 打印单次迭代的详细日志（符合 MCTS 输出规范）。
+   *
+   * <p>格式：
+   *
+   * <pre>
+   * Iteration {N}/{MAX} | selected: ROOT → action1 → action2
+   *   ROOT: visits=8, avg_reward=1.5
+   *   ├─ LLM_INFERENCE: visits=5, avg=2.10, UCB=2.71
+   *   ├─ OBSERVE: visits=3, avg=1.20, UCB=2.89 ← HIGH UCB (low visits)
+   *   └─ TOOL_CALL: visits=0, UCB=MAX ← unexplored
+   * </pre>
+   */
+  private void logIterationDetail(
+      int iteration,
+      int maxIterations,
+      List<ThinkingNode> selectedPath,
+      ThinkingNode simulatedChild) {
+    if (!logger.isInfoEnabled()) return;
+
+    // 构建选中路径字符串
+    StringBuilder pathStr = new StringBuilder();
+    for (int i = 0; i < selectedPath.size(); i++) {
+      if (i > 0) pathStr.append(" → ");
+      ThinkingNode n = selectedPath.get(i);
+      pathStr.append(n.actionType());
+      if (!"ROOT".equals(n.actionType())) {
+        pathStr.append("(").append(n.actionTarget()).append(")");
+      }
+    }
+    pathStr
+        .append(" → ")
+        .append(simulatedChild.actionType())
+        .append("(")
+        .append(simulatedChild.actionTarget())
+        .append(")");
+
+    logger.info("Iteration {}/{} | selected: {}", iteration, maxIterations, pathStr);
+
+    // 打印路径上每个节点的子节点详情
+    for (ThinkingNode pathNode : selectedPath) {
+      List<ThinkingNode> siblings = getChildren(pathNode);
+      if (siblings.isEmpty()) continue;
+
+      logNodeChildren(pathNode, siblings);
+    }
+
+    // 打印模拟节点的同层信息
+    if (simulatedChild.parent() != null) {
+      ThinkingNode simParent = simulatedChild.parent();
+      if (simParent != null && !selectedPath.contains(simParent)) {
+        logNodeChildren(simParent, getChildren(simParent));
+      }
+    }
+  }
+
+  /** 打印某个父节点的所有子节点详情。 */
+  private void logNodeChildren(ThinkingNode parent, List<ThinkingNode> siblings) {
+    StringBuilder childLog = new StringBuilder();
+    String indent = "  ";
+    childLog.append(indent).append(parent.actionType()).append(" → ");
+    if (parent.isRoot()) {
+      childLog
+          .append("ROOT: visits=")
+          .append(parent.visits())
+          .append(
+              String.format(
+                  ", avg_reward=%.2f",
+                  parent.visits() > 0 ? parent.reward() / parent.visits() : 0.0));
+    }
+    childLog.append("\n");
+
+    int parentVisits = parent.visits() > 0 ? parent.visits() : 1;
+
+    for (int i = 0; i < siblings.size(); i++) {
+      ThinkingNode sibling = siblings.get(i);
+      String prefix = (i == siblings.size() - 1) ? "  └─ " : "  ├─ ";
+
+      double avgReward = sibling.visits() > 0 ? sibling.reward() / sibling.visits() : 0.0;
+      double ucb =
+          sibling.visits() > 0
+              ? sibling.uct(parentVisits, DEFAULT_EXPLORATION_CONSTANT)
+              : Double.MAX_VALUE;
+
+      childLog
+          .append(indent)
+          .append(prefix)
+          .append(sibling.actionType())
+          .append("(")
+          .append(sibling.actionTarget())
+          .append("): visits=")
+          .append(sibling.visits())
+          .append(String.format(", avg=%.2f", avgReward))
+          .append(
+              String.format(
+                  ", UCB=%s", ucb == Double.MAX_VALUE ? "MAX" : String.format("%.2f", ucb)));
+
+      // 标记
+      if (sibling.visits() == 0) {
+        childLog.append(" ← unexplored");
+      } else if (sibling.visits() < HIGH_VISIT_THRESHOLD && ucb > 0) {
+        childLog.append(" ← HIGH UCB (low visits)");
+      } else if (sibling.visits() >= HIGH_VISIT_THRESHOLD && avgReward > 1.5) {
+        childLog.append(" ← mature");
+      }
+
+      childLog.append("\n");
+    }
+
+    logger.info(childLog.toString().stripTrailing());
   }
 
   // ========== 内部方法 ==========

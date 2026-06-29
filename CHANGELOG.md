@@ -82,6 +82,15 @@ updated: "2026-06-28"
 
 - **Planner 测试案例文档 (`docs/alice-core-planner/test/case/fast.md`, `docs/alice-core-planner/test/case/slow.md`)**: 双路径测试案例文档。FastPath 12 条测试点 (FP-T01~T12)，SlowPath 14 条测试点 (SL-T01~T14)，含覆盖缺口分析和代码溯源。
 
+- **MCTS 规划器完整实现 (`alice-core-planner`)**: 依据 MCTS 算法规范全面重构 SlowPathStrategy，实现 4 步迭代（Selection/Expansion/Simulation/Backpropagation）+ UCB1 置信区间 + 0~100 模拟评分。
+  - 新增 `ThinkingTree.bestChildByAvgReward()` 选择根节点 avg_reward 最高的子步骤作为下一步执行动作（符合 MCTS 输出规范），替代原 `bestPath()` 全路径分解
+  - 新增 `ThinkingTree.pathFromRoot()` 路径回溯方法
+  - 新增 `ThinkingTree.logIterationDetail()` / `logNodeChildren()` 实现 per-iteration 详细日志输出：迭代轮次、选中路径、各节点 UCB/visits/avg_reward、HIGH UCB/成熟/未探索标记
+  - `DEFAULT_MCTS_ITERATIONS` 从 20 改为 10（规范对齐）
+  - 模拟器评分从 1~3 调整为 0~100 分制（50 中立 + prompt 长度加成）
+  - Plan 输出从 `bestPath` 全路径多步骤改为单步（根节点 best child）+ FINISH，MCTS 树摘要存储在 metadata（`rootChildren`/`bestAction`/`bestAvgReward`）
+  - 新增 `docs/alice-core-planner/mcts.md` 设计文档，覆盖状态定义、4 步迭代、输出格式、实现状态追踪
+
 - **TUI 三区对齐布局 v4.0 (`alice-facade-tui`)**: 全面重构 TUI 布局，从 TAO 四段式 (InputBlock/ThinkBlock/ActionBlock/ObserveBlock) 改为三区对齐 (Main Area / Input Area / Footer)。
   - **`MessageAreaComponent`** (新增) — 统一消息流组件，替代旧的 4 个独立区域组件。所有消息类型按时间序排列，均无背景色，仅通过字体颜色和前缀区分：
     - 用户消息 — 默认终端色

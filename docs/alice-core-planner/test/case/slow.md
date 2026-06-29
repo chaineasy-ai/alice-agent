@@ -46,24 +46,25 @@ StrategySelector.select(context)
 ### Coverage Map
 
 ```
-┌──────────────────────────────────────────────────────┐
-│                 SlowPath Test Coverage                │
-│                                                      │
-│  SL-T01  ThinkingNode: 构建 + UCT 计算               │
-│  SL-T02  ThinkingNode: MCTS 操作 (reward/visit)     │
-│  SL-T03  ThinkingTree: 构建 + 根节点                 │
-│  SL-T04  ThinkingTree: expand 添加子节点             │
-│  SL-T05  ThinkingTree: backpropagate 更新父节点      │
-│  SL-T06  ThinkingTree: bestPath 最优路径             │
-│  SL-T07  SlowPathStrategy: 生成 MCTS Plan           │
-│  SL-T08  SlowPathStrategy: result 存在时直接 FINISH  │
-│  SL-T09  SopRegistry: 注册 + 匹配模板               │
-│  SL-T10  StaticPlanner: 从 SOP 生成 Plan            │
-│  SL-T11  PlannerModelSupplier: ModelSupplier 替代性  │
-│  SL-T12  ModelSession: Call 桥接 + complete/fail    │
-│  SL-T13  ModelCapabilities: alice-model 委托        │
-│  SL-T14  PlannerService: 无限迭代熔断 (TODO)        │
-└──────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                 SlowPath Test Coverage                   │
+│                                                          │
+│  SL-T01  ThinkingNode: 构建 + UCT 计算                   │
+│  SL-T02  ThinkingNode: MCTS 操作 (reward/visit)         │
+│  SL-T03  ThinkingTree: 构建 + 根节点                     │
+│  SL-T04  ThinkingTree: expand 添加子节点                 │
+│  SL-T05  ThinkingTree: backpropagate 更新父节点          │
+│  SL-T06  ThinkingTree: bestPath 最优路径                 │
+│  SL-T07  SlowPathStrategy: 生成 max-level MCTS Plan     │
+│  SL-T08  SlowPathStrategy: result 存在时直接 FINISH      │
+│  SL-T09  SlowPathStrategy: max-level 不分解详细步骤     │
+│  SL-T10  SopRegistry: 注册 + 匹配模板                    │
+│  SL-T11  StaticPlanner: 从 SOP 生成 Plan                 │
+│  SL-T12  PlannerModelSupplier: ModelSupplier 替代性      │
+│  SL-T13  ModelSession: Call 桥接 + complete/fail        │
+│  SL-T14  ModelCapabilities: alice-model 委托            │
+│  SL-T15  PlannerService: 无限迭代熔断 (TODO)            │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -216,15 +217,30 @@ tree.root().visits() == 1
 
 **注意**: 当前测试仅验证路径格式（有根节点），未验证选中的是否是真正最优的子节点。
 
-### SL-T07: SlowPathStrategy 生成 MCTS Plan
+### SL-T07: SlowPathStrategy 生成 max-level MCTS Plan
 
 | Field | Value |
 |-------|-------|
 | **Target** | `SlowPathStrategy.decide(Map)` |
-| **Source** | `PlannerServiceSpec` — `"SlowPathStrategy should generate MCTS plan"` |
+| **Source** | `PlannerServiceSpec` — `"SlowPathStrategy should generate max-level MCTS plan"` |
 | **Input** | `[prompt:"Complex multi-step analysis task"]` |
-| **Expected** | plan.type() == SLOW_PATH, metadata 含 treeNodes > 0, path="slow" |
+| **Expected** | plan.type() == SLOW_PATH, exactly 2 steps (1 action + FINISH), treeNodes > 0 |
 | **Status** | 🟩 GREEN |
+
+**关键设计原则 — Max-Level Plan (宏观规划)**:
+
+SlowPath 内部使用 MCTS 进行多轮树搜索与模拟，但输出的 Plan 必须在 **宏观 (max) 层级**——
+只提取 bestPath 中的**第一个动作节点**（跳过 ROOT），不将整条 bestPath 分解为多个详细子步骤。
+
+```
+  MCTS bestPath (内部树搜索)           输出 Plan (max-level)
+  ┌──────────────────────────┐      ┌──────────────────────┐
+  │  ROOT                    │      │  Step[0]: LLM_INFERENCE │
+  │   └── LLM_INFERENCE ◄────┼──────┤  Step[1]: FINISH      │
+  │        └── TOOL_CALL     │      └──────────────────────┘
+  │             └── FINISH   │
+  └──────────────────────────┘
+```
 
 **完整调用链路**:
 
@@ -241,17 +257,26 @@ SlowPathStrategy.decide([prompt:"Complex multi-step analysis task"])
       │     └── REVISION (if feedback)
       ├── simulator: heuristic reward (prompt length / 100)
       └── mctsIterations = 5 (builder 设置)
-  → bestPath → Plan [...steps..., FINISH]
+  → bestPath → Plan [firstAction, FINISH]  ← max-level 提取
 ```
 
 **Plan 验证**:
 
 ```groovy
 plan.type() == Plan.Type.SLOW_PATH
-plan.steps().size() >= 1
+plan.steps().size() == 2                    // 1 action step + FINISH
+plan.steps()[0].actionType() != "FINISH"    // first step is an action
+plan.steps()[1].actionType() == "FINISH"    // last step is FINISH
 plan.metadata()["path"] == "slow"
 (int) plan.metadata()["treeNodes"] > 0
+plan.metadata()["bestPathLength"] != null   // MCTS internal path length recorded
 ```
+
+| 场景 | 输入 | 预期 | 状态 |
+|------|------|------|------|
+| 基本 max-level | `[prompt:"Complex task"]` | 2 steps, first=action, last=FINISH | ✅ |
+| bestPath 长度不影响 plan steps | 任意 | steps.size()==2 始终成立 | ✅ |
+| metadata 记录内部路径 | — | bestPathLength >= 1 | ✅ |
 
 ### SL-T08: SlowPathStrategy result 存在时直接 FINISH
 
@@ -263,7 +288,34 @@ plan.metadata()["path"] == "slow"
 | **Expected** | plan.steps()[0].actionType() == "FINISH" |
 | **Status** | 🟩 GREEN |
 
-### SL-T09: SopRegistry 注册与匹配模板
+### SL-T09: SlowPathStrategy max-level 不分解详细步骤
+
+| Field | Value |
+|-------|-------|
+| **Target** | `SlowPathStrategy.decide(Map)` — max-level 契约 |
+| **Source** | `PlannerServiceSpec` — `"SlowPathStrategy should produce max-level plan, not detailed steps"` |
+| **Input** | `[prompt:"Complex analysis", availableTools:["search_web","read_file"]]` |
+| **Expected** | 不论 MCTS 内部找到多深的 bestPath，plan 始终只有 1 action step + FINISH |
+| **Status** | 🟩 GREEN |
+
+**场景**: 即使 MCTS 内部生成了多层的树结构（含 availableTools 时 expander 生成 TOOL_CALL 候选），
+输出 Plan 仍然保持在 max-level，不会被分解为详细子步骤：
+
+```groovy
+plan.steps().size() == 2                    // 永远 1 action + FINISH
+plan.steps()[0].actionType() != "FINISH"    // max-level action
+plan.steps()[0].actionType() != "ROOT"      // 不是内部 ROOT
+plan.steps()[1].actionType() == "FINISH"
+plan.metadata()["treeNodes"] > 1           // 内部树确实展开了多节点
+plan.metadata()["bestPathLength"] >= 1     // 内部路径长度
+```
+
+| 场景 | 输入 | MCTS 内部 bestPath 长度 | Plan steps 数量 |
+|------|------|------------------------|-----------------|
+| 无 tools | `[prompt:"Complex task"]` | 可能 2~4+ | 永远是 **2** (max-level) |
+| 有 tools | `[prompt:"...", availableTools:[...]]` | 可能 3~5+ | 永远是 **2** (max-level) |
+
+### SL-T10: SopRegistry 注册与匹配模板
 
 | Field | Value |
 |-------|-------|
@@ -293,7 +345,7 @@ def template = SopRegistry.SopTemplate.builder()
 | 多模板匹配 | 注册 2 个模板，输入命中两者 | 返回第一个匹配 | ❌ 未覆盖 |
 | 空关键词的模板 | keywords=[] | 永不匹配 | ❌ 未覆盖 |
 
-### SL-T10: StaticPlanner 从 SOP 生成 Plan
+### SL-T11: StaticPlanner 从 SOP 生成 Plan
 
 | Field | Value |
 |-------|-------|
@@ -319,7 +371,7 @@ plan.metadata()["sopId"] == "search_workflow"
 | 未命中 | 同上 | "hello" | null | ❌ 未覆盖 |
 | 空 registry | 无模板 | "search" | null | ❌ 未覆盖 |
 
-### SL-T11: PlannerModelSupplier ModelSupplier 替代性
+### SL-T12: PlannerModelSupplier ModelSupplier 替代性
 
 | Field | Value |
 |-------|-------|
@@ -342,7 +394,7 @@ supplier instanceof PlannerModelSupplier
 | `getInstructionModel()` | `ModelSession` | 轻量指令模型 (Fast Path) |
 | `request(Call)` | `Call.Response` | (继承自 ModelSupplier) 执行模型调用 |
 
-### SL-T12: ModelSession alice-model 桥接
+### SL-T13: ModelSession alice-model 桥接
 
 | Field | Value |
 |-------|-------|
@@ -381,7 +433,7 @@ ModelSession.builder()
     .build()
 ```
 
-### SL-T13: ModelCapabilities alice-model 委托
+### SL-T14: ModelCapabilities alice-model 委托
 
 | Field | Value |
 |-------|-------|
@@ -401,7 +453,7 @@ ModelSession.builder()
 
 **转换函数**: `ModelCapabilities.fromCapability(null) == NONE`
 
-### SL-T14: PlannerService 无限迭代熔断 (TODO)
+### SL-T15: PlannerService 无限迭代熔断 (TODO)
 
 | Field | Value |
 |-------|-------|
@@ -430,12 +482,13 @@ SlowPath 的 MCTS 搜索在没有熔断的情况下可能陷入无限循环或�
 | SL-T06 | ThinkingTree.bestPath | tree with 2 children | path from root | path[0].isRoot() |
 | SL-T07 | SlowPathStrategy | "Complex multi-step analysis task" | SLOW_PATH Plan | treeNodes > 0 |
 | SL-T08 | SlowPathStrategy | result:"done" | FINISH step | steps[0]="FINISH" |
-| SL-T09 | SopRegistry | keyword match | matched template | id="weather_query" |
-| SL-T10 | StaticPlanner | "search for documents" | STATIC Plan | sopId matched |
-| SL-T11 | PlannerModelSupplier | instanceof check | is ModelSupplier | compiler contract |
-| SL-T12 | ModelSession | of + complete/fail | wrapped Call | status transitions |
-| SL-T13 | ModelCapabilities | 5 enum values | delegation chain | supportsFunctionCall etc. |
-| SL-T14 | MCTS 熔断 | 超限 | bestPath fallback | ❌ TODO |
+| SL-T09 | SlowPathStrategy max-level | "Complex analysis" + availableTools | max-level Plan | steps.size()==2 |
+| SL-T10 | SopRegistry | keyword match | matched template | id="weather_query" |
+| SL-T11 | StaticPlanner | "search for documents" | STATIC Plan | sopId matched |
+| SL-T12 | PlannerModelSupplier | instanceof check | is ModelSupplier | compiler contract |
+| SL-T13 | ModelSession | of + complete/fail | wrapped Call | status transitions |
+| SL-T14 | ModelCapabilities | 5 enum values | delegation chain | supportsFunctionCall etc. |
+| SL-T15 | MCTS 熔断 | 超限 | bestPath fallback | ❌ TODO |
 
 ---
 
@@ -448,8 +501,9 @@ SlowPath 的 MCTS 搜索在没有熔断的情况下可能陷入无限循环或�
 | 🟡 SopRegistry 多模板优先级 | 多个模板同时匹配时选择策略 | Med | 指定优先级字段或返回排序结果 |
 | 🟡 StaticPlanner 未命中 | 走不到 StaticPlanner 的 fallback 路径 | Med | 添加 null plan 处理测试 |
 | 🟥 MCTS 熔断 | SlowPathStrategy 无迭代超时保护 | **High** | 添加 maxIterations + TokenBudget 双重熔断 |
+| 🟢 **max-level plan** | SlowPath 输出应为宏观规划而非详细子步骤 | — | 已通过 SL-T07 / SL-T09 覆盖 ✅ |
 | 🟡 bestPath 准确性 | 当前只验证 path 格式，未验证选中的是真正最优子节点 | Med | 添加确定性树结构验证 bestPath 结果 |
-| 🟡 SlowPathStrategy availableTools | MCTS expander 检查 context 中的 availableTools 列表 | Med | 测试有 tools 时 TOOL_CALL 候选生成 |
+| 🟢 **SlowPathStrategy availableTools** | MCTS expander 检查 context 中的 availableTools 列表 | — | 已通过 SL-T09 覆盖 ✅ |
 | 🟡 SlowPathStrategy 多轮 MCTS | runMcts 中 expander 和 simulator 的协作正确性 | Low | 验证 expand 后节点连接到树中 |
 | 🟡 ThinkingTree 序列化 | 支持 alice-memory-vault 持久化（DESIGN 文档要求） | Low | 添加 serialize/deserialize 测试 |
 
@@ -459,14 +513,15 @@ SlowPath 的 MCTS 搜索在没有熔断的情况下可能陷入无限循环或�
 
 | Source File | Line | Related Test |
 |-------------|------|-------------|
-| `SlowPathStrategy.java:46-110` | `decide()` + `runMcts()` | SL-T07, SL-T08, SL-T14 |
+| `SlowPathStrategy.java:46-110` | `decide()` + `runMcts()` | SL-T07, SL-T08, SL-T09, SL-T15 |
 | `ThinkingTree.java` | expand / backpropagate / bestPath | SL-T03~SL-T06 |
 | `ThinkingNode.java` | builder / uct / addReward / incrementVisits | SL-T01, SL-T02 |
-| `SopRegistry.java` | register / get / match | SL-T09 |
-| `StaticPlanner.java` | plan(Map) | SL-T10 |
-| `PlannerModelSupplier.java` | interface + bridge | SL-T11 |
-| `ModelSession.java` | of / complete / fail / builder | SL-T12 |
-| `ModelCapabilities.java` | enum + fromCapability | SL-T13 |
+| `SlowPathStrategy.java` | `decide()` max-level 提取 | SL-T09 |
+| `SopRegistry.java` | register / get / match | SL-T10 |
+| `StaticPlanner.java` | plan(Map) | SL-T11 |
+| `PlannerModelSupplier.java` | interface + bridge | SL-T12 |
+| `ModelSession.java` | of / complete / fail / builder | SL-T13 |
+| `ModelCapabilities.java` | enum + fromCapability | SL-T14 |
 | `StrategySelector.java:92-116` | `defaultComplexityCheck()` — SlowPath 路由 | FP-T03~FP-T05 |
 | `PlannerService.java:45-62` | `plan(Map)` — 整体入口 | SL-T07 (集成) |
 

@@ -20,8 +20,8 @@ public final class SlowPathStrategy implements DecisionStrategy {
 
   private static final Logger logger = LoggerFactory.getLogger(SlowPathStrategy.class);
 
-  /** MCTS 默认迭代次数 */
-  private static final int DEFAULT_MCTS_ITERATIONS = 20;
+  /** MCTS 默认迭代次数（符合 MCTS 输出规范：10 轮后停止搜索） */
+  private static final int DEFAULT_MCTS_ITERATIONS = 10;
 
   /** 默认探索常数 */
   private static final double DEFAULT_EXPLORATION_CONSTANT = Math.sqrt(2);
@@ -66,37 +66,57 @@ public final class SlowPathStrategy implements DecisionStrategy {
     // 运行 MCTS
     runMcts(rootState);
 
-    // 从最优路径生成 Plan
-    List<ThinkingNode> bestPath = tree.bestPath();
-    logger.info(
-        "[SlowPath] best path length={}, nodes visited={}", bestPath.size(), tree.nodeCount());
+    // ═══════════════════════════════════════════════════════════════
+    //  Select best child by avg_reward (MCTS 输出规范)
+    //
+    //  After 10 iterations, stop searching.
+    //  Select the root's child with the highest avg_reward
+    //  as the NEXT execution action.
+    //
+    //  Output: Plan[1 action step + FINISH] + MCTS tree summary
+    // ═══════════════════════════════════════════════════════════════
 
-    // 将最优路径转换为 Plan 步骤
+    ThinkingNode bestChild = tree.bestChildByAvgReward();
+    logger.info(
+        "[SlowPath] best child by avg_reward: {} -> {}, treeNodes={}",
+        bestChild != null ? bestChild.actionType() : "none",
+        bestChild != null ? bestChild.actionTarget() : "none",
+        tree.nodeCount());
+
+    int rootChildCount = tree.getChildren(tree.root()).size();
+    double bestAvgReward =
+        (bestChild != null && bestChild.visits() > 0)
+            ? bestChild.reward() / bestChild.visits()
+            : 0.0;
+
+    // Build metadata with MCTS search tree summary
+    java.util.Map<String, Object> meta = new java.util.LinkedHashMap<>();
+    meta.put("path", "slow");
+    meta.put("treeNodes", tree.nodeCount());
+    meta.put("treeDepth", tree.depth());
+    meta.put("mctsIterations", mctsIterations);
+    meta.put("rootChildren", rootChildCount);
+    meta.put(
+        "bestAction",
+        bestChild != null ? bestChild.actionType() + "->" + bestChild.actionTarget() : "none");
+    meta.put("bestAvgReward", Math.round(bestAvgReward * 100.0) / 100.0);
+
     Plan.Builder planBuilder =
         Plan.builder()
             .type(Plan.Type.SLOW_PATH)
-            .summary("MCTS refined plan")
-            .metadata(
-                Map.of(
-                    "path",
-                    "slow",
-                    "treeNodes",
-                    tree.nodeCount(),
-                    "treeDepth",
-                    tree.depth(),
-                    "mctsIterations",
-                    mctsIterations));
+            .summary("MCTS selected next action")
+            .metadata(meta);
 
-    // 跳过根节点（ROOT），从动作节点开始
-    for (int i = 1; i < bestPath.size(); i++) {
-      ThinkingNode node = bestPath.get(i);
+    if (bestChild != null) {
+      // 单步输出：根节点下 avg_reward 最高的子步骤作为下一步执行动作
       planBuilder.addStep(
           Plan.Step.of(
-              node.actionType(), node.actionTarget(), node.actionParams(), node.thought()));
-    }
-
-    // 如果路径中没有步骤，添加默认 LLM 推理
-    if (bestPath.size() <= 1) {
+              bestChild.actionType(),
+              bestChild.actionTarget(),
+              bestChild.actionParams(),
+              bestChild.thought()));
+    } else {
+      // Fallback: 无有效子节点，使用 LLM 推理
       String fallbackModelId =
           modelSupplier != null && modelSupplier.getReasoningModel() != null
               ? modelSupplier.getReasoningModel().modelId()
@@ -216,18 +236,19 @@ public final class SlowPathStrategy implements DecisionStrategy {
           return candidates;
         };
 
-    // 模拟器：评估节点状态的奖励
+    // 模拟器：评估节点状态的奖励（0~100 分，符合 MCTS 输出规范）
     Function<Map<String, Object>, Double> simulator =
         state -> {
           // 模拟执行并返回分数
           // 未来可替换为真实模型调用或验证器
           String currentPrompt = (String) state.getOrDefault("prompt", "");
-          // 基于 prompt 长度的简单启发式奖励
-          double baseReward = 1.0;
+          // 基于 prompt 长度的启发式评分：0~100
+          // 空 prompt = 50 分（中立）；长 prompt 最高 100 分
+          double score = 50.0;
           if (currentPrompt.length() > 0) {
-            baseReward += Math.min(currentPrompt.length() / 100.0, 2.0);
+            score += Math.min(currentPrompt.length() * 10.0, 50.0);
           }
-          return baseReward;
+          return score;
         };
 
     // 执行 MCTS

@@ -127,9 +127,15 @@ public class PlannerHoleTest {
 
     Plan plan = strategy.decide(Map.of("prompt", "Complex multi-step analysis task"));
     assertEq("slow path type", Plan.Type.SLOW_PATH, plan.type());
-    assertTrue("slow path has steps", plan.steps().size() >= 1);
+    // Single next action: exactly 1 action step + FINISH = 2 steps
+    assertEq("slow path step count (next action)", 2, plan.steps().size());
+    assertEq("last step is FINISH", "FINISH", plan.steps().get(1).actionType());
     assertEq("meta path=slow", "slow", plan.metadata().get("path"));
     assertTrue("meta treeNodes > 0", (int) plan.metadata().get("treeNodes") > 0);
+    // Tree summary metadata
+    assertTrue("meta rootChildren present", plan.metadata().containsKey("rootChildren"));
+    assertTrue("meta bestAction present", plan.metadata().containsKey("bestAction"));
+    assertTrue("meta bestAvgReward present", plan.metadata().containsKey("bestAvgReward"));
 
     System.out.println("PASS: PLN-P03 SlowPathStrategy.decide()");
   }

@@ -399,7 +399,7 @@ class PlannerServiceSpec extends Specification {
     // SlowPathStrategy
     // ========================================================================
 
-    def "SlowPathStrategy should generate MCTS plan"() {
+    def "SlowPathStrategy should select best root child by avg_reward as next action"() {
         given:
         def tree = new ThinkingTree([prompt: "Complex multi-step analysis task"])
         def supplier = Stub(PlannerModelSupplier) {
@@ -417,9 +417,54 @@ class PlannerServiceSpec extends Specification {
 
         then:
         plan.type() == Plan.Type.SLOW_PATH
-        plan.steps().size() >= 1
+        // Single next action: exactly 1 action step + FINISH = 2 steps
+        plan.steps().size() == 2
+        // The action step is a valid MCTS action type
+        plan.steps()[0].actionType() in ["LLM_INFERENCE", "TOOL_CALL", "OBSERVE", "REVISION"]
+        // Last step is FINISH
+        plan.steps()[-1].actionType() == "FINISH"
         plan.metadata()["path"] == "slow"
         plan.metadata()["treeNodes"] > 0
+        // Tree summary metadata present
+        plan.metadata()["rootChildren"] != null
+        plan.metadata()["bestAction"] != null
+        plan.metadata()["bestAvgReward"] != null
+    }
+
+    def "SlowPathStrategy should output tree summary in metadata"() {
+        given:
+        // Tree with available tools — richer MCTS exploration
+        def tree = new ThinkingTree([prompt: "Complex analysis", availableTools: ["search_web", "read_file"]])
+        def supplier = Stub(PlannerModelSupplier) {
+            getReasoningModel() >> ModelSession.of("gpt-4o", "test", [enable_thinking: true, reasoning_effort: "high"])
+        }
+
+        def strategy = SlowPathStrategy.builder()
+            .tree(tree)
+            .modelSupplier(supplier)
+            .mctsIterations(8)
+            .build()
+
+        when:
+        def plan = strategy.decide([prompt: "Complex analysis", availableTools: ["search_web", "read_file"]])
+
+        then:
+        plan.type() == Plan.Type.SLOW_PATH
+        // Single next action step
+        plan.steps().size() == 2
+        plan.steps()[0].actionType() in ["LLM_INFERENCE", "TOOL_CALL", "OBSERVE", "REVISION"]
+        plan.steps()[-1].actionType() == "FINISH"
+
+        // MCTS tree summary in metadata (per output spec)
+        plan.metadata()["treeNodes"] > 1
+        plan.metadata()["path"] == "slow"
+        plan.metadata()["mctsIterations"] == 8
+        plan.metadata()["rootChildren"] != null
+        int rootChildren = plan.metadata()["rootChildren"] as int
+        assert rootChildren >= 1  // at least LLM_INFERENCE + OBSERVE
+        plan.metadata()["bestAction"] != null
+        double bestAvgReward = plan.metadata()["bestAvgReward"] as double
+        assert bestAvgReward > 0
     }
 
     // ========================================================================
