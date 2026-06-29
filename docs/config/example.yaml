@@ -1,12 +1,17 @@
 # Alice Agent 配置键参考
 #
-# 实际存储格式：JSON (~/.alice/config.json)
-# 当前使用扁平键值对，每个键是顶层条目。
-# 本 YAML 仅为配置键的参考文档。
+# Alice Agent 使用两个配置文件：
+#   ~/.alice/config.json  —  系统配置（由 AliceConfigStore 管理）
+#   ~/.alice/model.json   —  模型提供商配置（由 ModelConfigLoader 管理）
+#
+# 本 YAML 仅为 ~/.alice/config.json 的配置键参考文档。
+# 模型/提供商相关配置（openai、anthropic、deepseek 等）请参见 model.json：
+#   https://github.com/cland/alice-agent/docs/config/README.md#2-model-config-alicemodeljson
+#
 # 配置读取优先级：环境变量 > ~/.alice/config.json > 内建默认值
 #
-# CLI 使用点分隔键名（如 openai.api_key），
-# JSON 存储使用下划线键名（如 openai_api_key），
+# CLI 使用点分隔键名（如 default.timeout），
+# JSON 存储使用下划线键名（如 default_timeout），
 # 由 AliceConfigStore 自动转换。
 
 # ==================== System Config ====================
@@ -35,56 +40,102 @@ action_timeout_ms:
   default: 30000
   description: "Action 执行超时（毫秒）"
 
-# ==================== Model Config ====================
+max_micro_depth:
+  json_key: max_micro_depth
+  env: MAX_MICRO_DEPTH
+  default: 30
+  description: "Micro-ReAct 最大递归深度（熔断阈值），高于 Macro 迭代以支持多步骤工具链"
+
+# ==================== Model Override Config ====================
+# 以下键为 config.json 中可选的模型覆盖配置。
+# 主要模型配置位于 ~/.alice/model.json 的 language_models.openai_compatible 结构下，
+# config.json 中的值优先级低于 model.json 的 default_model 字段。
 
 default.model:
   json_key: default_model
   env: DEFAULT_MODEL
   default: "gpt-4o-mini"
-  description: "默认 LLM 模型 ID"
+  description: "默认 LLM 模型 ID（可选覆盖，主配置见 model.json 中的 default_model）"
 
 agent.max_iterations:
   json_key: max_iterations
   env: MAX_ITERATIONS
   default: 10
-  description: "最大迭代次数（同 max_iterations）"
+  description: "最大迭代次数（同 max_iterations，可选覆盖）"
 
-# ==================== Provider: OpenAI ====================
+agent.max_micro_depth:
+  json_key: max_micro_depth
+  env: MAX_MICRO_DEPTH
+  default: 30
+  description: "Micro-ReAct 最大递归深度（同 max_micro_depth，可选覆盖）"
 
-openai.api_key:
-  json_key: openai_api_key
-  env: OPENAI_API_KEY
-  default: ~
-  description: "OpenAI API 密钥"
+# ==================== Provider Config (已迁移至 model.json) ====================
+#
+# 以下 openai.* / anthropic.* 键为旧版扁平配置路径，
+# 在 AliceConfigStore 中仍然可以 get/set，但不再被模型初始化流程使用。
+#
+# 所有提供商配置（API Key、Base URL、可用模型列表）已迁移至：
+#   ~/.alice/model.json → language_models.openai_compatible.{provider_name}
+#
+# 环境变量仍作为最终的 fallback 用于模型初始化：
+#   OPENAI_API_KEY    — OpenAI API 密钥
+#   ANTHROPIC_API_KEY — Anthropic API 密钥
+#   DEEPSEEK_API_KEY  — DeepSeek API 密钥
+#
+# 示例 model.json 结构：
+# {
+#   "default_model": "deepseek-v4-flash",
+#   "language_models": {
+#     "openai_compatible": {
+#       "deepseek": {
+#         "base_url": "https://api.deepseek.com/v1",
+#         "api_key": "${DEEPSEEK_API_KEY}",
+#         "available_models": [ ... ]
+#       },
+#       "openai": {
+#         "base_url": "https://api.openai.com/v1",
+#         "api_key": "${OPENAI_API_KEY}",
+#         "available_models": [ ... ]
+#       }
+#     }
+#   }
+# }
+#
+# 以下条目保留仅用于向后兼容的 get/set 支持：
+# ===========================================================================
 
-openai.model:
-  json_key: openai_model
-  env: OPENAI_MODEL
-  default: ~
-  description: "OpenAI provider 使用的模型"
+# openai.api_key:
+#   json_key: openai_api_key
+#   env: OPENAI_API_KEY
+#   default: ~
+#   description: "[已迁移] OpenAI API 密钥。请在 model.json 中配置。"
 
-openai.base_url:
-  json_key: openai_base_url
-  env: OPENAI_BASE_URL
-  default: "https://api.openai.com/v1"
-  description: "OpenAI API 端点 URL"
+# openai.model:
+#   json_key: openai_model
+#   env: OPENAI_MODEL
+#   default: ~
+#   description: "[已迁移] OpenAI provider 使用的模型。请在 model.json 的 available_models 中配置。"
 
-# ==================== Provider: Anthropic ====================
+# openai.base_url:
+#   json_key: openai_base_url
+#   env: OPENAI_BASE_URL
+#   default: "https://api.openai.com/v1"
+#   description: "[已迁移] OpenAI API 端点 URL。请在 model.json 中配置。"
 
-anthropic.api_key:
-  json_key: anthropic_api_key
-  env: ANTHROPIC_API_KEY
-  default: ~
-  description: "Anthropic API 密钥"
+# anthropic.api_key:
+#   json_key: anthropic_api_key
+#   env: ANTHROPIC_API_KEY
+#   default: ~
+#   description: "[已迁移] Anthropic API 密钥。请在 model.json 中配置。"
 
-anthropic.model:
-  json_key: anthropic_model
-  env: ANTHROPIC_MODEL
-  default: ~
-  description: "Anthropic provider 使用的模型"
+# anthropic.model:
+#   json_key: anthropic_model
+#   env: ANTHROPIC_MODEL
+#   default: ~
+#   description: "[已迁移] Anthropic provider 使用的模型。请在 model.json 的 available_models 中配置。"
 
-anthropic.base_url:
-  json_key: anthropic_base_url
-  env: ANTHROPIC_BASE_URL
-  default: "https://api.anthropic.com/v1"
-  description: "Anthropic API 端点 URL"
+# anthropic.base_url:
+#   json_key: anthropic_base_url
+#   env: ANTHROPIC_BASE_URL
+#   default: "https://api.anthropic.com/v1"
+#   description: "[已迁移] Anthropic API 端点 URL。请在 model.json 中配置。"
