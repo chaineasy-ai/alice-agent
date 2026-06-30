@@ -177,6 +177,12 @@ public final class Plan {
       return this;
     }
 
+    public Builder addStep(
+        String actionType, String target, Map<String, Object> parameters, String thought) {
+      stepBuilder.add(Step.of(actionType, target, parameters, thought));
+      return this;
+    }
+
     public Plan build() {
       if (steps == null && !stepBuilder.isEmpty()) {
         steps = List.copyOf(stepBuilder);

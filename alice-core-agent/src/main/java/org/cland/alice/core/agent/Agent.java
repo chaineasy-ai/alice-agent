@@ -17,9 +17,8 @@ import org.cland.alice.core.agent.result.StepResult;
 import org.cland.alice.core.agent.wal.RawMessage;
 import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
 import org.cland.alice.core.agent.wal.WalSession;
+import org.cland.alice.core.planner.Plan;
 import org.cland.alice.core.planner.PlannerService;
-import org.cland.alice.core.planner.sop.SopRegistry;
-import org.cland.alice.core.planner.sop.StaticPlanner;
 import org.cland.alice.core.planner.strategy.FastPathStrategy;
 import org.cland.alice.core.planner.strategy.SlowPathStrategy;
 import org.cland.alice.core.planner.strategy.StrategySelector;
@@ -124,6 +123,26 @@ public class Agent {
   /** 注入 {@link PlannerService} — 规划器引擎。 */
   public Agent withPlannerService(PlannerService plannerService) {
     this.plannerService = plannerService;
+    return this;
+  }
+
+  /**
+   * 注入静态规划（SOP）函数，重建 {@link PlannerService} 以支持 SOP 匹配。
+   *
+   * <p>如果当前已有 PlannerService，会复用其 StrategySelector 和现有的 SOP 函数。 该函数通常来自 {@code alice-memory-vault}
+   * 的 {@code StaticPlanner::plan}。
+   *
+   * @param staticPlannerFn 接收上下文 Map 返回 Plan 的函数（null 表示无 SOP）
+   */
+  public Agent withStaticPlanner(
+      java.util.function.Function<Map<String, Object>, Plan> staticPlannerFn) {
+    if (this.plannerService != null) {
+      this.plannerService =
+          PlannerService.builder()
+              .strategySelector(this.plannerService.strategySelector())
+              .staticPlannerFn(staticPlannerFn)
+              .build();
+    }
     return this;
   }
 
@@ -728,10 +747,10 @@ public class Agent {
             .mctsIterations(10)
             .build();
     var selector = StrategySelector.builder().fastPath(fastPath).slowPath(slowPath).build();
-    var sopRegistry = new SopRegistry();
-    var staticPlanner = new StaticPlanner(sopRegistry);
-    var planner =
-        PlannerService.builder().strategySelector(selector).staticPlanner(staticPlanner).build();
+    // SOP 静态规划器（可选）可通过 withPlannerService() 注入。
+    // 调用者（如 alice-bootstrap 或 facade 模块）若有 alice-memory-vault 访问权限，
+    // 可创建 StaticPlanner + SopRegistry 并通过 PlannerService.builder().staticPlannerFn() 注入。
+    var planner = PlannerService.builder().strategySelector(selector).build();
     agent.withPlannerService(planner);
 
     logger.info(

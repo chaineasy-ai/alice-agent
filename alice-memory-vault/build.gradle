@@ -38,6 +38,14 @@ dependencies {
     // Guava：升级到兼容 Java 21+ 的最新稳定版（33.6.0-jre 适配高版本 Java）
     implementation 'com.google.guava:guava:33.6.0-jre'
 
+    // alice-core-planner：SOP 静态规划依赖 Plan 类型
+    implementation project(':alice-core-planner')
+
+    // JGrapht：SOP DAG 图数据结构和 GraphML 序列化
+    implementation 'org.jgrapht:jgrapht-core:1.5.2'
+    implementation 'org.jgrapht:jgrapht-io:1.5.2'
+    implementation 'org.jgrapht:jgrapht-ext:1.5.2'
+
     // Groovy：升级到适配 Java 25 的最新稳定版（4.0.30 修复高版本 Java 兼容问题）
     testImplementation 'org.apache.groovy:groovy:4.0.30'
 

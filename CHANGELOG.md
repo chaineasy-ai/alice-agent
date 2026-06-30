@@ -18,7 +18,7 @@ scope:
   - "alice-facade-tui"
   - "alice-facade-web"
 status: "active"
-updated: "2026-06-28"
+updated: "2026-06-30"
 ---
 
 # Changelog
@@ -26,6 +26,23 @@ updated: "2026-06-28"
 ## Unreleased
 
 ### Features
+
+- **SOP 程序性记忆移至 alice-memory-vault (`alice-memory-vault`, `alice-core-planner`, `alice-facade-tui`)**: SOP (Standard Operating Procedure) 模块整体从 `alice-core-planner` 迁移至 `alice-memory-vault`，作为程序性记忆 (Procedural Memory) 的存储中心。
+  - `SopGraph` / `SopGraphPersistence` / `SopRegistry` / `StaticPlanner` 移至 `org.cland.alice.memory.sop` 包
+  - 新增 JGrapht 1.5.2 依赖（`jgrapht-core`/`jgrapht-io`/`jgrapht-ext`）—— 内存中 DAG 图结构 + GraphML 序列化
+  - `SopGraph` 基于 `DefaultDirectedGraph<SopNode, SopEdge>`，支持条件分支 (`on-success`/`on-failure`/`condition:<expr>`)、并行任务、拓扑排序
+  - `SopGraphPersistence` 支持 GraphML 文件的 save/load/toXml/fromXml，默认存储 `~/.alice/sops/<id>.graphml`
+  - `SopRegistry` 同时支持平铺模板 (`SopTemplate`) 和 DAG (`SopGraph`) 两种注册方式，通过关键词匹配
+  - `StaticPlanner` 将 SOP 模板解析为 `Plan` 步骤列表，自动追加 `FINISH`
+  - `PlannerService` 改用 `staticPlannerFn(Function<Map, Plan>)` 函数注入替代硬编码 `StaticPlanner` 类型依赖，消除模块循环依赖
+  - `Agent` 新增 `withStaticPlanner(Function)` 方法，支持运行时注入 SOP 规划逻辑
+  - `AliceTuiLauncher` 启动时自动从 `~/.alice/sops/` 加载所有 `.graphml` 文件到 `SopRegistry`，通过 `agent.withStaticPlanner()` 接入 `PlannerService`
+  - 新增 `docs/sop/example/weather-sop.graphml` 示例（6 节点天气查询 DAG，含并行天气/AQI 分支）
+  - 新增 `docs/sop/example/README.md` 完整使用文档与 API 参考
+  - 新增 `docs/sop/e2e/case.md` 端到端测试案例（8 阶段：构建 DAG → 拓扑排序 → GraphML 持久化 → 加载 → SofRegistry 匹配 → StaticPlanner → PlannerService 集成 → 存储管理）
+  - `alice-facade-tui` 新增 `alice-memory-vault` + `alice-core-planner` 依赖，`module-info.java` 同步更新
+  - `alice-core-planner` 移除 JGrapht 依赖和 `org.cland.alice.core.planner.sop` 包导出
+  - 更新 `TECH_STACK.md`：JGrapht 移至 `alice-memory-vault` 条目，`alice-memory-vault` 新增 SOP 职责描述
 
 - **Jackson 配置解析 + 双路径 Thinking 控制 (`alice-model`, `alice-core-agent`, `alice-core-planner`)**: 全面重构配置结构与 thinking 参数管线。
   - Config schema 变更: `default_model` 改为对象 `{provider, model, enable_thinking, reasoning_effort}`; 新增 `planner` 节（双路径模型 ID + per-path thinking 参数）; `providers.<name>.available_models[]` 替代顶层 `model_pool`

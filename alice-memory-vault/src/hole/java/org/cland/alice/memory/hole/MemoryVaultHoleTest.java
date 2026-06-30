@@ -1,5 +1,6 @@
 package org.cland.alice.memory.hole;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,6 +17,7 @@ import org.cland.alice.memory.core.Knowledge;
 import org.cland.alice.memory.core.MemorySet;
 import org.cland.alice.memory.core.SOP;
 import org.cland.alice.memory.core.Step;
+import org.cland.alice.memory.sop.*;
 import org.cland.alice.memory.vault.*;
 
 /**
@@ -24,7 +26,7 @@ import org.cland.alice.memory.vault.*;
  * <p>Each probe directly instantiates the module's public classes and calls their methods (no test
  * runner). Exit 0 = PASS, non-zero = FAIL.
  *
- * <p>Supported probe keys: mem_ctrl, episodic, semantic, procedural, wal, all
+ * <p>Supported probe keys: mem_ctrl, episodic, semantic, procedural, wal, sop, all
  */
 public class MemoryVaultHoleTest {
 
@@ -42,10 +44,11 @@ public class MemoryVaultHoleTest {
       case "semantic" -> testSemanticVault();
       case "procedural" -> testProceduralVault();
       case "wal" -> testWalStore();
+      case "sop" -> testSopGraph();
       case "all" -> runAll();
       default -> {
         System.err.println("Unknown probe key: " + args[0]);
-        System.err.println("Valid keys: mem_ctrl, episodic, semantic, procedural, wal, all");
+        System.err.println("Valid keys: mem_ctrl, episodic, semantic, procedural, wal, sop, all");
         System.exit(1);
       }
     }
@@ -63,6 +66,7 @@ public class MemoryVaultHoleTest {
     testSemanticVault();
     testProceduralVault();
     testWalStore();
+    testSopGraph();
   }
 
   // ==================== MEM-P01: VaultController CRUD ====================
@@ -639,6 +643,84 @@ public class MemoryVaultHoleTest {
                 });
       }
     }
+  }
+
+  // ==================== MEM-P06: SopGraph + SopRegistry + StaticPlanner ====================
+
+  static void testSopGraph() throws Exception {
+    // 1. SopGraph — 构建 DAG
+    var graph =
+        SopGraph.builder("weather", "天气查询")
+            .addNode("parse", "LLM_INFERENCE", "parse_query")
+            .addNode("api", "TOOL_CALL", "weather_api")
+            .addNode("format", "LLM_INFERENCE", "format_response")
+            .addNode("finish", "FINISH", "FINISH")
+            .addEdge("parse", "api")
+            .addEdge("api", "format")
+            .addEdge("format", "finish")
+            .addKeyword("天气")
+            .build();
+
+    if (graph == null) fail("MEM-P06: SopGraph build returned null");
+    if (!"weather".equals(graph.id())) fail("MEM-P06: graph.id() mismatch");
+    if (graph.nodes().size() != 4) fail("MEM-P06: expected 4 nodes, got " + graph.nodes().size());
+    if (graph.edges().size() != 3) fail("MEM-P06: expected 3 edges, got " + graph.edges().size());
+    if (!graph.hasRoots()) fail("MEM-P06: graph should have roots");
+
+    // 2. 拓扑排序
+    var ordered = graph.topologicalOrder();
+    if (ordered.size() != 4) fail("MEM-P06: topo order size");
+    if (!"parse".equals(ordered.get(0).id())) fail("MEM-P06: first topo node");
+
+    // 3. SopRegistry — 注册和匹配
+    var registry = new SopRegistry();
+    registry.register(graph);
+    if (registry.get("weather") == null) fail("MEM-P06: registry.get missing");
+    if (registry.getGraph("weather") == null) fail("MEM-P06: registry.getGraph missing");
+
+    var matched = registry.match("今天天气怎么样");
+    if (matched == null) fail("MEM-P06: registry.match returned null");
+    if (!"weather".equals(matched.id())) fail("MEM-P06: matched template id");
+
+    // 4. StaticPlanner — 从 SOP 生成 Plan
+    var staticPlanner = new StaticPlanner(registry);
+    var plan = staticPlanner.plan(Map.of("prompt", "今天天气如何？"));
+    if (plan == null) fail("MEM-P06: StaticPlanner returned null");
+    if (!org.cland.alice.core.planner.Plan.Type.STATIC.equals(plan.type())) {
+      fail("MEM-P06: plan type should be STATIC");
+    }
+    if (plan.steps().size() < 3) fail("MEM-P06: plan steps < 3");
+    if (!"parse_query".equals(plan.steps().get(0).target())) {
+      fail("MEM-P06: first step target");
+    }
+    if (plan.metadata() == null || !"weather".equals(plan.metadata().get("sopId"))) {
+      fail("MEM-P06: sopId metadata");
+    }
+
+    // 5. SopGraphPersistence — XML round-trip
+    String xml = SopGraphPersistence.toXml(graph);
+    if (xml == null || xml.isEmpty()) fail("MEM-P06: toXml returned empty");
+    if (!xml.contains("sopMeta")) fail("MEM-P06: XML missing sopMeta");
+
+    var restored = SopGraphPersistence.fromXml(xml);
+    if (restored == null) fail("MEM-P06: fromXml returned null");
+    if (!"weather".equals(restored.id())) fail("MEM-P06: restored id mismatch");
+    if (restored.nodes().size() != 4) fail("MEM-P06: restored node count");
+
+    // 6. 文件持久化
+    File tmpFile = File.createTempFile("sop-test-", ".graphml");
+    try {
+      SopGraphPersistence.save(graph, tmpFile);
+      if (!tmpFile.exists()) fail("MEM-P06: save file doesn't exist");
+
+      var fromFile = SopGraphPersistence.load(tmpFile);
+      if (!"weather".equals(fromFile.id())) fail("MEM-P06: file restored id");
+      if (fromFile.nodes().size() != 4) fail("MEM-P06: file restored nodes");
+    } finally {
+      tmpFile.delete();
+    }
+
+    System.out.println("PASS: MEM-P06 SopGraph + SopRegistry + StaticPlanner");
   }
 
   // ==================== helpers ====================

@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns"
+         xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns
+         http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <!--
+      SOP DAG — 天气查询流程 (weather-sop)
+      LLM_INFERENCE 节点: target = modelId, thought = 指令文本
+      TOOL_CALL 节点:    target = 工具名,  parameters = 工具参数
+      FINISH 节点:       target = "FINISH"
+    -->
+    <key id="key0" for="node" attr.name="actionType" attr.type="string">
+        <default>UNKNOWN</default>
+    </key>
+    <key id="key1" for="node" attr.name="target" attr.type="string">
+        <default/>
+    </key>
+    <key id="key2" for="node" attr.name="parameters" attr.type="string">
+        <default/>
+    </key>
+    <key id="key3" for="node" attr.name="thought" attr.type="string">
+        <default/>
+    </key>
+    <key id="key4" for="edge" attr.name="edgeLabel" attr.type="string">
+        <default/>
+    </key>
+    <key id="key5" for="node" attr.name="sopMeta" attr.type="string">
+        <default/>
+    </key>
+    <graph id="G" edgedefault="directed">
+
+        <!-- ========== 节点定义 ========== -->
+
+        <!-- Step 0: LLM 解析用户查询（首节点含 SOP 元数据） -->
+        <node id="parse_query">
+            <data key="key5">weather-sop|天气查询流程|天气,气温,降雨,查询,weather</data>
+            <data key="key0">LLM_INFERENCE</data>
+            <data key="key1">deepseek-v4-flash</data>
+            <data key="key3">分析用户输入，提取城市、日期和查询类型（天气/气温/降雨），以 JSON 格式输出</data>
+        </node>
+
+        <!-- Step 1: 地理编码 -->
+        <node id="get_coordinates">
+            <data key="key0">TOOL_CALL</data>
+            <data key="key1">geocode</data>
+            <data key="key2">source=openstreetmap</data>
+            <data key="key3">将城市名称解析为经纬度坐标</data>
+        </node>
+
+        <!-- Step 2a: 获取天气数据 -->
+        <node id="fetch_weather">
+            <data key="key0">TOOL_CALL</data>
+            <data key="key1">weather_api</data>
+            <data key="key2">provider=openweather;units=metric</data>
+            <data key="key3">调用 OpenWeather API 获取当前气象数据</data>
+        </node>
+
+        <!-- Step 2b: 获取空气质量（与 fetch_weather 并行） -->
+        <node id="fetch_aqi">
+            <data key="key0">TOOL_CALL</data>
+            <data key="key1">air_quality_api</data>
+            <data key="key2">provider=waqi</data>
+            <data key="key3">查询空气质量指数（AQI）</data>
+        </node>
+
+        <!-- Step 3: LLM 合并格式化结果 -->
+        <node id="format_response">
+            <data key="key0">LLM_INFERENCE</data>
+            <data key="key1">deepseek-v4-flash</data>
+            <data key="key2">format=markdown;include_aqi=true</data>
+            <data key="key3">将天气数据 + AQI 合并为友好的中文自然语言回复</data>
+        </node>
+
+        <!-- Step 4: 完成 -->
+        <node id="finish">
+            <data key="key0">FINISH</data>
+            <data key="key1">FINISH</data>
+        </node>
+
+        <!-- ========== 边定义 ========== -->
+        <edge source="parse_query" target="get_coordinates">
+            <data key="key4">on-success</data>
+        </edge>
+        <edge source="get_coordinates" target="fetch_weather">
+            <data key="key4">on-success</data>
+        </edge>
+        <edge source="get_coordinates" target="fetch_aqi">
+            <data key="key4">on-success:parallel</data>
+        </edge>
+        <edge source="fetch_weather" target="format_response">
+            <data key="key4">on-success</data>
+        </edge>
+        <edge source="fetch_aqi" target="format_response">
+            <data key="key4">on-success</data>
+        </edge>
+        <edge source="format_response" target="finish">
+            <data key="key4">on-success</data>
+        </edge>
+
+    </graph>
+</graphml>

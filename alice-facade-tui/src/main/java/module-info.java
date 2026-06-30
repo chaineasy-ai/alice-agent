@@ -14,6 +14,8 @@ module alice.agent.facade.tui.main {
   requires alice.agent.alice.core.agent.main;
   requires alice.agent.alice.guardrail.main;
   requires alice.agent.command.main;
+  requires alice.agent.alice.memory.vault.main;
+  requires alice.agent.alice.core.planner.main;
 
   // JLine 4: 三层单线分割布局 + 原生向上顶出补全（AUTO_MENU）
   // 4.2.1 fat bundle 自动模块名 org.jline

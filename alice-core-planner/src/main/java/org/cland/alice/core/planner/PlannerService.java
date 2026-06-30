@@ -2,7 +2,7 @@ package org.cland.alice.core.planner;
 
 import java.util.Map;
 import java.util.Objects;
-import org.cland.alice.core.planner.sop.StaticPlanner;
+import java.util.function.Function;
 import org.cland.alice.core.planner.strategy.StrategySelector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,20 +14,20 @@ import org.slf4j.LoggerFactory;
  *
  * <pre>
  *   1. 接收 AgentContext
- *   2. 尝试 Static Planning (SOP 模板匹配)
+ *   2. 尝试 Static Planning (SOP 模板匹配，注入的函数)
  *   3. 若未命中，通过 StrategySelector 做复杂度评估
  *   4. 选择 Fast Path 或 Slow Path
  *   5. 返回 Plan
  * </pre>
  *
- * <p>使用示例：
+ * <p>SOP 模板匹配逻辑由 {@code staticPlannerFn} 提供（通常来自 {@code alice-memory-vault} 的 {@code
+ * StaticPlanner}）。 使用示例：
  *
  * <pre>
  *   PlannerService planner = PlannerService.builder()
  *       .strategySelector(selector)
- *       .staticPlanner(staticPlanner)
+ *       .staticPlannerFn(ctx -> staticPlanner.plan(ctx))
  *       .build();
- *
  *   Plan plan = planner.plan(contextMap);
  * </pre>
  */
@@ -36,12 +36,12 @@ public final class PlannerService {
   private static final Logger logger = LoggerFactory.getLogger(PlannerService.class);
 
   private final StrategySelector strategySelector;
-  private final StaticPlanner staticPlanner;
+  private final Function<Map<String, Object>, Plan> staticPlannerFn;
 
   private PlannerService(Builder builder) {
     this.strategySelector =
         Objects.requireNonNull(builder.strategySelector, "strategySelector must not be null");
-    this.staticPlanner = builder.staticPlanner; // 可选
+    this.staticPlannerFn = builder.staticPlannerFn; // 可选
   }
 
   public static Builder builder() {
@@ -54,7 +54,7 @@ public final class PlannerService {
    * <p>接收 AgentContext 的 Map 快照，执行双路径决策逻辑：
    *
    * <ol>
-   *   <li>尝试静态规划（SOP 模板）
+   *   <li>尝试静态规划（SOP 模板，通过注入的函数）
    *   <li>若未命中，通过 StrategySelector 执行复杂度评估并路由
    * </ol>
    *
@@ -80,9 +80,9 @@ public final class PlannerService {
       }
     }
 
-    // 2. 尝试静态规划（SOP 模板匹配）
-    if (staticPlanner != null) {
-      Plan staticPlan = staticPlanner.plan(context);
+    // 2. 尝试静态规划（SOP 模板匹配，注入的函数）
+    if (staticPlannerFn != null) {
+      Plan staticPlan = staticPlannerFn.apply(context);
       if (staticPlan != null) {
         logger.info("[PlannerService] Static plan selected");
         return staticPlan;
@@ -116,11 +116,16 @@ public final class PlannerService {
     return plan(prompt, null);
   }
 
+  /** 获取 {@link StrategySelector}（用于重建 PlannerService 时复用）。 */
+  public StrategySelector strategySelector() {
+    return strategySelector;
+  }
+
   // ========== Builder ==========
 
   public static final class Builder {
     private StrategySelector strategySelector;
-    private StaticPlanner staticPlanner;
+    private Function<Map<String, Object>, Plan> staticPlannerFn;
 
     private Builder() {}
 
@@ -129,8 +134,8 @@ public final class PlannerService {
       return this;
     }
 
-    public Builder staticPlanner(StaticPlanner staticPlanner) {
-      this.staticPlanner = staticPlanner;
+    public Builder staticPlannerFn(Function<Map<String, Object>, Plan> staticPlannerFn) {
+      this.staticPlannerFn = staticPlannerFn;
       return this;
     }
 

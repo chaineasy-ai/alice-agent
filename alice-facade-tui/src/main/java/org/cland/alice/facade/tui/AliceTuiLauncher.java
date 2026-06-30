@@ -27,6 +27,9 @@ import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
 import org.cland.alice.core.agent.wal.WalSession;
 import org.cland.alice.facade.tui.bridge.EventBridge;
 import org.cland.alice.facade.tui.state.TuiState;
+import org.cland.alice.memory.sop.SopGraphPersistence;
+import org.cland.alice.memory.sop.SopRegistry;
+import org.cland.alice.memory.sop.StaticPlanner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,8 +79,34 @@ public class AliceTuiLauncher implements AutoCloseable {
             new FileWalStore(
                 java.nio.file.Paths.get(
                     System.getProperty("user.home"), ".alice", "wal", sessionId)));
-    this.agent =
+    // 创建 Agent
+    Agent agent =
         Agent.createDefault(config).withWal(wal).withGuardrail(new GuardrailVerificatorAdapter());
+
+    // 初始化 SOP 静态规划器（程序性记忆 — 从 ~/.alice/sops/ 加载已有 SOP）
+    try {
+      SopRegistry sopRegistry = new SopRegistry();
+      var sopsDir = SopGraphPersistence.getDefaultDir().toFile();
+      if (sopsDir.exists() && sopsDir.isDirectory()) {
+        for (String sopId : SopGraphPersistence.list()) {
+          try {
+            var graph = SopGraphPersistence.load(sopId);
+            sopRegistry.register(graph);
+            logger.info(
+                "[AliceTuiLauncher] Loaded SOP: {} ({} nodes)", sopId, graph.nodes().size());
+          } catch (Exception e) {
+            logger.warn("[AliceTuiLauncher] Failed to load SOP '{}': {}", sopId, e.getMessage());
+          }
+        }
+      }
+      StaticPlanner staticPlanner = new StaticPlanner(sopRegistry);
+      agent.withStaticPlanner(staticPlanner::plan);
+      logger.info("[AliceTuiLauncher] SOP initialized: {} SOPs loaded", sopRegistry.ids().size());
+    } catch (Exception e) {
+      logger.warn("[AliceTuiLauncher] SOP initialization skipped: {}", e.getMessage());
+    }
+
+    this.agent = agent;
     logger.info(
         "[AliceTuiLauncher] Agent created via factory: model={}, session={}",
         config.defaultModelId(),

@@ -4,8 +4,6 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import org.cland.alice.core.planner.budget.TokenBudget;
-import org.cland.alice.core.planner.sop.SopRegistry;
-import org.cland.alice.core.planner.sop.StaticPlanner;
 import org.cland.alice.core.planner.strategy.DecisionStrategy;
 import org.cland.alice.core.planner.strategy.FastPathStrategy;
 import org.cland.alice.core.planner.strategy.SlowPathStrategy;
@@ -252,28 +250,52 @@ public class PlannerHoleTest {
     System.out.println("PASS: PLN-P06 ThinkingTree");
   }
 
-  // ==================== PLN-P07: StaticPlanner + SopRegistry ====================
+  // ==================== PLN-P07: PlannerService with staticPlannerFn ====================
+  //
+  // StaticPlanner + SopRegistry 已移至 alice-memory-vault 模块。
+  // 此处测试 PlannerService 通过 Function 接口接收静态规划逻辑。
 
   static void testStaticPlanner() {
-    SopRegistry registry = new SopRegistry();
-    registry.register(
-        SopRegistry.SopTemplate.builder()
-            .id("search_workflow")
-            .keywords(List.of("search", "find", "lookup"))
-            .addStep("TOOL_CALL", "search_web")
-            .addStep("LLM_INFERENCE", "gpt-4o")
-            .build());
+    // 模拟 StaticPlanner 逻辑：通过注入的函数实现
+    java.util.function.Function<Map<String, Object>, Plan> mockStaticPlanner =
+        ctx -> {
+          String prompt = (String) ctx.get("prompt");
+          if (prompt != null && (prompt.contains("search") || prompt.contains("查找"))) {
+            return Plan.builder()
+                .type(Plan.Type.STATIC)
+                .summary("Mock static plan")
+                .metadata(Map.of("sopId", "search_workflow"))
+                .addStep("TOOL_CALL", "search_web")
+                .addStep("LLM_INFERENCE", "gpt-4o")
+                .build();
+          }
+          return null;
+        };
 
-    StaticPlanner planner = new StaticPlanner(registry);
+    var selector =
+        StrategySelector.builder()
+            .fastPath(ctx -> Plan.fastPath("Fast", "FINISH", "FINISH"))
+            .slowPath(ctx -> Plan.builder().type(Plan.Type.SLOW_PATH).summary("Slow").build())
+            .build();
+
+    var planner =
+        PlannerService.builder()
+            .strategySelector(selector)
+            .staticPlannerFn(mockStaticPlanner)
+            .build();
+
+    // 匹配 SOP
     Plan plan = planner.plan(Map.of("prompt", "Please search for documents"));
-
     assertEq("static plan type", Plan.Type.STATIC, plan.type());
-    assertTrue("static plan has steps", plan.steps().size() == 3);
     assertEq("first step tool", "TOOL_CALL", plan.steps().get(0).actionType());
     assertEq("first step target", "search_web", plan.steps().get(0).target());
     assertEq("sopId metadata", "search_workflow", plan.metadata().get("sopId"));
 
-    System.out.println("PASS: PLN-P07 StaticPlanner + SopRegistry");
+    // 不匹配 SOP → fallback to FastPath
+    Plan noMatch = planner.plan(Map.of("prompt", "hello"));
+    assertEq("no match → fast", Plan.Type.FAST_PATH, noMatch.type());
+
+    System.out.println("PASS: PLN-P07 PlannerService with staticPlannerFn");
   }
 
   // ==================== Test model supplier ====================

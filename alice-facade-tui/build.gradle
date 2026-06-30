@@ -24,11 +24,13 @@ dependencies {
     implementation 'ch.qos.logback:logback-classic:1.5.16'
     implementation 'ch.qos.logback:logback-core:1.5.16'
 
-    // Internal modules — TUI only depends on core-agent and command
+    // Internal modules
     implementation project(':alice-bootstrap')
     implementation project(':alice-core-agent')
     implementation project(':alice-guardrail')
     implementation project(':alice-agent-command')
+    implementation project(':alice-memory-vault')
+    implementation project(':alice-core-planner')
 
     // JLine 4: 纯硬编码三层单线分割布局（TAO Standard Mode）
     // 参考 docs/alice-facade-tui/Layout.md：依赖 JLine 4 原生 AUTO_MENU 实现向上顶出补全

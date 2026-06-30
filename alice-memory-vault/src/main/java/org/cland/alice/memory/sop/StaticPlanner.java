@@ -1,4 +1,4 @@
-package org.cland.alice.core.planner.sop;
+package org.cland.alice.memory.sop;
 
 import java.util.Map;
 import java.util.Objects;
@@ -7,11 +7,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * 静态规划器，对应设计文档中的 {@code StaticPlanner}。
+ * 静态规划器 — 将 SOP 模板直接解析为 {@link Plan} 步骤列表。
  *
- * <p>负责将 SOP 模板直接解析为一系列 {@link Plan.Step} 列表， 完全跳过模型生成，保证确定性执行。
+ * <p>完全跳过模型生成，保证确定性执行。适用于 SOP 明确的任务（如"查询天气"、"发送邮件"等标准流程）。
  *
- * <p>适用于 SOP 明确的任务（如"查询天气"、"发送邮件"等标准流程）。
+ * <p>作为 {@code alice-core-planner} 中 {@link org.cland.alice.core.planner.PlannerService
+ * PlannerService} 的静态规划函数注入。
  */
 public final class StaticPlanner {
 
@@ -26,17 +27,13 @@ public final class StaticPlanner {
   /**
    * 根据上下文匹配并生成静态规划。
    *
-   * <p>如果匹配到 SOP 模板，返回 {@link Plan.Type#STATIC} 的规划； 否则返回 null，由 {@code StrategySelector} 走
-   * fast/slow path。
-   *
-   * @param context 规划器上下文的只读快照
-   * @return 静态规划，或 null（如果无匹配模板）
+   * @param context 规划器上下文的只读快照（来自 {@code alice-core-planner}）
+   * @return 静态 {@link Plan}，如果没有匹配的 SOP 则返回 null
    */
   public Plan plan(Map<String, Object> context) {
     String prompt = (String) context.getOrDefault("prompt", "");
     if (prompt == null || prompt.isBlank()) return null;
 
-    // 匹配 SOP 模板
     SopRegistry.SopTemplate template = sopRegistry.match(prompt);
     if (template == null) {
       logger.debug("[StaticPlanner] No matching SOP for prompt");
@@ -45,19 +42,18 @@ public final class StaticPlanner {
 
     logger.info("[StaticPlanner] Matched SOP: {}", template.id());
 
-    // 直接转换为静态 Plan
     Plan.Builder builder =
         Plan.builder()
             .type(Plan.Type.STATIC)
             .summary("Static plan from SOP: " + template.id())
             .metadata(Map.of("sopId", template.id()));
 
-    for (Plan.Step step : template.steps()) {
-      builder.addStep(step);
+    for (SopGraph.SopNode node : template.steps()) {
+      builder.addStep(node.actionType(), node.target(), node.parameters(), node.thought());
     }
 
     // 如果模板步骤中没有 FINISH，自动添加
-    boolean hasFinish = template.steps().stream().anyMatch(s -> "FINISH".equals(s.actionType()));
+    boolean hasFinish = template.steps().stream().anyMatch(n -> "FINISH".equals(n.actionType()));
     if (!hasFinish) {
       builder.addStep(Plan.Step.of("FINISH", "FINISH"));
     }

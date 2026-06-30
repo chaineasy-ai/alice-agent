@@ -4,8 +4,7 @@ import org.cland.alice.core.planner.budget.TokenBudget
 import org.cland.alice.core.planner.model.ModelCapabilities
 import org.cland.alice.core.planner.model.ModelSession
 import org.cland.alice.core.planner.model.PlannerModelSupplier
-import org.cland.alice.core.planner.sop.SopRegistry
-import org.cland.alice.core.planner.sop.StaticPlanner
+import java.util.function.Function
 import org.cland.alice.core.planner.strategy.DecisionStrategy
 import org.cland.alice.core.planner.strategy.FastPathStrategy
 import org.cland.alice.core.planner.strategy.SlowPathStrategy
@@ -520,57 +519,76 @@ class PlannerServiceSpec extends Specification {
     }
 
     // ========================================================================
-    // SopRegistry & StaticPlanner
+    // PlannerService with staticPlannerFn (SOP via Function injection)
+    //
+    // SopRegistry & StaticPlanner 已移至 alice-memory-vault 模块的
+    // org.cland.alice.memory.sop 包。此处通过 Function 接口测试
+    // PlannerService 的静态规划集成能力。
     // ========================================================================
 
-    def "SopRegistry should register and match templates"() {
+    def "PlannerService should use injected staticPlannerFn for matching"() {
         given:
-        def registry = new SopRegistry()
-        def template = SopRegistry.SopTemplate.builder()
-            .id("weather_query")
-            .description("Get weather information")
-            .keywords(["weather", "temperature", "forecast"])
-            .addStep("TOOL_CALL", "get_weather")
-            .addStep("LLM_INFERENCE", "gpt-4o-mini")
+        def mockStaticPlanner = { Map<String, Object> ctx ->
+            String prompt = ctx.get("prompt") as String
+            if (prompt?.contains("search")) {
+                return Plan.builder()
+                    .type(Plan.Type.STATIC)
+                    .summary("Mock static plan")
+                    .metadata([sopId: "search_workflow"])
+                    .addStep("TOOL_CALL", "search_web")
+                    .addStep("LLM_INFERENCE", "gpt-4o")
+                    .build()
+            }
+            return null
+        } as Function<Map<String, Object>, Plan>
+
+        def fastPath = Stub(DecisionStrategy)
+        def slowPath = Stub(DecisionStrategy)
+        def selector = StrategySelector.builder()
+            .fastPath(fastPath)
+            .slowPath(slowPath)
+            .build()
+
+        def plannerService = PlannerService.builder()
+            .strategySelector(selector)
+            .staticPlannerFn(mockStaticPlanner)
             .build()
 
         when:
-        registry.register(template)
-
-        then:
-        registry.get("weather_query") == template
-        registry.ids().contains("weather_query")
-
-        when:
-        def matched = registry.match("What is the weather today?")
-
-        then:
-        matched != null
-        matched.id() == "weather_query"
-    }
-
-    def "StaticPlanner should generate plan from SOP"() {
-        given:
-        def registry = new SopRegistry()
-        registry.register(SopRegistry.SopTemplate.builder()
-            .id("search_workflow")
-            .keywords(["search", "find", "lookup"])
-            .addStep("TOOL_CALL", "search_web")
-            .addStep("LLM_INFERENCE", "gpt-4o")
-            .build())
-
-        def staticPlanner = new StaticPlanner(registry)
-
-        when:
-        def plan = staticPlanner.plan([prompt: "Please search for documents"])
+        def plan = plannerService.plan([prompt: "Please search for documents"])
 
         then:
         plan != null
         plan.type() == Plan.Type.STATIC
-        plan.steps().size() == 3 // 2 steps + auto FINISH
         plan.steps()[0].actionType() == "TOOL_CALL"
         plan.steps()[0].target() == "search_web"
         plan.metadata()["sopId"] == "search_workflow"
+    }
+
+    def "PlannerService should fallback when staticPlannerFn returns null"() {
+        given:
+        def mockStaticPlanner = { null } as Function<Map<String, Object>, Plan>
+
+        def fastPath = Stub(DecisionStrategy) {
+            decide(_) >> Plan.fastPath("Fast fallback", "FINISH", "FINISH")
+        }
+        def slowPath = Stub(DecisionStrategy)
+        def selector = StrategySelector.builder()
+            .fastPath(fastPath)
+            .slowPath(slowPath)
+            .build()
+
+        def plannerService = PlannerService.builder()
+            .strategySelector(selector)
+            .staticPlannerFn(mockStaticPlanner)
+            .build()
+
+        when:
+        def plan = plannerService.plan([prompt: "no match"])
+
+        then:
+        plan != null
+        plan.type() == Plan.Type.FAST_PATH
     }
 
     // ========================================================================
