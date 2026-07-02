@@ -146,8 +146,8 @@ graph TD
     +--------------+         (Pre-Verify Blocked)            |  |
     |  VERIFYING   | ----------------------------------------+  |
     +--------------+                                            |
-           | (Pass)                                             |
-           v                                                    |
+           | (Pass)                     | (Fail/Blocked)        |
+           v                            v                       |
     +-------------------------------------------------------+   |
     |  ACTING (Tactical ReAction Session)                   |   |
     |                                                       |   |
@@ -165,8 +165,14 @@ graph TD
     |  REFLECTING  | -------------------------------------------+
     +--------------+        (Post-Verify & Strategy Update)
            |
-           v
-       [ FINISH ]
+           | (Reflection Pass) | (Reflection Fail / Result Mismatch)
+           v                   v
+       [ FINISH ]        +--------------+
+                         |   REVISION   |
+                         +--------------+
+                                |
+                                v
+                        (Return to PERCEIVING)
 ```
 
 ---
