@@ -3,11 +3,13 @@ package org.cland.alice.core.agent.executor;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executors;
 import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
 import org.cland.alice.core.agent.AgentContext;
@@ -623,7 +625,7 @@ public class AgentExecutor {
             return microReActStep(updatedCtx, continueAction, originalPrompt, depth + 1, maxDepth);
           }
 
-          // 1. Dispatch structured tool_calls from Function Calling
+          // 1. Dispatch structured tool_calls from Function Calling (PARALLEL via virtual threads)
           Object rawToolCalls = updatedCtx.get("__tool_calls");
           String finishReason =
               updatedCtx.containsKey("__finish_reason")
@@ -633,69 +635,214 @@ public class AgentExecutor {
           if (rawToolCalls instanceof java.util.List<?> tcList && !tcList.isEmpty()) {
             @SuppressWarnings("unchecked")
             java.util.List<Call.ToolCall> toolCalls = (java.util.List<Call.ToolCall>) tcList;
-            int idx =
-                updatedCtx.containsKey("__tool_call_index")
-                    ? Integer.parseInt(updatedCtx.get("__tool_call_index").toString())
-                    : 0;
 
-            if (idx < toolCalls.size()) {
-              Call.ToolCall tc = toolCalls.get(idx);
-              updatedCtx.put("__tool_call_index", String.valueOf(idx + 1));
+            // ── Parallel dispatch: fire all tool calls concurrently via virtual threads ──
+            // Lazily init ExecutionEngine (thread-safe)
+            if (executionEngine == null) {
+              synchronized (this) {
+                if (executionEngine == null && agent.toolRegistry() != null) {
+                  executionEngine =
+                      ExecutionEngine.builder().registry(agent.toolRegistry()).build();
+                  logger.info("[Micro-ReAct/Tool] ExecutionEngine lazily initialized (parallel)");
+                }
+              }
+            }
+            if (executionEngine == null) {
+              logger.warn("[Micro-ReAct/Tool] no ExecutionEngine for parallel dispatch");
+              return Future.succeededFuture(
+                  new StepWithContext(
+                      updatedCtx,
+                      new StepResult.Continue(
+                          Action.revision("No ExecutionEngine for parallel tool dispatch"),
+                          Observation.failure("ExecutionEngine not configured"))));
+            }
 
+            @SuppressWarnings("unchecked")
+            java.util.Set<String> readFiles =
+                (java.util.Set<String>) updatedCtx.get("__read_files");
+
+            var virtualExecutor = Executors.newVirtualThreadPerTaskExecutor();
+            List<CompletableFuture<ParallelToolResult>> parallelFutures = new ArrayList<>();
+
+            for (Call.ToolCall tc : toolCalls) {
               java.util.Map<String, Object> params = new java.util.LinkedHashMap<>();
               if (tc.arguments() != null && !tc.arguments().isBlank()) {
                 params.putAll(parseToolArgsJson(tc.arguments()));
               }
-              logger.info(
-                  "[Micro-ReAct/Reason] Dispatching tool_call #{}/{}: {} depth={}",
-                  idx + 1,
-                  toolCalls.size(),
-                  tc.name(),
-                  depth);
-              logger.debug(
-                  "[Micro-ReAct/Reason] Parsed tool call args: name={} params={}",
-                  tc.name(),
-                  params);
+              // read_file cache skip
+              if ("read_file".equals(tc.name()) && readFiles != null) {
+                Object pathObj = params.get("path");
+                if (pathObj instanceof String path && readFiles.contains(path)) {
+                  logger.info(
+                      "[Dispatch/TOOL_CALL] read_file skipped (already read, parallel): {}", path);
+                  parallelFutures.add(
+                      CompletableFuture.completedFuture(
+                          new ParallelToolResult(
+                              tc,
+                              params,
+                              ToolResult.builder()
+                                  .status(
+                                      org.cland.alice.tool.gateway.engine.ToolResult.Status.SUCCESS)
+                                  .summary("[CACHED] " + path + " was already read.")
+                                  .rawData("[CACHED] " + path)
+                                  .metadata(Map.of("toolName", tc.name(), "cached", "true"))
+                                  .build(),
+                              true)));
+                  continue;
+                }
+              }
 
-              Action toolAction = Action.toolCall(tc.name(), params);
-              return microReActStep(updatedCtx, toolAction, originalPrompt, depth + 1, maxDepth);
+              // WAL record before execution
+              if (wal != null) {
+                wal.assistantToolCalls(
+                    updatedCtx.sessionId(),
+                    java.util.List.of(
+                        org.cland.alice.core.agent.wal.ToolCall.of(
+                            String.valueOf(SnowflakeIdGenerator.getInstance().nextId()),
+                            tc.name(),
+                            params)));
+              }
+
+              // Parallel execution via virtual thread
+              parallelFutures.add(
+                  CompletableFuture.supplyAsync(
+                      () -> {
+                        try {
+                          ToolResult r =
+                              guardrailToolProxy != null
+                                  ? guardrailToolProxy.invoke(tc.name(), params)
+                                  : executionEngine.invoke(tc.name(), params);
+                          return new ParallelToolResult(tc, params, r, false);
+                        } catch (Exception e) {
+                          return new ParallelToolResult(
+                              tc,
+                              params,
+                              ToolResult.failure(tc.name() + " error: " + e.getMessage()),
+                              false);
+                        }
+                      },
+                      virtualExecutor));
             }
 
-            // All tool calls consumed - check if there are tool results to feed back
-            updatedCtx.remove("__tool_calls");
-            updatedCtx.remove("__tool_call_index");
-            updatedCtx.remove("__finish_reason");
-            updatedCtx.remove("__turn_end");
-            updatedCtx.remove("__true_start");
+            // Await all, bridge to Vert.x Future
+            Promise<StepWithContext> parallelPromise = Promise.promise();
+            CompletableFuture.allOf(parallelFutures.toArray(new CompletableFuture[0]))
+                .whenComplete(
+                    (v, err) -> {
+                      if (err != null) {
+                        parallelPromise.fail(err);
+                        return;
+                      }
 
-            // 检查是否有累积的工具执行结果需要送回 LLM 做后续推理
-            String actionLog =
-                updatedCtx.containsKey("__action_log")
-                    ? updatedCtx.get("__action_log").toString()
-                    : null;
-            if (actionLog != null && !actionLog.isBlank()) {
-              logger.info(
-                  "[Micro-ReAct/Reason] Dispatching follow-up LLM with tool results, depth={}",
-                  depth);
-              String rawPrompt =
-                  updatedCtx.containsKey("prompt") ? updatedCtx.get("prompt").toString() : "";
-              @SuppressWarnings("unchecked")
-              java.util.Set<String> readFiles =
-                  (java.util.Set<String>) updatedCtx.get("__read_files");
-              String userContent =
-                  org.cland.alice.core.agent.prompt.PromptManager.buildMicroUserContent(
-                      actionLog, rawPrompt, readFiles);
-              return microReActStep(
-                  updatedCtx,
-                  Action.llmInference(config.defaultModelId(), userContent),
-                  originalPrompt,
-                  depth + 1,
-                  maxDepth);
-            }
+                      var batchLog = new StringBuilder();
+                      @SuppressWarnings("unchecked")
+                      java.util.Set<String> updatedReadFiles =
+                          (java.util.Set<String>) updatedCtx.get("__read_files");
 
-            logger.info("[Micro-ReAct/Reason] All tool calls executed, no results to feed back");
-            return Future.succeededFuture(
-                new StepWithContext(updatedCtx, new StepResult.Continue(null)));
+                      for (int i = 0; i < parallelFutures.size(); i++) {
+                        ParallelToolResult ptr = parallelFutures.get(i).join();
+                        Call.ToolCall tc = ptr.toolCall;
+                        ToolResult tr = ptr.result;
+
+                        if (!ptr.cached) {
+                          boolean ok =
+                              tr.status()
+                                  == org.cland.alice.tool.gateway.engine.ToolResult.Status.SUCCESS;
+                          // Fire action first so TUI ObserveBlock gets the correct action prefix
+                          fireOnAction(tc.name(), ptr.params);
+                          fireOnObserve(
+                              tr.rawData() != null && !tr.rawData().isBlank()
+                                  ? tr.rawData()
+                                  : (tr.summary() != null ? tr.summary() : ""),
+                              tr.summary() != null ? tr.summary() : "",
+                              0L);
+
+                          if (wal != null) {
+                            String rc =
+                                tr.rawData() != null && !tr.rawData().isBlank()
+                                    ? tr.rawData()
+                                    : (tr.summary() != null ? tr.summary() : "");
+                            wal.toolResult(
+                                updatedCtx.sessionId(),
+                                String.valueOf(SnowflakeIdGenerator.getInstance().nextId()),
+                                rc);
+                            wal.checkpointOnToolReturn(updatedCtx.sessionId(), tc.name(), ok);
+                          }
+
+                          if ("read_file".equals(tc.name())) {
+                            Object pathObj = ptr.params.get("path");
+                            if (pathObj instanceof String p && !p.isBlank()) {
+                              if (updatedReadFiles == null) {
+                                updatedReadFiles = new java.util.HashSet<>();
+                                updatedCtx.put("__read_files", updatedReadFiles);
+                              }
+                              updatedReadFiles.add(p);
+                            }
+                          }
+
+                          if ("write_file".equals(tc.name())) {
+                            batchLog.append("Tool ").append(tc.name()).append(" succeeded.\n\n");
+                          } else {
+                            batchLog
+                                .append("Tool ")
+                                .append(tc.name())
+                                .append(" returned:\n")
+                                .append(
+                                    tr.rawData() != null && !tr.rawData().isBlank()
+                                        ? tr.rawData()
+                                        : (tr.summary() != null ? tr.summary() : ""))
+                                .append("\n\n");
+                          }
+                        } else {
+                          // Fire action + observe for cached tools too (TUI pairing)
+                          fireOnAction(tc.name(), ptr.params);
+                          fireOnObserve(
+                              "[CACHED] " + tc.name() + " was already read in a previous step.",
+                              "[CACHED] " + tc.name(),
+                              0L);
+                          batchLog.append("[CACHED] ").append(tc.name()).append("\n\n");
+                        }
+                      }
+
+                      updatedCtx.remove("__tool_calls");
+                      updatedCtx.remove("__tool_call_index");
+                      updatedCtx.remove("__finish_reason");
+                      updatedCtx.remove("__turn_end");
+                      updatedCtx.remove("__true_start");
+
+                      String actionLog = batchLog.toString();
+                      if (!actionLog.isBlank()) {
+                        updatedCtx.put("__action_log", actionLog);
+                        logger.info(
+                            "[Micro-ReAct/Reason] {} parallel tool(s) via virtual threads, feeding back LLM, depth={}",
+                            toolCalls.size(),
+                            depth);
+                        String rawPrompt =
+                            updatedCtx.containsKey("prompt")
+                                ? updatedCtx.get("prompt").toString()
+                                : "";
+                        String userContent =
+                            org.cland.alice.core.agent.prompt.PromptManager.buildMicroUserContent(
+                                actionLog, rawPrompt, updatedReadFiles);
+                        microReActStep(
+                                updatedCtx,
+                                Action.llmInference(config.defaultModelId(), userContent),
+                                originalPrompt,
+                                depth + 1,
+                                maxDepth)
+                            .onSuccess(parallelPromise::complete)
+                            .onFailure(parallelPromise::fail);
+                        return;
+                      }
+
+                      logger.info(
+                          "[Micro-ReAct/Reason] All {} parallel tool(s) done, no results",
+                          toolCalls.size());
+                      parallelPromise.complete(
+                          new StepWithContext(updatedCtx, new StepResult.Continue(null)));
+                    });
+
+            return parallelPromise.future();
           }
 
           // 2. No tool calls - determine next action from finish_reason
@@ -1541,6 +1688,17 @@ public class AgentExecutor {
       }
     }
   }
+
+  /**
+   * Internal holder for a parallel tool call result. Associates the original {@link Call.ToolCall}
+   * and parameters with the {@link ToolResult} and a flag indicating whether it was served from
+   * cache.
+   */
+  private record ParallelToolResult(
+      Call.ToolCall toolCall,
+      java.util.Map<String, Object> params,
+      ToolResult result,
+      boolean cached) {}
 
   /** 从 Call.Response 的 raw metadata 中提取 reasoning_content。 */
   private static String extractReasoningFromRaw(Call.Response response) {

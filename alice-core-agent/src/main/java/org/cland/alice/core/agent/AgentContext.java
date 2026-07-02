@@ -149,7 +149,7 @@ public class AgentContext {
               || to == Phase.FINISH; // 致命错误时直接结束
       case OBSERVING -> to == Phase.VERIFYING_POST || to == Phase.REVISION || to == Phase.FINISH;
       case VERIFYING_POST -> to == Phase.REFLECTING || to == Phase.FINISH || to == Phase.REVISION;
-      case REFLECTING -> to == Phase.PLANNING || to == Phase.FINISH;
+      case REFLECTING -> to == Phase.PLANNING || to == Phase.REVISION || to == Phase.FINISH;
       case REVISION -> to == Phase.PLANNING;
       case FINISH -> false; // 终态
     };

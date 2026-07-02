@@ -6,6 +6,7 @@ import freemarker.template.TemplateException;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,21 +14,23 @@ import org.slf4j.LoggerFactory;
 /**
  * Prompt Manager — 统一管理 Agent 三层层级的 prompt 构建。
  *
- * <p>所有 prompt 模板均以 FreeMarker {@code .ftl} 文件存储于 classpath: {@code
- * /org/cland/alice/core/agent/prompt/}。
+ * <p>所有 prompt 模板均以 FreeMarker {@code .ftl} 文件存储。加载优先级：
+ *
+ * <ol>
+ *   <li>{@code ~/.alice/prompts/&lt;name&gt;.ftl} — 用户自定义 prompt（优先）
+ *   <li>classpath: {@code /org/cland/alice/core/agent/prompt/&lt;name&gt;.ftl} — 内置默认}
+ * </ol>
+ *
+ * <p>Rules ({@code ~/.alice/rules/*.md}) 是程序记忆（Procedural Memory）的另一形式： 纯 Markdown 指令，每次调用 {@link
+ * #buildRules()} 时动态加载并注入 system prompt。
  *
  * <pre>
- *   1. Planner Prompt  (planner.ftl)     — 由 PlannerService/Strategy 构建
- *   2. Core Loop Prompt (core_loop.ftl)  — PPAO 宏观循环
- *   3. Micro Loop Prompt (micro_loop.ftl) — Micro-ReAct 微观循环
+ *   1. Planner Prompt  (planner.ftl)        — 由 PlannerService/Strategy 构建
+ *   2. Core Loop Prompt (core_loop.ftl)     — PPAO 宏观循环
+ *   3. Micro Loop Prompt (micro_loop.ftl)   — Micro-ReAct 微观循环
  *   4. Micro Loop Error (micro_loop_error.ftl) — 工具失败时
+ *   5. ~/.alice/rules/*.md                  — 用户自定义规则（自动注入 system prompt）
  * </pre>
- *
- * <p>示例用法：
- *
- * <pre>{@code
- * String prompt = PromptManager.buildCoreLoopPrompt(userTask, lastObs, lastFb);
- * }</pre>
  */
 public final class PromptManager {
 
@@ -66,6 +69,9 @@ public final class PromptManager {
     }
   }
 
+  /** Lazily-initialized file loader for {@code ~/.alice/prompts/} and {@code ~/.alice/rules/}. */
+  private static volatile FilePromptLoader fileLoader;
+
   private static String systemPromptCache; // lazily extracted from core_loop.ftl
   private static String microLoopSystemCache; // lazily rendered from micro_loop.ftl
 
@@ -87,7 +93,25 @@ public final class PromptManager {
       return systemPromptCache;
     }
 
-    // 将模板源码渲染一次（使用空数据），再从输出中提取 <system> 块
+    // Try user-defined prompt from ~/.alice/prompts/core_loop.ftl first
+    PromptDef userPrompt = getUserPrompt("core_loop");
+    if (userPrompt != null) {
+      systemPromptCache = extractSystemBlock(userPrompt.template());
+      if (systemPromptCache != null) {
+        // Append user-defined rules from ~/.alice/rules/*.md
+        String rulesSection = buildRules();
+        if (!rulesSection.isEmpty()) {
+          systemPromptCache = systemPromptCache + "\n\n" + rulesSection;
+        }
+        log.info(
+            "[PromptManager] Using system prompt from {} ({} chars)",
+            userPrompt.source(),
+            systemPromptCache.length());
+        return systemPromptCache;
+      }
+    }
+
+    // Fallback: render classpath core_loop.ftl
     String rendered;
     try (StringWriter out = new StringWriter()) {
       CORE_LOOP.process(Map.of("userTask", ""), out);
@@ -95,19 +119,52 @@ public final class PromptManager {
     } catch (TemplateException | IOException e) {
       log.warn("[PromptManager] Failed to extract system prompt, falling back to default", e);
       systemPromptCache = "You are Alice, an AI coding assistant.";
+      // Append rules even in error fallback
+      String rulesSection = buildRules();
+      if (!rulesSection.isEmpty()) {
+        systemPromptCache = systemPromptCache + "\n\n" + rulesSection;
+      }
       return systemPromptCache;
     }
 
-    // 提取 <system>...</system> 块
-    int sysStart = rendered.indexOf("<system>");
-    int sysEnd = rendered.indexOf("</system>");
-    if (sysStart >= 0 && sysEnd > sysStart) {
-      systemPromptCache = rendered.substring(sysStart + 8, sysEnd).trim();
-    } else {
+    systemPromptCache = extractSystemBlock(rendered);
+    if (systemPromptCache == null) {
       log.warn("[PromptManager] No <system> block found in core_loop.ftl");
       systemPromptCache = "You are Alice, an AI coding assistant.";
     }
+    // Append user-defined rules from ~/.alice/rules/*.md
+    String rulesSection = buildRules();
+    if (!rulesSection.isEmpty()) {
+      systemPromptCache = systemPromptCache + "\n\n" + rulesSection;
+    }
     return systemPromptCache;
+  }
+
+  /**
+   * Build a {@code <rules>} section from all markdown files under {@code ~/.alice/rules/}.
+   *
+   * <p>Rules are procedural memory — they encode "how to do things" as Markdown text that gets
+   * injected into the agent's system prompt. Returns an empty string if no rule files are found.
+   *
+   * @return a {@code <rules>...</rules>} XML block, or empty string
+   */
+  public static String buildRules() {
+    FilePromptLoader loader = getFileLoader();
+    List<RuleDef> rules = loader.getAllRules();
+    if (rules.isEmpty()) return "";
+
+    StringBuilder sb = new StringBuilder();
+    sb.append("<rules>\n");
+    for (RuleDef rule : rules) {
+      sb.append("  <!-- ")
+          .append(rule.title())
+          .append(" (")
+          .append(rule.priority())
+          .append(") -->\n");
+      sb.append(rule.content()).append("\n\n");
+    }
+    sb.append("</rules>");
+    return sb.toString();
   }
 
   // ========================================================================
@@ -150,6 +207,19 @@ public final class PromptManager {
     if (microLoopSystemCache != null) {
       return microLoopSystemCache;
     }
+
+    // Try user-defined prompt from ~/.alice/prompts/micro_loop.ftl first
+    PromptDef userPrompt = getUserPrompt("micro_loop");
+    if (userPrompt != null) {
+      microLoopSystemCache = userPrompt.template().trim();
+      log.info(
+          "[PromptManager] Using micro_loop prompt from {} ({} chars)",
+          userPrompt.source(),
+          microLoopSystemCache.length());
+      return microLoopSystemCache;
+    }
+
+    // Fallback: render classpath micro_loop.ftl
     try (StringWriter out = new StringWriter()) {
       MICRO_LOOP.process(Map.of(), out);
       microLoopSystemCache = out.toString().trim();
@@ -245,6 +315,66 @@ public final class PromptManager {
   // ========================================================================
   // 内部渲染
   // ========================================================================
+
+  // ========================================================================
+  // FilePromptLoader 管理
+  // ========================================================================
+
+  /** Get or lazily initialize the {@link FilePromptLoader}. */
+  private static FilePromptLoader getFileLoader() {
+    var l = fileLoader;
+    if (l == null) {
+      synchronized (PromptManager.class) {
+        l = fileLoader;
+        if (l == null) {
+          l = new FilePromptLoader();
+          fileLoader = l;
+          log.info("[PromptManager] FilePromptLoader initialized");
+        }
+      }
+    }
+    return l;
+  }
+
+  /**
+   * Reload prompts and rules from disk ({@code ~/.alice/prompts/} and {@code ~/.alice/rules/}).
+   * Clears all caches so the next call to any {@code build*} method re-reads from disk.
+   */
+  public static void reloadFromDisk() {
+    getFileLoader().reload();
+    systemPromptCache = null;
+    microLoopSystemCache = null;
+    log.info("[PromptManager] Caches cleared — will reload from disk on next access");
+  }
+
+  // ========================================================================
+  // 内部方法
+  // ========================================================================
+
+  /** Try to load a user-defined prompt from {@code ~/.alice/prompts/}. */
+  private static PromptDef getUserPrompt(String name) {
+    try {
+      return getFileLoader().getPrompt(name);
+    } catch (Exception e) {
+      log.debug("[PromptManager] Failed to load user prompt '{}': {}", name, e.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * Extract content from an XML-like {@code <system>...</system>} block. Returns {@code null} if no
+   * block is found.
+   */
+  private static String extractSystemBlock(String text) {
+    if (text == null) return null;
+    int start = text.indexOf("<system>");
+    int end = text.indexOf("</system>");
+    if (start >= 0 && end > start) {
+      return text.substring(start + 8, end).trim();
+    }
+    // Whole text as fallback (no <system> wrapper — plain system prompt)
+    return text.trim();
+  }
 
   private static String render(Template template, Map<String, Object> data) {
     try (StringWriter out = new StringWriter()) {

@@ -18,7 +18,7 @@ scope:
   - "alice-facade-tui"
   - "alice-facade-web"
 status: "active"
-updated: "2026-06-30"
+updated: "2026-07-03"
 ---
 
 # Changelog
@@ -218,6 +218,30 @@ updated: "2026-06-30"
 - **`__micro_system_prompt` 未设置 (`alice-core-agent`)**: 前次 overlapping edits 冲突解决时 `microReActLoop()` 中 `ctx.put("__micro_system_prompt", ...)` 静默丢失。修复：补回该行代码。
 
 - **`buildRequestBody()` JSON 语法错误 (`alice-model`)**: 手拼 JSON 字符串出现转义错误导致 `"}"}` 非法。修复：全局替换为 Jackson ObjectMapper。
+
+### Features
+
+- **Micro-ReAct 并行工具调度 + 虚拟线程 (`alice-core-agent`)**: LLM Function Calling 返回多个 `tool_calls` 时，不再逐个递归 dispatch，改为通过 `CompletableFuture.supplyAsync()` + `Executors.newVirtualThreadPerTaskExecutor()` 并行执行所有独立工具调用。
+  - 全部工具结果通过 `CompletableFuture.allOf().whenComplete()` 聚合，保留原始调用顺序
+  - 深度消耗从 N 个 depth（每工具+1）降为 1 个 depth（整个 batch +1），熔断阈值不再因多工具浪费
+  - `read_file` cache 在并行调度中同样生效，已读路径返回 `[CACHED]` 跳过执行
+  - WAL 记录、GuardrailToolProxy 检查、`fireOnAction`/`fireOnObserve` 事件配对均在并行路径中正确处理
+  - 新增 `ParallelToolResult` 内部 record 封装并行结果
+
+- **Procedural Memory: Prompt/Rule 新类型 (`alice-core-agent`)**: 新增加载器 + 两种 Procedural Memory 类型，使 agent prompt/rule 可从本地文件动态加载。
+  - `PromptDef` record — FreeMarker 模板定义，存储于 `~/.alice/prompts/<name>.ftl`
+  - `RuleDef` record — Markdown 规则定义（含 YAML front-matter: `title`/`priority`/`applies_to`），存储于 `~/.alice/rules/<name>.md`
+  - `FilePromptLoader` — 懒扫描 + 缓存文件加载器，覆盖 `~/.alice/prompts/*.ftl` 和 `~/.alice/rules/*.md`，支持运行时 `reload()`
+  - `PromptManager` 加载优先级：`~/.alice/prompts/` → classpath 兜底
+  - `buildSystemPrompt()` 自动追加 `~/.alice/rules/*.md` 内容到 system prompt（按 priority 排序：high > medium > low）
+  - 新增 `PromptManager.reloadFromDisk()` 支持运行时重载
+  - 新增 `docs/prompt/README.md`、`docs/prompt/STRUCTURE.md`、`docs/rule/README.md` 文档
+
+### Fixes
+
+- **Invalid phase transition: `REFLECTING -> REVISION` (`alice-core-agent`)**: `AgentContext.transitionTo()` 的状态机不允许 `REFLECTING` → `REVISION` 转换。当 Post-Verify 检测到错误模式后强制 revision 时，`reflect()` 先设 REFLECTING 再跳 REVISION 导致 `IllegalStateException`。修复：`AgentContext.java` phase 状态机增加 `REFLECTING -> REVISION` 合法边。
+
+- **TUI Observe 事件 action 前缀错配 (`alice-core-agent`, `alice-facade-tui`)**: 并行调度中 `fireOnAction()` 在预执行循环全部执行完毕（`lastAction` 被覆盖为最后一个工具），之后 `fireOnObserve()` 读到错误的 action 前缀。修复：将 `fireOnAction` 移到 `whenComplete` 中与 `fireOnObserve` 配对，确保每个 observe 拿到正确的 `$ command` 前缀。
 
 ## 20260627
 
