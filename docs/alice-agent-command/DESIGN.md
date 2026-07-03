@@ -1,11 +1,12 @@
 # alice-agent-command DESIGN
-**summary**: Complete command set design for the sealed AgentCommand interface hierarchy with Routine-Time support
+**summary**: Complete command set design for the sealed AgentCommand interface hierarchy with Routine-Time and Prompt support
 **read_when**:
 - implementing or modifying sealed command interface
+- adding or modifying prompt/rule commands
 **scope**:
 - alice-agent-command
 **status**: active
-**updated**: 2026-06-14
+**updated**: 2026-07-03
 
 已将定时/常规调度任务（Routine/Time 驱动）融合至整体设计，新增**常规调度驱动 (Routine-Time)** 大类，专门承接时间、周期、Cron 表达式触发的自主任务；同步更新类图、用例映射表，并补充定时触发相关时序流程。
 
@@ -35,6 +36,8 @@ classDiagram
     AgentCommand <|-- CapabilityCmd
     CapabilityCmd <|-- RegisterSkillCmd : /skill (加载 MCP/工具集)
     CapabilityCmd <|-- UpdateRulesCmd : /rules (加载预设 Prompt/规则)
+    CapabilityCmd <|-- LoadPromptCmd : /prompt (加载 managed prompt/外部文件)
+    CapabilityCmd <|-- ListPromptsCmd : /prompt (列出 managed prompts)
     CapabilityCmd <|-- ReloadKernelCmd : /reload (强制刷新所有 Resource)
 
     %% 3. 运行配置 (Alignment) - 调整内核参数
@@ -73,6 +76,8 @@ classDiagram
 | ---- | --------------- | -------------- | -------- | ----------------- |
 | 能力 (Capability) | `--skill` | `/skill` | 注册工具 | 触发 `ToolGateway` 扫描新工具定义，并通知 **P (Planner)** 更新 API Schema 认知。 |
 | 能力 (Capability) | `--rules` | `/rules` | 注册提示词 | 触发 `Memory` 加载 `.prompt` 文件，并通知 **P (Planner)** 重新 Rebase 整个 `System Prompt`。 |
+| 能力 (Capability) | `--prompt` | `/prompt:<name>` | 加载 managed prompt | 从 `~/.alice/prompts/` 查找 `<name>.ftl`，拷贝到 `~/.alice/rules/` 后调用 `PromptManager.reloadFromDisk()`。| 能力 (Capability) | `--prompt` | `/prompt <path>` | 加载外部 prompt 文件 | 读取外部文件（.md/.ftl/.txt），拷贝到 `~/.alice/rules/` 或 `~/.alice/prompts/` 后刷新 PromptManager 缓存。|
+| 能力 (Capability) | `--prompt` | `/prompt` | 列出 managed prompts | 扫描 `~/.alice/prompts/*.ftl` 返回所有可用的 prompt 名称列表，供用户选择使用 `/prompt:<name>` 加载。 |
 | 能力 (Capability) | `--reload` | `/reload` | 热重载 | 强制重新扫描 `alice-core-agent` 所有外部能力源，确保本地 Dell R730 文件变更即时生效。 |
 | 执行 (Execution) | `--run` | `/run` | 目标驱动 | 开启 P-E-M-T-V 自主执行循环。 |
 | 执行 (Execution) | `--exec` | `/exec` | 原生驱动 | 直接执行 `ls`、`git`、`nvidia-smi` 等底层指令。 |

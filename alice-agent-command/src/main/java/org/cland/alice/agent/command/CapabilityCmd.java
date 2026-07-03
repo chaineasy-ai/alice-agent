@@ -4,6 +4,8 @@
  * 对应 docs/app/AgentCommand.md 中的 CapabilityCmd 分支：
  *   RegisterSkillCmd  — /skill （加载 MCP / 工具集）
  *   UpdateRulesCmd    — /rules （加载预设 Prompt / 规则）
+ *   LoadPromptCmd     — /prompt （加载 managed prompt / 外部文件）
+ *   ListPromptsCmd    — /prompt （列出 managed prompts）
  *   ReloadKernelCmd   — /reload（强制刷新所有 Resource）
  */
 package org.cland.alice.agent.command;
@@ -15,7 +17,7 @@ import java.util.Objects;
  * 能力装载指令 — 需要 Reload 的静态/动态资源。
  *
  * <p>继承自 {@link AgentCommand}，密封许可给 {@link RegisterSkillCmd}、{@link UpdateRulesCmd}、 {@link
- * ReloadKernelCmd}。
+ * LoadPromptCmd}、{@link ListPromptsCmd}、{@link ReloadKernelCmd}。
  *
  * <p>时序（对应 AgentCommand.md §3）：
  *
@@ -29,7 +31,7 @@ import java.util.Objects;
  */
 public sealed interface CapabilityCmd extends AgentCommand {
 
-  /** 能力资源的标识（文件路径、MCP 端点、规则名等） */
+  /** 能力资源的标识（文件路径、MCP 端点、规则名、prompt 名称等） */
   String resource();
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -89,6 +91,63 @@ public sealed interface CapabilityCmd extends AgentCommand {
     @Override
     public String resource() {
       return rulesRef;
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // /prompt — 加载提示词
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * 加载提示词指令 {@code /prompt}。
+   *
+   * <p>将名称或文件路径传递给 facade 层，由 facade 完成文件解析、读取、拷贝与注册。
+   *
+   * @param promptRef 提示词名称或文件路径
+   */
+  record LoadPromptCmd(String promptRef, String sessionId, String traceId, Instant timestamp)
+      implements CapabilityCmd {
+
+    public LoadPromptCmd {
+      Objects.requireNonNull(promptRef, "promptRef must not be null");
+      Objects.requireNonNull(sessionId, "sessionId must not be null");
+      Objects.requireNonNull(traceId, "traceId must not be null");
+    }
+
+    public LoadPromptCmd(String promptRef, String sessionId, String traceId) {
+      this(promptRef, sessionId, traceId, Instant.now());
+    }
+
+    @Override
+    public String resource() {
+      return promptRef;
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // /prompt — 列出 managed prompts
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * 列出 managed prompts 指令。
+   *
+   * <p>扫描 {@code ~/.alice/prompts/} 目录返回所有可用 {@code .ftl} 文件列表。
+   */
+  record ListPromptsCmd(String sessionId, String traceId, Instant timestamp)
+      implements CapabilityCmd {
+
+    public ListPromptsCmd {
+      Objects.requireNonNull(sessionId, "sessionId must not be null");
+      Objects.requireNonNull(traceId, "traceId must not be null");
+    }
+
+    public ListPromptsCmd(String sessionId, String traceId) {
+      this(sessionId, traceId, Instant.now());
+    }
+
+    @Override
+    public String resource() {
+      return "*";
     }
   }
 

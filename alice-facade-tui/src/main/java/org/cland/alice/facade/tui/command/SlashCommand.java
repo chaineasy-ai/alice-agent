@@ -37,16 +37,26 @@ public record SlashCommand(String command, String args, Type type, String descri
 
     // 分离命令名和参数
     String trimmed = input.trim();
+
+    // 支持冒号语法 /prompt:<name> → cmd=/prompt, args=<name>
+    // 仅在无空格参数时生效
     int spaceIdx = trimmed.indexOf(' ');
     String cmd;
     String args;
 
-    if (spaceIdx < 0) {
-      cmd = trimmed.toLowerCase();
-      args = "";
-    } else {
+    if (spaceIdx >= 0) {
       cmd = trimmed.substring(0, spaceIdx).toLowerCase();
       args = trimmed.substring(spaceIdx + 1).trim();
+    } else {
+      // 无空格：检查冒号语法
+      int colonIdx = trimmed.indexOf(':');
+      if (colonIdx > 1) { // 至少 /x:...
+        cmd = trimmed.substring(0, colonIdx).toLowerCase();
+        args = trimmed.substring(colonIdx + 1).trim();
+      } else {
+        cmd = trimmed.toLowerCase();
+        args = "";
+      }
     }
 
     return switch (cmd) {
@@ -58,7 +68,8 @@ public record SlashCommand(String command, String args, Type type, String descri
       case "/compact" ->
           new SlashCommand(cmd, args, Type.INTERNAL, "压缩上下文：提炼历史为摘要，释放 Context Window");
       case "/feedback" -> new SlashCommand(cmd, args, Type.INTERNAL, "反馈：向 Agent 注入人类反馈（HITL）");
-      case "/prompt" -> new SlashCommand(cmd, args, Type.IO, "加载提示词：读取外部文件作为系统提示");
+      case "/prompt" ->
+          new SlashCommand(cmd, args, Type.IO, "加载提示词：/prompt <文件路径> 或 /prompt:<name> 从规则库加载");
       case "/history" -> new SlashCommand(cmd, args, Type.IO, "历史回溯：展示最近执行记录快照");
       case "/exec" -> new SlashCommand(cmd, args, Type.SYSTEM, "执行指令：运行 Shell 命令并将结果传给 Agent");
       case "/model" -> new SlashCommand(cmd, args, Type.CONFIG, "切换模型：动态修改当前使用 LLM");
@@ -109,7 +120,7 @@ public record SlashCommand(String command, String args, Type type, String descri
             /feedback    反馈：向 Agent 注入人类反馈（HITL）
             /exit        安全退出：保存会话后关闭 TUI
             /help        命令帮助：列出所有斜杠命令
-            /prompt <f>  加载提示词：读取外部文件作为系统提示
+            /prompt <f>  加载提示词：/prompt <文件路径> 或 /prompt:<name> 从规则库加载
             /history     历史回溯：展示最近执行记录快照
             /exec <cmd>  执行指令：运行 Shell 命令并将结果传给 Agent
             /model <id>  切换模型：动态修改当前使用 LLM

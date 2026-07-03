@@ -5,13 +5,13 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import org.cland.alice.agent.command.AgentCommand;
 import org.cland.alice.agent.command.ControlCmd;
+import org.cland.alice.core.agent.prompt.PromptManager;
 import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
 import org.cland.alice.facade.tui.bridge.EventBridge;
 import org.slf4j.Logger;
@@ -189,22 +189,34 @@ public class CommandHandler {
   private boolean handleIo(SlashCommand cmd) {
     if (cmd.is("/prompt")) {
       if (!cmd.hasArgs()) {
-        eventBridge.onChatMessage("System", "用法: /prompt <文件路径>");
+        // 无参数时列出可用的 managed prompts
+        eventBridge.onChatMessage("System", PromptHelper.listPrompts());
         return true;
       }
       try {
-        Path path = Paths.get(cmd.args());
-        String content = Files.readString(path);
-        eventBridge.onChatMessage("System", "已加载提示词文件: " + path.toAbsolutePath());
-        eventBridge.onChatMessage("System", "── 系统提示词 ──\n" + content);
+        String args = cmd.args();
+        var result = PromptHelper.resolve(args);
+        if (!result.found()) {
+          eventBridge.onChatMessage(
+              "System", result.message() + "\n使用 /prompt 查看可用 prompt 列表，或指定完整文件路径。");
+          return true;
+        }
+        String content = PromptHelper.readContent(result.path());
+        eventBridge.onChatMessage("System", "已加载提示词: " + result.path().toAbsolutePath());
+        eventBridge.onChatMessage("System", "── 内容 ──\n" + content);
         if (onCommandOutput != null) {
           onCommandOutput.accept(content);
         }
-        // 转化为 UpdateRulesCmd 并派发给 Agent
+        // 注册到 Agent 系统（拷贝 + 刷新 PromptManager 缓存）
+        Path dest = PromptHelper.copyPromptFile(result.path(), result.managed());
+        PromptManager.reloadFromDisk();
+        // 通过 UpdateRulesCmd 派发给 Agent（已在本地完成拷贝 + reload）
         AgentCommand ac =
             new org.cland.alice.agent.command.CapabilityCmd.UpdateRulesCmd(
-                path.toAbsolutePath().toString(), sessionId(), traceId());
-        dispatchToAgent(ac);
+                dest.toAbsolutePath().toString(), sessionId(), traceId());
+        if (ac != null) {
+          dispatchToAgent(ac);
+        }
       } catch (IOException e) {
         eventBridge.onTaskError("读取文件失败: " + e.getMessage());
       }

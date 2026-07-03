@@ -58,15 +58,23 @@ public sealed interface AgentCommand
     }
 
     // 分离命令名与参数
+    // 支持冒号语法 /prompt:<name> → cmd=/prompt, args=<name>
     int spaceIdx = trimmed.indexOf(' ');
     String cmd;
     String args;
-    if (spaceIdx < 0) {
-      cmd = trimmed.toLowerCase();
-      args = "";
-    } else {
+    if (spaceIdx >= 0) {
       cmd = trimmed.substring(0, spaceIdx).toLowerCase();
       args = trimmed.substring(spaceIdx + 1).trim();
+    } else {
+      // 无空格：检查冒号语法
+      int colonIdx = trimmed.indexOf(':');
+      if (colonIdx > 1) { // 至少 /x:...
+        cmd = trimmed.substring(0, colonIdx).toLowerCase();
+        args = trimmed.substring(colonIdx + 1).trim();
+      } else {
+        cmd = trimmed.toLowerCase();
+        args = "";
+      }
     }
 
     return switch (cmd) {
@@ -81,6 +89,10 @@ public sealed interface AgentCommand
       // ── Capability ─────────────────────────────────────────────
       case "/skill" -> new CapabilityCmd.RegisterSkillCmd(args, sessionId, traceId);
       case "/rules" -> new CapabilityCmd.UpdateRulesCmd(args, sessionId, traceId);
+      case "/prompt" ->
+          args.isBlank()
+              ? new CapabilityCmd.ListPromptsCmd(sessionId, traceId)
+              : new CapabilityCmd.LoadPromptCmd(args, sessionId, traceId);
       case "/reload" -> new CapabilityCmd.ReloadKernelCmd(sessionId, traceId);
 
       // ── Alignment ──────────────────────────────────────────────

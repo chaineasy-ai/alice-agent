@@ -27,6 +27,18 @@ updated: "2026-07-03"
 
 ### Features
 
+- **PromptCmd 指令密封分支 (`alice-agent-command`)**: `CapabilityCmd` 新增 `LoadPromptCmd` 和 `ListPromptsCmd` 两个记录类型，作为 `/prompt` 命令的 AgentCommand 表示。`AgentCommand.parse()` 将 `/prompt:<name>` 映射为 `LoadPromptCmd`，将无参数 `/prompt` 映射为 `ListPromptsCmd`。冒号语法 (`/prompt:<name>`) 在 `AgentCommand.parse()` 和 `SlashCommand.parse()` 中统一实现。
+
+- **PromptHelper 工具类 (`alice-facade-tui`)**: 新增 `PromptHelper` 工具类，提供 managed prompt 的解析 (`resolve`)、读取 (`readContent`)、拷贝 (`copyPromptFile`)、列表 (`listPrompts`)、扫描 (`scanPromptNames`) 静态方法。对应 `CapabilityCmd.LoadPromptCmd` 的实际文件系统操作，调用者需在拷贝后自行调用 `PromptManager.reloadFromDisk()`。
+
+- **TUI 完整 `/prompt` 命令支持 (`alice-facade-tui`)**: `CommandHandler.handleIo()` 完成 `/prompt` 完整处理流程：`PromptHelper.resolve()` → `readContent()` → TUI 显示内容 → `copyPromptFile()` → `PromptManager.reloadFromDisk()` → 以 `UpdateRulesCmd` 派发给 Agent。`AliceTuiLauncher.dispatchAgentCommand()` 新增 `LoadPromptCmd` → `handleLoadPrompt()` 和 `ListPromptsCmd` → `handleListPrompts()` 两个分支，支持通过 `AgentCommand.parse()` 直接分发的 `/prompt` 请求。
+
+- **TUI 动态 Tab 补全 (`alice-facade-tui`)**: `ScreenManager` 的 Tab 补全器支持 `/prompt:` 前缀动态扫描 `~/.alice/prompts/*.ftl`，输入 `/prompt:` 后按 Tab 自动列出匹配的 managed prompt 名称。
+
+- **Managed Prompts 示例 (`docs/prompt/example`, `docs/rule/example`)**: 新增 4 个示例 prompt 文件 (`a.ftl`, `b.ftl`, `c.ftl`, `code-review.ftl`) 和 1 个示例 rule 文件 (`git-convention.md`)，用于演示 managed prompts 和 rules 系统。
+
+- **文档更新 (`docs/alice-agent-command/DESIGN.md`, `docs/alice-facade-cmd/DESIGN.md`, `docs/alice-facade-tui/DESIGN.md`)**: 三份设计文档同步更新，涵盖 `LoadPromptCmd`/`ListPromptsCmd` 密封分支、`PromptHelper` API、冒号语法、Tab 补全、Managed Prompts 系统、AgentCommand 分发流程。
+
 - **SOP 程序性记忆移至 alice-memory-vault (`alice-memory-vault`, `alice-core-planner`, `alice-facade-tui`)**: SOP (Standard Operating Procedure) 模块整体从 `alice-core-planner` 迁移至 `alice-memory-vault`，作为程序性记忆 (Procedural Memory) 的存储中心。
   - `SopGraph` / `SopGraphPersistence` / `SopRegistry` / `StaticPlanner` 移至 `org.cland.alice.memory.sop` 包
   - 新增 JGrapht 1.5.2 依赖（`jgrapht-core`/`jgrapht-io`/`jgrapht-ext`）—— 内存中 DAG 图结构 + GraphML 序列化

@@ -21,11 +21,13 @@ import org.cland.alice.agent.subagent.SubAgentRecord;
 import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
 import org.cland.alice.core.agent.guardrail.GuardrailVerificatorAdapter;
+import org.cland.alice.core.agent.prompt.PromptManager;
 import org.cland.alice.core.agent.wal.FileWalStore;
 import org.cland.alice.core.agent.wal.RawMessage;
 import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
 import org.cland.alice.core.agent.wal.WalSession;
 import org.cland.alice.facade.tui.bridge.EventBridge;
+import org.cland.alice.facade.tui.command.PromptHelper;
 import org.cland.alice.facade.tui.state.TuiState;
 import org.cland.alice.memory.sop.SopGraphPersistence;
 import org.cland.alice.memory.sop.SopRegistry;
@@ -207,6 +209,8 @@ public class AliceTuiLauncher implements AutoCloseable {
       case ExecutionCmd.AcquireGoalCmd run -> submitTaskToAgent(run.task());
       case ExecutionCmd.ExecuteRawCmd exec -> submitTaskToAgent(exec.task());
       case CapabilityCmd.ReloadKernelCmd reload -> handleReload(reload);
+      case CapabilityCmd.LoadPromptCmd load -> handleLoadPrompt(load);
+      case CapabilityCmd.ListPromptsCmd list -> handleListPrompts(list);
       case CapabilityCmd cmd2 -> handleCapability(cmd2);
       case ControlCmd.ResetSessionCmd reset -> handleReset(reset);
       case ControlCmd.ClearContextCmd clear -> handleClearContext(clear);
@@ -253,6 +257,52 @@ public class AliceTuiLauncher implements AutoCloseable {
             screenManager.markContentDirty();
           }
         });
+  }
+
+  private void handleLoadPrompt(CapabilityCmd.LoadPromptCmd load) {
+    String resource = load.resource();
+    logger.info("Handling LoadPromptCmd: resource={}", resource);
+
+    if (resource == null || resource.isBlank()) {
+      eventBridge.onChatMessage("System", "用法: /prompt <文件路径> 或 /prompt:<name>");
+      return;
+    }
+
+    CompletableFuture.runAsync(
+        () -> {
+          try {
+            // 0. 解析路径（managed name 或文件路径）
+            var result = PromptHelper.resolve(resource);
+            if (!result.found()) {
+              eventBridge.onChatMessage(
+                  "System", result.message() + "\n使用 /prompt 查看可用 prompt 列表，或指定完整文件路径。");
+              return;
+            }
+
+            var srcPath = result.path();
+            String content = PromptHelper.readContent(srcPath);
+
+            // 1. 拷贝到 prompts/rules 目录
+            var dest = PromptHelper.copyPromptFile(srcPath, result.managed());
+            PromptManager.reloadFromDisk();
+
+            // 2. 通知用户
+            String destName = dest.startsWith(PromptHelper.PROMPTS_DIR) ? "提示词模板" : "规则";
+            eventBridge.onChatMessage(
+                "System",
+                destName + "已加载: " + dest.toAbsolutePath() + "\n下次会话时自动注入 system prompt。");
+            logger.info("Prompt loaded from {} -> {} ({} bytes)", resource, dest, content.length());
+
+          } catch (Exception e) {
+            logger.error("Failed to load prompt file: {}", resource, e);
+            eventBridge.onTaskError("加载提示词失败: " + e.getMessage());
+          }
+        });
+  }
+
+  private void handleListPrompts(CapabilityCmd.ListPromptsCmd list) {
+    logger.info("Handling ListPromptsCmd");
+    eventBridge.onChatMessage("System", PromptHelper.listPrompts());
   }
 
   private void handleCapability(CapabilityCmd cmd) {

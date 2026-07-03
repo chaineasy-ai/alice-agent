@@ -2,6 +2,10 @@ package org.cland.alice.facade.tui;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
@@ -117,15 +121,56 @@ public class ScreenManager implements AutoCloseable {
 
     this.terminal = createTerminal();
 
-    var allCandidates = new java.util.ArrayList<String>();
-    allCandidates.addAll(SLASH_COMMAND_CANDIDATES);
-    allCandidates.addAll(MODEL_CANDIDATES);
-    StringsCompleter cmdCompleter = new StringsCompleter(allCandidates);
+    // 静态候选列表：斜杠命令 + 模型名
+    var staticCandidates = new java.util.ArrayList<String>();
+    staticCandidates.addAll(SLASH_COMMAND_CANDIDATES);
+    staticCandidates.addAll(MODEL_CANDIDATES);
+    var staticCompleter = new StringsCompleter(staticCandidates);
+
+    // 动态补全器：/prompt:<name> 时扫描 ~/.alice/prompts/*.ftl
+    // 使用 JLine 4 Completer SPI（@FunctionalInterface）
+    Completer dynamicCompleter =
+        (reader, line, candidates) -> {
+          String buffer = line.line();
+
+          // 当用户输入 /prompt: 前缀时，动态列出 managed prompts
+          if (buffer.startsWith("/prompt:")) {
+            Path promptsDir = Paths.get(System.getProperty("user.home"), ".alice", "prompts");
+            if (Files.isDirectory(promptsDir)) {
+              String prefix = buffer.substring("/prompt:".length());
+              try (DirectoryStream<Path> stream = Files.newDirectoryStream(promptsDir, "*.ftl")) {
+                for (Path file : stream) {
+                  String name = file.getFileName().toString();
+                  name = name.substring(0, name.length() - 4); // 去掉 .ftl
+                  if (name.startsWith(prefix)) {
+                    // value=完整补全结果（含 /prompt: 前缀），替换当前 word
+                    // display=菜单中显示的文本
+                    candidates.add(
+                        new Candidate(
+                            "/prompt:" + name, // value: 实际插入的文本
+                            name, // display: 菜单显示
+                            null,
+                            null,
+                            null,
+                            null,
+                            true));
+                  }
+                }
+              } catch (IOException e) {
+                logger.debug("Failed to scan prompts dir for completion", e);
+              }
+            }
+            return;
+          }
+
+          // 其他输入 → 使用静态候选列表
+          staticCompleter.complete(reader, line, candidates);
+        };
 
     this.reader =
         LineReaderBuilder.builder()
             .terminal(this.terminal)
-            .completer(cmdCompleter)
+            .completer(dynamicCompleter)
             .option(LineReader.Option.AUTO_MENU, true)
             .variable(LineReader.LIST_MAX, COMPLETION_LIST_MAX)
             .build();
