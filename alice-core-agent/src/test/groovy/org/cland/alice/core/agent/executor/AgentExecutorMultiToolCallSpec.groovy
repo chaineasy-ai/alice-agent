@@ -72,9 +72,10 @@ class AgentExecutorMultiToolCallSpec extends Specification {
                 .build())
 
         // 注册 mock tool — 使用 MockToolBean 的 closure 字段
+        // 注意：工具通过并行虚拟线程调度，必须使用线程安全的集合
         mockToolBean = new MockToolBean()
-        def calls = []
-        mockToolBean.mockOpImpl = { String msg -> calls << msg; "done: $msg" }
+        def calls = new Vector()
+        mockToolBean.mockOpImpl = { String msg -> synchronized(calls) { calls << msg.toString() }; "done: $msg" }
 
         mockToolRegistry = createMockToolRegistry("mock_op", mockToolBean, ["msg"] as String[])
 
@@ -91,8 +92,9 @@ class AgentExecutorMultiToolCallSpec extends Specification {
         then:
         result == "[FINISH]"
         // 验证两个工具调用都被执行了（至少一次），证明 multi-call dispatch 工作
+        // 注意：并行调度不保证执行顺序，因此按集合包含关系判断
         calls.size() >= 2
-        calls.subList(0, 2) == ["first", "second"]
+        calls.containsAll(["first", "second"])
     }
 
     /**
@@ -132,15 +134,16 @@ class AgentExecutorMultiToolCallSpec extends Specification {
                 .build())
 
         // 注册两个不同类型的 mock tool
+        // 注意：工具通过并行虚拟线程调度，必须使用线程安全的集合
         mockToolRegistry = new ToolRegistry()
         def readBean = new MockToolBean()
-        def readCalls = []
-        readBean.mockOpImpl = { String path -> readCalls << "read:$path"; "content of $path" }
+        def readCalls = new Vector()
+        readBean.mockOpImpl = { String path -> synchronized(readCalls) { readCalls << ("read:" + path) }; "content of " + path }
 
         // 注册 write tool: 双参数提取
         def writeBean2 = new MockToolBean()
-        def writeCalls = []
-        writeBean2.mockOpImpl2 = { String p, String c -> writeCalls << "write:$p=$c"; "ok" }
+        def writeCalls = new Vector()
+        writeBean2.mockOpImpl2 = { String p, String c -> synchronized(writeCalls) { writeCalls << ("write:" + p + "=" + c) }; "ok" }
 
         def lookup = MethodHandles.lookup()
         // 注册 read tool: 单参数
@@ -177,11 +180,12 @@ class AgentExecutorMultiToolCallSpec extends Specification {
         then:
         result == "[FINISH]"
         // 验证 read tool 调用 2 次，write tool 调用 1 次
+        // 注意：并行调度不保证执行顺序，因此按集合包含关系判断
         readCalls.size() >= 2
-        readCalls[0] == "read:x.txt"
-        readCalls[1] == "read:y.txt"
+        readCalls.contains("read:x.txt")
+        readCalls.contains("read:y.txt")
         writeCalls.size() >= 1
-        writeCalls[0] == "write:z.txt=data"
+        writeCalls.contains("write:z.txt=data")
     }
 
     /**
