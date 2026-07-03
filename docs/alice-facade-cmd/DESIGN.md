@@ -168,43 +168,14 @@ graph TD
 | `alice tools` | 列出所有加载工具及描述 | `alice tools --detail` |
 | `alice config` | 管理模型密钥/全局配置 | `alice config set openai.key "sk-..."` |
 
-### 7.2 交互式斜杠命令 (Slash Commands)
-在 `alice chat` 交互模式下，所有输入通过 `AgentCommand.parse()` 解析为密封指令体系的记录类型：
-
-| 斜杠命令 | AgentCommand 类型 | 说明 |
-| :--- | :--- | :--- |
-| `/run <task>` | `ExecutionCmd.AcquireGoalCmd` | 提交自然语言任务 |
-| `/exec <cmd>` | `ExecutionCmd.ExecuteRawCmd` | 执行 Shell 命令 |
-| `/prompt:<name>` | `CapabilityCmd.LoadPromptCmd` | 加载 managed prompt |
-| `/prompt <path>` | `CapabilityCmd.LoadPromptCmd` | 加载外部文件 |
-| `/prompt` | `CapabilityCmd.ListPromptsCmd` | 列出 managed prompts |
-| `/rules <ref>` | `CapabilityCmd.UpdateRulesCmd` | 加载规则引用 |
-| `/skill <ref>` | `CapabilityCmd.RegisterSkillCmd` | 注册 MCP 工具集 |
-| `/reload` | `CapabilityCmd.ReloadKernelCmd` | 热重载 |
-| `/model <id>` | `AlignmentCmd.SwitchModelCmd` | 切换 LLM 模型 |
-| `/new` | `ControlCmd.ResetSessionCmd` | 重置会话 |
-| `/clear` | `ControlCmd.ClearContextCmd` | 清空短期记忆 |
-| `/context` | `ControlCmd.ViewContextCmd` | 查看上下文 |
-| `/compact` | `ControlCmd.CompactContextCmd` | 压缩历史 |
-| `/feedback <msg>` | `ControlCmd.FeedbackCmd` | 注入人类反馈 |
-| `/exit` | `ControlCmd.InterruptCmd` | 安全退出 |
-| `/routine <cron>` | `RoutineTimeCmd.RegisterRoutineCmd` | 注册定时任务 |
-| `/sub-agent <sub>` | `SubAgentCmd.*` | 多 Agent 管理 |
-| `/resume [id]` | `ControlCmd.ResumeSessionCmd` | 恢复历史会话 |
-
-### 7.3 冒号语法 (Colon Syntax)
-`/prompt:<name>` 使用冒号语法，解析器检测到命令名包含 `:` 时自动拆分：
-- `/prompt:code-review` → cmd=`/prompt`, args=`code-review`
-- 在 `SlashCommand.parse()` 和 `AgentCommand.parse()` 中统一实现
-
-### 7.4 参数详情（以 run 为例）
+### 7.2 参数详情（以 run 为例）
 - `-t, --task <string>`：**必填**，指定 Agent 任务目标
 - `-m, --model <string>`：可选，覆盖默认模型（如 gpt-4o、claude-3.5-sonnet）
 - `-v, --verbose`：可选，打印详细思考/执行过程
 - `--json`：可选，以 JSON 格式输出结果
 - `--timeout <int>`：可选，设置任务最大执行时长（秒）
 
-### 7.5 典型使用场景
+### 7.3 典型使用场景
 #### 用例 1：开发者自动化
 - 描述：CLI 快速生成单元测试
 - 命令：`alice run "为 src/main/java/Utils.java 生成单元测试" --verbose`
@@ -220,15 +191,42 @@ graph TD
 - 命令：`cat build.log | alice run "分析此日志中的错误原因" --json`
 - 预期输出：结构化 JSON（包含 error_code、reason、suggestion 等字段）
 
-#### 用例 4：加载 Managed Prompt
-- 描述：在 chat 会话中动态加载预定义的提示词模板
-- 命令：`/prompt:code-review`（从 `~/.alice/prompts/code-review.ftl` 加载）
-- 预期输出：提示词内容注入 system prompt
+---
+
+## 8. AgentCommand 抽象指令层
+### 8.1 密封接口层级
+`alice-agent-command` 模块定义了完整的密封指令体系。指令由 `AgentCommand.parse()` 创建，`AliceCliLauncher.dispatchCommand()` 通过模式匹配 `switch` 分发：
+
+```
+AgentCommand (sealed interface)
+├── ExecutionCmd        — --run, --exec
+├── CapabilityCmd       ──skill, --rules, --reload
+│   ├── RegisterSkillCmd
+│   ├── UpdateRulesCmd
+│   ├── LoadPromptCmd
+│   ├── ListPromptsCmd
+│   └── ReloadKernelCmd
+├── AlignmentCmd        — --model
+├── ControlCmd          — --new, --clear, --context, --compact, --feedback, --exit, --resume
+├── RoutineTimeCmd      — --routine
+└── SubAgentCmd         — --sub-agent spawn/connect/list/...
+```
+
+### 8.2 CLI 模式与 Chat 模式的命令差异
+| 模式 | 命令风格 | 入口 |
+|------|----------|------|
+| 单次任务 (`alice run`) | `--task "..." --model gpt-4o` (picocli flags) | `CommandParser.parse()` |
+| 交互式 (`alice chat`) | `/run ...` `/model gpt-4o` (JLine slash commands) | `AgentCommand.parse()` / `dispatchCommand()` |
+
+两个模式最终都通过 `AliceCliLauncher.dispatchCommand()` 分发 AgentCommand，但输入解析方式不同。
 
 ---
 
-## 8. 模块实现细节
-1. **依赖框架**：推荐使用 `picocli` 处理子命令与参数解析
+## 9. 模块实现细节
+1. **依赖框架**：
+   - `picocli` 处理子命令与参数解析
+   - `JLine 3` 交互式 `alice chat` 模式的行编辑、Tab 补全、历史持久化
+   - `alice-agent-command` 提供 AgentCommand 密封指令体系
 2. **退出码映射**
     - `0`：任务执行成功
     - `1`：运行时错误（Agent 无法完成目标）
@@ -239,3 +237,4 @@ graph TD
 1. 本文档完整规范了 `alice-facade-cmd` 模块的**架构、流程、命令、实现**标准
 2. 所有图表统一格式，结构清晰，可直接用于开发、评审与维护
 3. 聚焦 CLI 核心能力：参数解析、代理驱动、结构化输出，兼容交互式/自动化场景
+4. 单次任务使用 picocli `--flags`，交互式 chat 使用 `/slash` 命令，统一通过 AgentCommand 密封体系分发
