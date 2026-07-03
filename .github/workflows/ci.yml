@@ -1,15 +1,14 @@
-# Alice Agent CI — Build, Test, Package & Native Image
+# Alice Agent CI — Build, Test, JVM Distribution & Native Image (Linux · macOS · Windows)
 #
-# 构建全模块，运行所有测试，产出最终终端应用（TUI + CLI）的可分发归档。
-# 额外构建 GraalVM Native Image 可执行文件，大幅提升启动速度和降低内存占用。
+# 全模块构建 + 测试 + 三平台 GraalVM Native Image 可执行文件。
 #
 # Native Image 产物：
-#   alice-bootstrap/build/native/nativeCompile/alice-agent*
-#     — Linux/macOS: ELF/Mach-O 可执行文件（压缩后约 20-30MB）
+#   Linux:   alice-bootstrap/build/native/nativeCompile/alice           (ELF)
+#   macOS:   alice-bootstrap/build/native/nativeCompile/alice           (Mach-O)
+#   Windows: alice-bootstrap/build/native/nativeCompile/alice.exe       (PE)
 #
-# 最终分发包：
-#   alice-bootstrap/build/install/alice-agent/
-#     — JVM 运行时（启动脚本 + 所有依赖 JAR）
+# JVM 分发包：
+#   alice-bootstrap/build/install/alice/   (启动脚本 + 所有模块 JAR)
 
 name: CI
 
@@ -19,22 +18,37 @@ on:
   pull_request:
     branches: [main]
 
+# ────────────────────────────────────────────────────────────────────────────
+# 共享环境变量
+# ────────────────────────────────────────────────────────────────────────────
+env:
+  GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4g
+
+# ────────────────────────────────────────────────────────────────────────────
+# Build & Test (JVM) — 三平台验证
+# ────────────────────────────────────────────────────────────────────────────
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+      # 任一平台失败不影响其他平台
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 25
+      - name: Set up JDK 25 (Temurin)
         uses: actions/setup-java@v4
         with:
           java-version: 25
           distribution: temurin
           cache: gradle
 
-      - name: Make gradlew executable
+      - name: Make gradlew executable (Linux/macOS)
+        if: runner.os != 'Windows'
         run: chmod +x gradlew
 
       - name: Build all modules
@@ -43,35 +57,62 @@ jobs:
       - name: Run all tests
         run: ./gradlew test --no-daemon
 
-      - name: Build final JVM distribution (CLI + TUI)
+      - name: Build JVM distribution
         run: ./gradlew :alice-bootstrap:installDist --no-daemon
 
       - name: Upload JVM distribution artifact
         uses: actions/upload-artifact@v4
         with:
-          name: alice-agent-jvm-dist
-          path: alice-bootstrap/build/install/alice-agent/
+          name: alice-jvm-dist-${{ matrix.os }}
+          path: alice-bootstrap/build/install/alice/
           retention-days: 7
 
-      - name: Verify JVM launcher
+      - name: Verify JVM launcher (Linux/macOS)
+        if: runner.os != 'Windows'
         run: |
           echo "=== Build Artifacts ==="
-          ls -la alice-bootstrap/build/install/alice-agent/bin/
+          ls -la alice-bootstrap/build/install/alice/bin/
           echo ""
           echo "=== Module JARs ==="
-          ls -la alice-bootstrap/build/install/alice-agent/lib/*.jar | wc -l
+          ls -la alice-bootstrap/build/install/alice/lib/*.jar | wc -l
           echo "JARs total"
           echo ""
           echo "=== Launcher check ==="
-          if [ -f alice-bootstrap/build/install/alice-agent/bin/alice-agent ]; then
-            echo "✅ JVM distribution ready: alice-agent/bin/alice-agent"
+          if [ -f alice-bootstrap/build/install/alice/bin/alice ]; then
+            echo "✅ JVM distribution ready: alice/bin/alice"
           else
             echo "❌ JVM distribution not found"
             exit 1
           fi
 
+      - name: Verify JVM launcher (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Write-Host "=== Build Artifacts ==="
+          Get-ChildItem -Path alice-bootstrap/build/install/alice/bin/ -Name
+          Write-Host ""
+          Write-Host "=== Module JARs ==="
+          $count = (Get-ChildItem -Path alice-bootstrap/build/install/alice/lib/*.jar).Count
+          Write-Host "$count JARs total"
+          Write-Host ""
+          if (Test-Path "alice-bootstrap/build/install/alice/bin/alice.bat") {
+            Write-Host "✅ JVM distribution ready: alice/bin/alice.bat"
+          } else {
+            Write-Host "❌ JVM distribution not found"
+            exit 1
+          }
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # GraalVM Native Image — 三平台并行构建
+  # ────────────────────────────────────────────────────────────────────────────
   native-image:
-    runs-on: ubuntu-latest
+    needs: [build]
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
@@ -84,7 +125,8 @@ jobs:
           distribution: graalvm
           cache: gradle
 
-      - name: Make gradlew executable
+      - name: Make gradlew executable (Linux/macOS)
+        if: runner.os != 'Windows'
         run: chmod +x gradlew
 
       - name: Install native-image tool
@@ -94,23 +136,43 @@ jobs:
       - name: Build Native Image
         run: ./gradlew :alice-bootstrap:nativeCompile --no-daemon
 
-      - name: Verify native binary
+      - name: Verify native binary (Linux/macOS)
+        if: runner.os != 'Windows'
         run: |
           echo "=== Native Image Binary ==="
           ls -lh alice-bootstrap/build/native/nativeCompile/
           echo ""
-          if [ -f alice-bootstrap/build/native/nativeCompile/alice-agent ]; then
-            file alice-bootstrap/build/native/nativeCompile/alice-agent
+          if [ -f alice-bootstrap/build/native/nativeCompile/alice ]; then
+            file alice-bootstrap/build/native/nativeCompile/alice
             echo ""
-            echo "✅ GraalVM Native Image built successfully"
+            echo "✅ GraalVM Native Image (${{ matrix.os }}) built successfully"
           else
             echo "❌ Native image binary not found"
             exit 1
           fi
 
-      - name: Upload Native Image artifact
+      - name: Verify native binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Write-Host "=== Native Image Binary ==="
+          Get-ChildItem -Path alice-bootstrap/build/native/nativeCompile/ -Name
+          if (Test-Path "alice-bootstrap/build/native/nativeCompile/alice.exe") {
+            Write-Host "✅ GraalVM Native Image (Windows) built successfully"
+          } else {
+            Write-Host "❌ Native image binary not found"
+            exit 1
+          }
+
+      - name: Upload Native Image artifact (${{ matrix.os }})
         uses: actions/upload-artifact@v4
         with:
-          name: alice-agent-native
-          path: alice-bootstrap/build/native/nativeCompile/alice-agent*
+          name: alice-native-${{ matrix.os }}
+          # 排除 .build_artifacts.txt 等元数据文件
+          path: |
+            alice-bootstrap/build/native/nativeCompile/alice*
+            !alice-bootstrap/build/native/nativeCompile/*.build*
+            !alice-bootstrap/build/native/nativeCompile/*.txt
           retention-days: 7
+
+

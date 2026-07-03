@@ -95,7 +95,7 @@ tasks.withType(JavaExec).configureEach {
 
 application {
     mainClass = 'org.cland.alice.agent.AliceApp'
-    applicationName = 'alice-agent'
+    applicationName = 'alice'
     applicationDefaultJvmArgs = [
         "-Dfile.encoding=UTF-8",
         // JDK 25+: required by jansi/jna for native access via System::load
@@ -106,7 +106,7 @@ application {
 graalvmNative {
     binaries {
         main {
-            imageName = 'alice-agent'
+            imageName = 'alice'
 
             buildArgs.add('-H:+UnlockExperimentalVMOptions')
             buildArgs.add('-Dfile.encoding=UTF-8')
@@ -154,7 +154,7 @@ distributions {
 }
 
 jar {
-    archiveBaseName = 'alice-agent'
+    archiveBaseName = 'alice'
 }
 
 tasks.named('test') {

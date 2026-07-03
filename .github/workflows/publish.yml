@@ -1,0 +1,233 @@
+# Alice Agent Publish — Build native binaries + JVM distribution on release,
+# then attach all platform assets to the GitHub Release.
+#
+# 触发条件：GitHub Release 被发布（含从 Draft → Published）。
+# 产物上传到该 Release 页面，供用户直接下载。
+
+name: Publish
+
+on:
+  release:
+    types: [published]
+
+# ────────────────────────────────────────────────────────────────────────────
+# 共享环境变量
+# ────────────────────────────────────────────────────────────────────────────
+env:
+  GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4g
+
+# ────────────────────────────────────────────────────────────────────────────
+# 构建 & 测试（三平台 JVM）
+# ────────────────────────────────────────────────────────────────────────────
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout tag ${{ github.event.release.tag_name }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Set up JDK 25 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: 25
+          distribution: temurin
+          cache: gradle
+
+      - name: Make gradlew executable (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: chmod +x gradlew
+
+      - name: Build all modules
+        run: ./gradlew assemble --no-daemon
+
+      - name: Run all tests
+        run: ./gradlew test --no-daemon
+
+      - name: Build JVM distribution
+        run: ./gradlew :alice-bootstrap:installDist --no-daemon
+
+      - name: Package JVM distribution as tarball (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          cd alice-bootstrap/build/install
+          tar czf ../../../alice-jvm-${{ matrix.os }}.tar.gz alice/
+
+      - name: Package JVM distribution as zip (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path alice-bootstrap/build/install/alice -DestinationPath alice-jvm-windows-latest.zip
+
+      - name: Upload JVM dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: alice-jvm-dist-${{ matrix.os }}
+          path: alice-jvm-${{ matrix.os }}.*
+          retention-days: 1
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # GraalVM Native Image — 三平台并行构建
+  # ────────────────────────────────────────────────────────────────────────────
+  native-image:
+    needs: [build]
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout tag ${{ github.event.release.tag_name }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Set up GraalVM JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: 25
+          distribution: graalvm
+          cache: gradle
+
+      - name: Make gradlew executable (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: chmod +x gradlew
+
+      - name: Install native-image tool
+        run: |
+          gu install native-image || echo "native-image already installed"
+
+      - name: Build Native Image
+        run: ./gradlew :alice-bootstrap:nativeCompile --no-daemon
+
+      - name: Strip debug symbols (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          strip alice-bootstrap/build/native/nativeCompile/alice || true
+
+      - name: Compress native binary (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          gzip -c alice-bootstrap/build/native/nativeCompile/alice \
+            > alice-linux-amd64.gz
+
+      - name: Compress native binary (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          gzip -c alice-bootstrap/build/native/nativeCompile/alice \
+            > alice-darwin-amd64.gz
+
+      - name: Compress native binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path alice-bootstrap/build/native/nativeCompile/alice.exe \
+            -DestinationPath alice-windows-amd64.zip
+
+      - name: Upload native binary artifact (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: alice-native-linux
+          path: alice-linux-amd64.gz
+          retention-days: 1
+
+      - name: Upload native binary artifact (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: alice-native-macos
+          path: alice-darwin-amd64.gz
+          retention-days: 1
+
+      - name: Upload native binary artifact (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: alice-native-windows
+          path: alice-windows-amd64.zip
+          retention-days: 1
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Attach — 将所有平台产物上传到 Release 页面
+  # ────────────────────────────────────────────────────────────────────────────
+  attach:
+    needs: [native-image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download native binary (Linux)
+        uses: actions/download-artifact@v4
+        with:
+          name: alice-native-linux
+          path: native-binaries
+
+      - name: Download native binary (macOS)
+        uses: actions/download-artifact@v4
+        with:
+          name: alice-native-macos
+          path: native-binaries
+
+      - name: Download native binary (Windows)
+        uses: actions/download-artifact@v4
+        with:
+          name: alice-native-windows
+          path: native-binaries
+
+      - name: Download JVM dist (Linux)
+        uses: actions/download-artifact@v4
+        with:
+          name: alice-jvm-dist-ubuntu-latest
+          path: jvm-dist
+
+      - name: Download JVM dist (macOS)
+        uses: actions/download-artifact@v4
+        with:
+          name: alice-jvm-dist-macos-latest
+          path: jvm-dist
+
+      - name: Download JVM dist (Windows)
+        uses: actions/download-artifact@v4
+        with:
+          name: alice-jvm-dist-windows-latest
+          path: jvm-dist
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+
+          # Native binaries
+          if [ -f native-binaries/alice-linux-amd64.gz ]; then
+            cp native-binaries/alice-linux-amd64.gz release-assets/
+          fi
+          if [ -f native-binaries/alice-darwin-amd64.gz ]; then
+            cp native-binaries/alice-darwin-amd64.gz release-assets/
+          fi
+          if [ -f native-binaries/alice-windows-amd64.zip ]; then
+            cp native-binaries/alice-windows-amd64.zip release-assets/
+          fi
+
+          # JVM distributions
+          for f in jvm-dist/*; do
+            if [ -f "$f" ]; then
+              cp "$f" release-assets/
+            fi
+          done
+
+          echo "=== Release Assets ==="
+          ls -lh release-assets/
+
+      - name: Upload assets to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: release-assets/*
