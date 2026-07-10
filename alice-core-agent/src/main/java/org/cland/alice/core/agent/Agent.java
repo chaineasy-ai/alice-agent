@@ -57,7 +57,7 @@ import org.slf4j.LoggerFactory;
  *   System.out.println(result); // "Paris"
  * </pre>
  */
-public class Agent {
+public class Agent implements AgentFacade {
 
   private static final Logger logger = LoggerFactory.getLogger(Agent.class);
 
@@ -106,10 +106,12 @@ public class Agent {
 
   // ========== 属性 ==========
 
+  @Override
   public String agentId() {
     return agentId;
   }
 
+  @Override
   public AgentConfig config() {
     return config;
   }
@@ -174,6 +176,7 @@ public class Agent {
 
   // ========== 子模块 Getters（原 AgentCore getters） ==========
 
+  @Override
   public PlannerService plannerService() {
     return plannerService;
   }
@@ -182,10 +185,12 @@ public class Agent {
     return guardrail;
   }
 
+  @Override
   public ToolRegistry toolRegistry() {
     return toolRegistry;
   }
 
+  @Override
   public AgentSession memory() {
     return memory;
   }
@@ -367,6 +372,7 @@ public class Agent {
    * @param action 待验证的 Action
    * @return true 表示通过，false 表示被拦截
    */
+  @Override
   public boolean verifyPre(Action action) {
     if (!config.preVerifyEnabled() || guardrail == null) {
       return true;
@@ -385,6 +391,7 @@ public class Agent {
    * @param stepResult 当前步骤的结果
    * @return true 表示通过，false 表示需要 Revision
    */
+  @Override
   public boolean verifyPost(StepResult stepResult) {
     if (!config.postVerifyEnabled() || guardrail == null) {
       return true;
@@ -394,6 +401,7 @@ public class Agent {
   }
 
   /** 判断 PPAO 循环是否需要终止。 */
+  @Override
   public boolean shouldFinish(AgentContext context, StepResult result) {
 
     if (result instanceof StepResult.Finish) {

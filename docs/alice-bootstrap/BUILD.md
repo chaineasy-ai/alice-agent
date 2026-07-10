@@ -136,7 +136,7 @@ alice sub-agent spawn --goal "analyze logs"
 ```batch
 @echo off
 chcp 65001 >nul
-alice-agent --tui
+alice --tui
 ```
 
 ### Web Mode
@@ -167,7 +167,7 @@ java -jar alice-facade-web/build/libs/alice-facade-web-0.1.0.jar
 ./gradlew :alice-bootstrap:installDist
 ```
 
-Output: `alice-bootstrap/build/install/alice-agent/bin/alice-agent`
+Output: `alice-bootstrap/build/install/alice/bin/alice` (Linux/macOS) or `alice-bootstrap/build/install/alice/bin/alice.bat` (Windows)
 
 ### Build Tarball / Zip
 

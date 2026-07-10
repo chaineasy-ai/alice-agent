@@ -12,7 +12,7 @@ updated: "2026-06-13"
 # RUN AGENT ON TUI MODE
 
 ```bash
-./alice-bootstrap/build/install/alice-agent/bin/alice-agent --tui
+./alice-bootstrap/build/install/alice/bin/alice --tui
 ```
 
 # win

@@ -60,7 +60,7 @@ class BuildAliceAgent(unittest.TestCase):
         """Verify the project compiles."""
         if not REBUILD:
             self.skipTest("Skipped (use --build to rebuild)")
-        dist_dir = PROJECT_ROOT / "alice-bootstrap" / "build" / "install" / "alice-agent"
+        dist_dir = PROJECT_ROOT / "alice-bootstrap" / "build" / "install" / "alice"
         self.assertTrue(dist_dir.is_dir(), f"Distribution not found at {dist_dir}")
         bin_dir = dist_dir / "bin"
         self.assertTrue(bin_dir.is_dir(), f"Bin directory not found at {bin_dir}")
@@ -180,7 +180,7 @@ class TestAliceAgentJavaApi(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        dist_dir = PROJECT_ROOT / "alice-bootstrap" / "build" / "install" / "alice-agent"
+        dist_dir = PROJECT_ROOT / "alice-bootstrap" / "build" / "install" / "alice"
         lib_dir = dist_dir / "lib"
         if lib_dir.is_dir():
             cls.classpath = str(lib_dir)
@@ -285,7 +285,7 @@ class TestAliceAgentSystem(unittest.TestCase):
 
     def test_distribution_has_all_jars(self):
         """The built distribution should contain all module jars."""
-        dist_lib = PROJECT_ROOT / "alice-bootstrap" / "build" / "install" / "alice-agent" / "lib"
+        dist_lib = PROJECT_ROOT / "alice-bootstrap" / "build" / "install" / "alice" / "lib"
         if not dist_lib.is_dir():
             self.skipTest("Distribution not found — run with --build first")
         jars = list(dist_lib.glob("*.jar"))

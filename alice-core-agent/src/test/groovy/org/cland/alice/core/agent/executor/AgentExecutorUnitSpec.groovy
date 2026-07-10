@@ -23,7 +23,8 @@ class AgentExecutorUnitSpec extends Specification {
     // ========================================================================
 
     private static Method findMethod(String name, Class<?>... paramTypes) {
-        def m = AgentExecutor.getDeclaredMethod(name, paramTypes)
+        // 静态辅助方法已从 AgentExecutor 移至 MicroReActEngine (SRP 拆分)
+        def m = MicroReActEngine.getDeclaredMethod(name, paramTypes)
         m.setAccessible(true)
         return m
     }
