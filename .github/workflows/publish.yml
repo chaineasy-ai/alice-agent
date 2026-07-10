@@ -101,6 +101,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Install native-image tool
+        shell: bash
         run: |
           gu install native-image || echo "native-image already installed"
 
