@@ -208,6 +208,7 @@ public final class FilePromptLoader {
     String title = null;
     String priority = "medium";
     List<String> appliesTo = List.of();
+    String status = "enabled";
 
     if (raw.startsWith("---")) {
       int endIdx = raw.indexOf("---", 3);
@@ -224,12 +225,14 @@ public final class FilePromptLoader {
           } else if (line.startsWith("applies_to:")) {
             String val = line.substring(11).trim().replaceAll("^\"|\"$", "");
             appliesTo = List.of(val.split("\\s*,\\s*"));
+          } else if (line.startsWith("status:")) {
+            status = line.substring(7).trim().toLowerCase();
           }
         }
       }
     }
 
-    return new RuleDef(name, source, title, priority, appliesTo, content);
+    return new RuleDef(name, source, title, priority, appliesTo, status, content);
   }
 
   /** Strip file extension (e.g. {@code "micro_loop.ftl"} → {@code "micro_loop"}). */

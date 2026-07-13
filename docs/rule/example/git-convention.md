@@ -1,6 +1,7 @@
 ---
 title: Git Convention
 priority: high
+status: enabled
 ---
 
 ## Commit Message Format

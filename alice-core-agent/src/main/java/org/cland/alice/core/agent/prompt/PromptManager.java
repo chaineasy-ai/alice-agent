@@ -72,8 +72,52 @@ public final class PromptManager {
   /** Lazily-initialized file loader for {@code ~/.alice/prompts/} and {@code ~/.alice/rules/}. */
   private static volatile FilePromptLoader fileLoader;
 
-  private static String systemPromptCache; // lazily extracted from core_loop.ftl
-  private static String microLoopSystemCache; // lazily rendered from micro_loop.ftl
+  private static String systemPromptCache;
+  private static String microLoopSystemCache;
+
+  /**
+   * Reserved context names — rule filenames matching these are routed to specific prompt layers.
+   * Non-matching filenames (e.g. {@code coding.md}) apply to ALL contexts.
+   */
+  private static final java.util.Set<String> RESERVED_CONTEXTS =
+      java.util.Set.of("system", "planner", "micro_loop", "error");
+
+  /**
+   * Reserved default rules — built-in fallback when no file-based rules match a context. These
+   * ensure the agent always has basic behavioral rules even if all rule files are deleted.
+   */
+  private static final java.util.Map<String, List<String>> RESERVED_RULES =
+      java.util.Map.of(
+          "system",
+          List.of(
+              "Always use read_file to examine a file before modifying it. Never assume file content.",
+              "write_file content must contain the COMPLETE file \u2014 not just the changed lines.",
+              "NEVER repeat a tool call that already succeeded. Check previous observations first.",
+              "You can make multiple tool calls in a single response when they are independent.",
+              "If a tool call fails, diagnose the error and fix the issue before retrying.",
+              "Use Function Calling (the structured tool_calls API) to invoke tools \u2014 do not embed tool calls in text.",
+              "BATCH all reads: use a SINGLE response to read ALL files you need. Do not split reads across multiple turns.",
+              "TRACK what you already read: never re-read a file whose content is already in the conversation."),
+          "micro_loop",
+          List.of(
+              "You have already read the files below. DO NOT re-read them.",
+              "Your goal is to WRITE changes, not to keep reading.",
+              "Based on the tool result and the user task, determine the next action.",
+              "If the task requires code changes: read the relevant files ONCE, then write the fix.",
+              "You can make multiple tool calls in a single response when they are independent.",
+              "Use Function Calling (the structured tool_calls API) to invoke tools.",
+              "BATCH all reads into ONE response. Never split reads across turns.",
+              "NEVER re-read a file already in the conversation history."),
+          "planner",
+          List.of(
+              "Analyze the user request and output a plan as ONE OR MORE lines.",
+              "Each line is exactly one word from the list below.",
+              "Available intents: ANALYZE, SEARCH, CODE, GENERATE, ANSWER, FINISH",
+              "Example: \"SEARCH ANALYZE GENERATE\" for a research-then-write task."),
+          "error",
+          List.of(
+              "The tool call below failed. Diagnose the error before retrying.",
+              "Do not retry the same call with identical parameters."));
 
   private PromptManager() {}
 
@@ -99,7 +143,7 @@ public final class PromptManager {
       systemPromptCache = extractSystemBlock(userPrompt.template());
       if (systemPromptCache != null) {
         // Append user-defined rules from ~/.alice/rules/*.md
-        String rulesSection = buildRules();
+        String rulesSection = buildRules("system");
         if (!rulesSection.isEmpty()) {
           systemPromptCache = systemPromptCache + "\n\n" + rulesSection;
         }
@@ -120,7 +164,7 @@ public final class PromptManager {
       log.warn("[PromptManager] Failed to extract system prompt, falling back to default", e);
       systemPromptCache = "You are Alice, an AI coding assistant.";
       // Append rules even in error fallback
-      String rulesSection = buildRules();
+      String rulesSection = buildRules("system");
       if (!rulesSection.isEmpty()) {
         systemPromptCache = systemPromptCache + "\n\n" + rulesSection;
       }
@@ -133,7 +177,7 @@ public final class PromptManager {
       systemPromptCache = "You are Alice, an AI coding assistant.";
     }
     // Append user-defined rules from ~/.alice/rules/*.md
-    String rulesSection = buildRules();
+    String rulesSection = buildRules("system");
     if (!rulesSection.isEmpty()) {
       systemPromptCache = systemPromptCache + "\n\n" + rulesSection;
     }
@@ -148,23 +192,75 @@ public final class PromptManager {
    *
    * @return a {@code <rules>...</rules>} XML block, or empty string
    */
+  /**
+   * Build a {@code <rules>} section from all enabled rule files under {@code ~/.alice/rules/}.
+   * Includes rules regardless of {@code applies_to} (backward-compatible).
+   *
+   * @return a {@code <rules>...</rules>} XML block, or empty string
+   */
   public static String buildRules() {
+    return buildRules(null);
+  }
+
+  /**
+   * Build a {@code <rules>} section filtered by prompt context.
+   *
+   * <p>Routing is by filename (reserved word):
+   *
+   * <ul>
+   *   <li>If the rule filename matches a {@link #RESERVED_CONTEXTS reserved word} (e.g. {@code
+   *       system.md}, {@code micro_loop.md}), it is only included when the context matches that
+   *       word.
+   *   <li>Non-reserved filenames (e.g. {@code coding.md}) are included in <b>all</b> contexts.
+   * </ul>
+   *
+   * @param context prompt layer context ({@code "system"}, {@code "planner"}, {@code "micro_loop"},
+   *     {@code "error"}), or {@code null} for all rules
+   * @return a {@code <rules>...</rules>} XML block, or empty string
+   */
+  public static String buildRules(String context) {
     FilePromptLoader loader = getFileLoader();
-    List<RuleDef> rules = loader.getAllRules();
-    if (rules.isEmpty()) return "";
+    List<RuleDef> allRules = loader.getAllRules();
 
     StringBuilder sb = new StringBuilder();
     sb.append("<rules>\n");
-    for (RuleDef rule : rules) {
+
+    boolean hasContent = false;
+
+    // Phase 1: file-based rules from ~/.alice/rules/
+    for (RuleDef rule : allRules) {
+      if ("disabled".equals(rule.status())) continue;
+
+      // routing by reserved word (filename):
+      //   - reserved name + context mismatch → skip
+      //   - reserved name + context match → include
+      //   - non-reserved name → include in ALL contexts
+      boolean isReserved = RESERVED_CONTEXTS.contains(rule.name());
+      if (context != null && isReserved && !context.equals(rule.name())) {
+        continue;
+      }
+
       sb.append("  <!-- ")
           .append(rule.title())
           .append(" (")
           .append(rule.priority())
           .append(") -->\n");
       sb.append(rule.content()).append("\n\n");
+      hasContent = true;
     }
+
+    // Phase 2: reserved default rules (fallback if no file-based rules matched)
+    if (!hasContent && context != null && RESERVED_RULES.containsKey(context)) {
+      sb.append("  <!-- Reserved Defaults (built-in) -->\n");
+      for (String rule : RESERVED_RULES.get(context)) {
+        sb.append("  <rule>").append(rule).append("</rule>\n");
+      }
+      sb.append("\n");
+      hasContent = true;
+    }
+
     sb.append("</rules>");
-    return sb.toString();
+    return hasContent ? sb.toString() : "";
   }
 
   // ========================================================================
@@ -220,7 +316,13 @@ public final class PromptManager {
     if (error != null && !error.isBlank()) {
       data.put("error", error);
     }
-    return render(PLANNER, data);
+    String base = render(PLANNER, data);
+    // Append context-specific planner rules
+    String rulesSection = buildRules("planner");
+    if (!rulesSection.isEmpty()) {
+      base = base + "\n\n" + rulesSection;
+    }
+    return base;
   }
 
   /**
@@ -253,25 +355,35 @@ public final class PromptManager {
       return microLoopSystemCache;
     }
 
+    StringBuilder sb = new StringBuilder();
+
     // Try user-defined prompt from ~/.alice/prompts/micro_loop.ftl first
     PromptDef userPrompt = getUserPrompt("micro_loop");
     if (userPrompt != null) {
-      microLoopSystemCache = userPrompt.template().trim();
+      sb.append(userPrompt.template().trim());
       log.info(
           "[PromptManager] Using micro_loop prompt from {} ({} chars)",
           userPrompt.source(),
-          microLoopSystemCache.length());
-      return microLoopSystemCache;
+          sb.length());
+    } else {
+      // Fallback: render classpath micro_loop.ftl
+      try (StringWriter out = new StringWriter()) {
+        MICRO_LOOP.process(Map.of(), out);
+        sb.append(out.toString().trim());
+      } catch (TemplateException | IOException e) {
+        log.warn("[PromptManager] Failed to render micro_loop.ftl, falling back", e);
+        sb.append("");
+      }
     }
 
-    // Fallback: render classpath micro_loop.ftl
-    try (StringWriter out = new StringWriter()) {
-      MICRO_LOOP.process(Map.of(), out);
-      microLoopSystemCache = out.toString().trim();
-    } catch (TemplateException | IOException e) {
-      log.warn("[PromptManager] Failed to render micro_loop.ftl, falling back", e);
-      microLoopSystemCache = "<rules><rule>Use tools to complete the task.</rule></rules>";
+    // Append context-specific micro_loop rules from ~/.alice/rules/
+    String rulesSection = buildRules("micro_loop");
+    if (!rulesSection.isEmpty()) {
+      if (!sb.isEmpty()) sb.append("\n\n");
+      sb.append(rulesSection);
     }
+
+    microLoopSystemCache = sb.toString().trim();
     return microLoopSystemCache;
   }
 
@@ -326,6 +438,11 @@ public final class PromptManager {
         .append(errorMessage != null ? errorMessage : "unknown error")
         .append("</message>\n");
     sb.append("</tool_error>");
+    // Append context-specific error recovery rules
+    String rulesSection = buildRules("error");
+    if (!rulesSection.isEmpty()) {
+      sb.append("\n\n").append(rulesSection);
+    }
     return sb.toString();
   }
 

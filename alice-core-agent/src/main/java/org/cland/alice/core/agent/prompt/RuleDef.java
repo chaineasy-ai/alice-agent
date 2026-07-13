@@ -14,7 +14,8 @@ import java.util.Objects;
  * <p>A rule file contains:
  *
  * <ul>
- *   <li><b>Front matter</b> (YAML) — optional: {@code title}, {@code priority}, {@code applies_to}
+ *   <li><b>Front matter</b> (YAML) — optional: {@code title}, {@code priority}, {@code applies_to},
+ *       {@code status}
  *   <li><b>Body</b> (Markdown) — the actual rule content
  * </ul>
  *
@@ -25,6 +26,7 @@ import java.util.Objects;
  * title: Coding Standards
  * priority: high
  * applies_to: java,python
+ * status: enabled
  * ---
  * ## Java
  * - Use Google Java Format for all Java files.
@@ -39,6 +41,8 @@ import java.util.Objects;
  * @param title Optional title from front matter
  * @param priority Optional priority (high/medium/low)
  * @param appliesTo Optional comma-separated list of contexts this rule applies to
+ * @param status Rule enablement: {@code "enabled"} or {@code "disabled"} (default: {@code
+ *     "enabled"})
  * @param content The full rule content (front matter stripped, Markdown body)
  */
 public record RuleDef(
@@ -47,6 +51,7 @@ public record RuleDef(
     String title,
     String priority,
     List<String> appliesTo,
+    String status,
     String content) {
 
   public RuleDef {
@@ -56,9 +61,10 @@ public record RuleDef(
     title = title != null ? title : name;
     priority = priority != null ? priority : "medium";
     appliesTo = appliesTo != null ? List.copyOf(appliesTo) : List.of();
+    status = status != null ? status : "enabled";
   }
 
   public RuleDef(String name, String source, String content) {
-    this(name, source, name, "medium", List.of(), content);
+    this(name, source, name, "medium", List.of(), "enabled", content);
   }
 }
