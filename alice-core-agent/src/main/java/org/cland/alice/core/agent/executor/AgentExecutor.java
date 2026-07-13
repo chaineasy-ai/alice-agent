@@ -1524,7 +1524,7 @@ public class AgentExecutor {
             ? error.getMessage()
             : error.getClass().getSimpleName() + " (no message)");
     context.put("status", "FATAL_ERROR");
-    context.transitionTo(AgentContext.Phase.FINISH);
+    context.forceTransitionTo(AgentContext.Phase.FINISH);
 
     // WAL: 致命错误 — 紧急 Checkpoint
     if (wal != null) {

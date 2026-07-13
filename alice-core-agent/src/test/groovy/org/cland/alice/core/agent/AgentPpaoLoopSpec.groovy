@@ -39,12 +39,12 @@ class AgentPpaoLoopSpec extends Specification {
                 int idx = callIndex.getAndIncrement()
                 if (idx < plans.size()) return plans[idx]
                 return Plan.builder().type(Plan.Type.FAST_PATH).summary("Default finish")
-                        .addStep(Plan.Step.of("FINISH", "FINISH")).build()
+                        .addStep(Plan.Step.of(Plan.Intent.FINISH, "FINISH")).build()
             }
         }
         def slowPath = Stub(DecisionStrategy) {
             decide(_ as Map) >> { Plan.builder().type(Plan.Type.SLOW_PATH).summary("fallback")
-                    .addStep(Plan.Step.of("FINISH", "FINISH")).build() }
+                    .addStep(Plan.Step.of(Plan.Intent.FINISH, "FINISH")).build() }
         }
         return StrategySelector.builder()
                 .fastPath(fastPath).slowPath(slowPath)
@@ -55,25 +55,25 @@ class AgentPpaoLoopSpec extends Specification {
     private StrategySelector finishStrategy() {
         sequencedStrategy([
             Plan.builder().type(Plan.Type.FAST_PATH).summary("Immediate finish")
-                    .addStep(Plan.Step.of("FINISH", "FINISH")).build()
+                    .addStep(Plan.Step.of(Plan.Intent.FINISH, "FINISH")).build()
         ])
     }
 
     private StrategySelector revisionThenFinishStrategy() {
         sequencedStrategy([
             Plan.builder().type(Plan.Type.FAST_PATH).summary("Revision")
-                    .addStep(Plan.Step.of("REVISION", "REVISION", ["feedback": "Re-evaluate"])).build(),
+                    .addStep(Plan.Step.of(Plan.Intent.REVISION, "REVISION", ["feedback": "Re-evaluate"])).build(),
             Plan.builder().type(Plan.Type.FAST_PATH).summary("Done")
-                    .addStep(Plan.Step.of("FINISH", "FINISH")).build()
+                    .addStep(Plan.Step.of(Plan.Intent.FINISH, "FINISH")).build()
         ])
     }
 
     private StrategySelector observeThenFinishStrategy() {
         sequencedStrategy([
-            Plan.builder().type(Plan.Type.FAST_PATH).summary("Observe")
-                    .addStep(Plan.Step.of("OBSERVE", "ENVIRONMENT")).build(),
+            Plan.builder().type(Plan.Type.FAST_PATH).summary("Answer then finish")
+                    .addStep(Plan.Step.of(Plan.Intent.ANSWER, "ANSWER")).build(),
             Plan.builder().type(Plan.Type.FAST_PATH).summary("Done")
-                    .addStep(Plan.Step.of("FINISH", "FINISH")).build()
+                    .addStep(Plan.Step.of(Plan.Intent.FINISH, "FINISH")).build()
         ])
     }
 
@@ -130,7 +130,7 @@ class AgentPpaoLoopSpec extends Specification {
         ctx.currentPhase() == AgentContext.Phase.FINISH
     }
 
-    def "should handle OBSERVE via run()"() {
+    def "should handle non-FINISH intent via run()"() {
         given:
         def planner = makePlanner(observeThenFinishStrategy())
         def agent = new Agent("test-observe", AgentConfig.builder().maxIterations(10).build())

@@ -149,6 +149,16 @@ public class AgentContext {
     this.currentPhase = target;
   }
 
+  /**
+   * 强制转换阶段，跳过状态机规则校验。
+   *
+   * <p>仅用于从 {@code AgentExecutor.handleFatalError()} 这样的错误恢复路径中调用， 确保致命错误后 Agent 能进入 FINISH
+   * 终态，即使当前阶段不允许直接转换。
+   */
+  public synchronized void forceTransitionTo(Phase target) {
+    this.currentPhase = target;
+  }
+
   /** 判断阶段转换是否合法 — 委托给 {@link PhaseStateGraph}。 */
   private boolean canTransitionTo(Phase from, Phase to) {
     return phaseGraph.canTransition(from, to);
