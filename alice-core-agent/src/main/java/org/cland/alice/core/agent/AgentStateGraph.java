@@ -117,6 +117,13 @@ public final class AgentStateGraph implements PhaseStateGraph {
     // REVISION → PLANNING：修订完成后重新规划
     addEdge(AgentContext.Phase.REVISION, AgentContext.Phase.PLANNING);
 
+    // 任意阶段 → FINISH：允许从任何非终态优雅退出（错误恢复、取消等）
+    addEdge(AgentContext.Phase.START, AgentContext.Phase.FINISH);
+    addEdge(AgentContext.Phase.PERCEIVING, AgentContext.Phase.FINISH);
+    addEdge(AgentContext.Phase.PLANNING, AgentContext.Phase.FINISH);
+    addEdge(AgentContext.Phase.VERIFYING_PRE, AgentContext.Phase.FINISH);
+    addEdge(AgentContext.Phase.REVISION, AgentContext.Phase.FINISH);
+
     // FINISH — 终态，无出边
 
     logger.info(

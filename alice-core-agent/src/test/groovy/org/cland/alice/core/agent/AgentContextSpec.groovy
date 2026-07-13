@@ -59,7 +59,7 @@ class AgentContextSpec extends Specification {
         def ctx = new AgentContext()
 
         when:
-        ctx.transitionTo(AgentContext.Phase.FINISH)
+        ctx.transitionTo(AgentContext.Phase.ACTING) // START -> ACTING: must go through PERCEIVING first
 
         then:
         thrown(IllegalStateException)
