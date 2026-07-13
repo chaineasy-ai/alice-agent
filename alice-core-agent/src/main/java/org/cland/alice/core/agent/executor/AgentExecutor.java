@@ -361,10 +361,52 @@ public class AgentExecutor {
     logger.debug("[Plan] iteration={}", context.iteration());
     context.transitionTo(AgentContext.Phase.PLANNING);
 
+    // 通过状态机判断终态：如果已经是终态，跳过规划器直接 FINISH
+    if (context.phaseGraph().isTerminal(context.currentPhase())) {
+      logger.info("[Plan] Phase {} is terminal, skipping planner", context.currentPhase());
+      Action finishAction = Action.finish();
+      context.appendThought("Plan: " + finishAction.type() + " -> " + finishAction.target());
+      return Future.succeededFuture(
+          new StepWithContext(context, new StepResult.Continue(finishAction)));
+    }
+
     Action nextAction;
     if (agent.plannerService() != null) {
+      // 用 PromptManager 渲染 planner.ftl 并注入 context，供 FastPathStrategy 做意图分类
+      String plannerPrompt = PromptManager.buildPlannerPrompt(context.asMap());
+      context.put("plannerPrompt", plannerPrompt);
+
       // PlannerService.plan() 返回 Plan，转为意图 Map
+      // PlannerService 内部也有 result 检查作为防御兜底
       Plan plan = agent.plannerService().plan(context.asMap());
+
+      // 记录 planner 的两条消息到 WAL：prompt（请求）→ intent（响应），通过 plannerTraceId 串联
+      String plannerTraceId = "planner_" + System.currentTimeMillis();
+      if (wal != null) {
+        wal.plannerPrompt(
+            context.sessionId(),
+            plannerPrompt,
+            java.util.Map.of(
+                "prompt", context.containsKey("prompt") ? context.get("prompt").toString() : ""));
+      }
+      Object planIntent = plan.metadata().get("intent");
+      if (planIntent != null) {
+        context.put("plannerIntent", planIntent);
+        logger.info("[Plan] planner intent: {}", planIntent);
+        if (wal != null) {
+          String rawResponse =
+              plan.metadata().containsKey("plannerRawResponse")
+                  ? plan.metadata().get("plannerRawResponse").toString()
+                  : planIntent.toString();
+          Object chain = plan.metadata().get("intentChain");
+          java.util.Map<String, Object> plannerMeta = new java.util.LinkedHashMap<>();
+          plannerMeta.put(
+              "prompt", context.containsKey("prompt") ? context.get("prompt").toString() : "");
+          if (chain != null) plannerMeta.put("intentChain", chain);
+          wal.plannerIntent(context.sessionId(), rawResponse, planIntent.toString(), plannerMeta);
+        }
+      }
+
       Map<String, Object> intent = planToIntent(plan, context.asMap());
       nextAction = mapToAction(intent);
     } else {
@@ -1621,11 +1663,17 @@ public class AgentExecutor {
     }
 
     Plan.Step firstStep = plan.steps().get(0);
-    String actionType = firstStep.actionType();
 
-    return switch (actionType) {
-      case "FINISH" -> Map.of("type", "FINISH", "target", "FINISH");
-      case "TOOL_CALL" -> {
+    return switch (firstStep.intent()) {
+      case FINISH -> Map.of("type", "FINISH", "target", "FINISH");
+      case REVISION -> {
+        var m = new java.util.LinkedHashMap<String, Object>();
+        m.put("type", "REVISION");
+        m.put("target", "REVISION");
+        m.put("feedback", firstStep.parameters().getOrDefault("feedback", "Revision requested"));
+        yield Map.copyOf(m);
+      }
+      case SEARCH -> {
         var m = new java.util.LinkedHashMap<String, Object>();
         m.put("type", "TOOL_CALL");
         m.put("target", firstStep.target());
@@ -1633,16 +1681,10 @@ public class AgentExecutor {
         if (firstStep.thought() != null) m.put("thought", firstStep.thought());
         yield Map.copyOf(m);
       }
-      case "REVISION" -> {
-        var m = new java.util.LinkedHashMap<String, Object>();
-        m.put("type", "REVISION");
-        m.put("target", "REVISION");
-        m.put("feedback", firstStep.parameters().getOrDefault("feedback", "Revision requested"));
-        yield Map.copyOf(m);
-      }
       default -> {
         var m = new java.util.LinkedHashMap<String, Object>();
         m.put("type", "LLM_INFERENCE");
+        m.put("intent", firstStep.intent().name());
         m.put("target", firstStep.target() != null ? firstStep.target() : "gpt-4o-mini");
         m.put(
             "prompt",

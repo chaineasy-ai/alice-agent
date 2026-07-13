@@ -20,7 +20,7 @@
 | 概念 | 类 | 说明 |
 |------|-----|------|
 | **图** | `SopGraph` | 整个 SOP 工作流的 DAG 容器，包含节点和边 |
-| **节点** | `SopGraph.SopNode` | 工作流中的一个步骤（`actionType` + `target` + `parameters`） |
+| **节点** | `SopGraph.SopNode` | 工作流中的一个步骤（`intent` + `target` + `parameters`，intent 为 `Plan.Intent` 枚举） |
 | **边** | `SopGraph.SopEdge` | 步骤间的流转关系，携带标签（`on-success` / `on-failure` / `condition:<expr>`） |
 | **序列化** | `SopGraphPersistence` | GraphML 格式的导入/导出 |
 
@@ -41,9 +41,9 @@
 
 ```java
 SopGraph graph = SopGraph.builder("my-sop", "我的工作流")
-    .addNode("start", "LLM_INFERENCE", "parse_input")
-    .addNode("process", "TOOL_CALL", "process_data")
-    .addNode("end", "FINISH", "FINISH")
+    .addNode("start", Plan.Intent.ANALYZE, "parse_input")
+    .addNode("process", Plan.Intent.SEARCH, "process_data")
+    .addNode("end", Plan.Intent.FINISH, "FINISH")
     .addEdge("start", "process", "on-success")
     .addEdge("process", "end", "on-success")
     .addKeyword("示例")
@@ -54,10 +54,10 @@ SopGraph graph = SopGraph.builder("my-sop", "我的工作流")
 
 ```java
 SopGraph graph = SopGraph.builder("search-sop", "搜索工作流")
-    .addNode("query", "LLM_INFERENCE", "parse_query", Map.of("model", "gpt-4o"))
-    .addNode("search", "TOOL_CALL", "web_search", Map.of("engine", "bing", "max_results", "5"))
-    .addNode("summarize", "LLM_INFERENCE", "summarize_results")
-    .addNode("finish", "FINISH", "FINISH")
+    .addNode("query", Plan.Intent.ANALYZE, "parse_query", Map.of("model", "gpt-4o"))
+    .addNode("search", Plan.Intent.SEARCH, "web_search", Map.of("engine", "bing", "max_results", "5"))
+    .addNode("summarize", Plan.Intent.ANALYZE, "summarize_results")
+    .addNode("finish", Plan.Intent.FINISH, "FINISH")
     .addEdge("query", "search")
     .addEdge("search", "summarize", "on-success")
     .addEdge("summarize", "finish", "on-success")
@@ -68,12 +68,12 @@ SopGraph graph = SopGraph.builder("search-sop", "搜索工作流")
 
 ```java
 SopGraph graph = SopGraph.builder("code-review", "代码审查流程")
-    .addNode("lint", "TOOL_CALL", "run_linter")
-    .addNode("analyze", "TOOL_CALL", "static_analysis")
-    .addNode("review", "LLM_INFERENCE", "ai_code_review")
-    .addNode("fix", "TOOL_CALL", "auto_fix")
-    .addNode("report", "LLM_INFERENCE", "generate_report")
-    .addNode("finish", "FINISH", "FINISH")
+    .addNode("lint", Plan.Intent.SEARCH, "run_linter")
+    .addNode("analyze", Plan.Intent.SEARCH, "static_analysis")
+    .addNode("review", Plan.Intent.ANALYZE, "ai_code_review")
+    .addNode("fix", Plan.Intent.SEARCH, "auto_fix")
+    .addNode("report", Plan.Intent.ANALYZE, "generate_report")
+    .addNode("finish", Plan.Intent.FINISH, "FINISH")
     // 并行：lint + analyze 同时进行
     .addEdge("lint", "review", "on-success")
     .addEdge("analyze", "review", "on-success:parallel")
@@ -137,9 +137,9 @@ Path current = SopGraphPersistence.getDefaultDir();
 
 ```java
 List<Plan.Step> steps = List.of(
-    Plan.Step.of("TOOL_CALL", "step_a"),
-    Plan.Step.of("TOOL_CALL", "step_b"),
-    Plan.Step.of("FINISH", "FINISH")
+    Plan.Step.of(Plan.Intent.SEARCH, "step_a"),
+    Plan.Step.of(Plan.Intent.SEARCH, "step_b"),
+    Plan.Step.of(Plan.Intent.FINISH, "FINISH")
 );
 
 // 自动生成线性 DAG（step-0 → step-1 → step-2）
@@ -197,7 +197,7 @@ System.out.println("Edges: " + weatherSop.edges().size()); // 6
 
 // 拓扑排序 — 确定执行顺序
 for (SopGraph.SopNode node : weatherSop.topologicalOrder()) {
-    System.out.println("  " + node.actionType() + " → " + node.target());
+    System.out.println("  " + node.intent() + " → " + node.target());
 }
 
 // 查找根节点和叶节点
@@ -277,8 +277,8 @@ Plan plan = planner.plan(Map.of("prompt", "今天北京天气如何？"));
 // 现有代码（平铺列表）
 registry.register(SopTemplate.builder()
     .id("my-sop")
-    .addStep("TOOL_CALL", "a")
-    .addStep("TOOL_CALL", "b")
+    .addStep(Plan.Intent.SEARCH, "a")
+    .addStep(Plan.Intent.SEARCH, "b")
     .build());
 
 // 迁移到 DAG（自动生成线性图，与模板兼容）
@@ -293,9 +293,9 @@ registry.register(graph);  // 既注册了图，也同步了模板
 | 方法 | 说明 |
 |------|------|
 | `SopGraph.builder(id, description)` | 创建 DAG 构建器 |
-| `.addNode(id, actionType, target)` | 添加步骤节点 |
-| `.addNode(id, actionType, target, params)` | 添加带参数节点 |
-| `.addNode(id, actionType, target, params, thought)` | 添加带参数+思考的节点 |
+| `.addNode(id, intent, target)` | 添加步骤节点 |
+| `.addNode(id, intent, target, params)` | 添加带参数节点 |
+| `.addNode(id, intent, target, params, thought)` | 添加带参数+思考的节点 |
 | `.addEdge(from, to)` | 添加无条件边（默认 `on-success`） |
 | `.addEdge(from, to, label)` | 添加条件边 |
 | `.addKeyword(kw)` | 添加关键词 |

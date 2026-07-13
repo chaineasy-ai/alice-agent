@@ -75,7 +75,7 @@ public final class PlannerService {
         return Plan.builder()
             .type(Plan.Type.FAST_PATH)
             .summary("Task completed")
-            .addStep(Plan.Step.of("FINISH", "FINISH"))
+            .addStep(Plan.Step.of(Plan.Intent.FINISH, "FINISH"))
             .build();
       }
     }

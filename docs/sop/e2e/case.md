@@ -16,7 +16,7 @@ updated: "2026-06-30"
 - `docs/sop/example/weather-sop.graphml` is copied into it
 
 ```bash
-mkdir -p ~/.alice/sops
+mkdir -p ~/.alice/sop
 cp docs/sop/example/weather-sop.graphml ~/.alice/sops/
 ```
 

@@ -144,6 +144,41 @@ public final class WalSession {
   }
 
   /**
+   * Appends a planner prompt message (the input sent to the intent classification model).
+   *
+   * @param sessionId session identifier
+   * @param promptText the rendered planner prompt
+   * @param metadata additional metadata
+   * @return assigned message ID
+   */
+  public long plannerPrompt(String sessionId, String promptText, Map<String, Object> metadata) {
+    var meta = new java.util.LinkedHashMap<String, Object>();
+    meta.put("spanType", "planner_prompt");
+    meta.put("isUserVisible", false);
+    if (metadata != null) meta.putAll(metadata);
+    return appender.appendPlanner(sessionId, promptText, Map.copyOf(meta));
+  }
+
+  /**
+   * Appends a planner intent message (the classification result from the model).
+   *
+   * @param sessionId session identifier
+   * @param rawResponse the raw text returned by the intent classification model
+   * @param intent the parsed Plan.Intent name
+   * @param metadata additional metadata
+   * @return assigned message ID
+   */
+  public long plannerIntent(
+      String sessionId, String rawResponse, String intent, Map<String, Object> metadata) {
+    var meta = new java.util.LinkedHashMap<String, Object>();
+    meta.put("spanType", "planner_intent");
+    meta.put("intent", intent);
+    meta.put("isUserVisible", false);
+    if (metadata != null) meta.putAll(metadata);
+    return appender.appendPlanner(sessionId, rawResponse, Map.copyOf(meta));
+  }
+
+  /**
    * Appends a compact summary message with proper metadata.
    *
    * <p>Per the WAL specification (§3.5), the compact record automatically sets:

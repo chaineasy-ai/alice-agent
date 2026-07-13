@@ -54,7 +54,7 @@ public record RawMessage(
 
   /** Valid role enumeration set. */
   public static final List<String> VALID_ROLES =
-      List.of("system", "user", "assistant", "tool", "compact", "tool_register");
+      List.of("system", "user", "assistant", "tool", "compact", "tool_register", "planner");
 
   public RawMessage {
     Objects.requireNonNull(sessionId, "sessionId must not be null");

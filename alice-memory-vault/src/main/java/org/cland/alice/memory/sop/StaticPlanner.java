@@ -49,13 +49,13 @@ public final class StaticPlanner {
             .metadata(Map.of("sopId", template.id()));
 
     for (SopGraph.SopNode node : template.steps()) {
-      builder.addStep(node.actionType(), node.target(), node.parameters(), node.thought());
+      builder.addStep(node.intent(), node.target(), node.parameters(), node.thought());
     }
 
     // 如果模板步骤中没有 FINISH，自动添加
-    boolean hasFinish = template.steps().stream().anyMatch(n -> "FINISH".equals(n.actionType()));
+    boolean hasFinish = template.steps().stream().anyMatch(n -> n.intent() == Plan.Intent.FINISH);
     if (!hasFinish) {
-      builder.addStep(Plan.Step.of("FINISH", "FINISH"));
+      builder.addStep(Plan.Step.of(Plan.Intent.FINISH, "FINISH"));
     }
 
     return builder.build();

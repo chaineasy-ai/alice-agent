@@ -114,7 +114,7 @@ public final class GuardrailVerificatorAdapter implements Verificator {
 
     // 纠正 Plan 动作类型（Action.Type → Plan.Step 兼容字符串）
     String planTarget = targetStr != null ? targetStr : "";
-    Plan plan = Plan.fastPath("Guardrail pre-verify: " + typeStr, typeStr, planTarget);
+    Plan plan = Plan.fastPath("Guardrail pre-verify: " + typeStr, toIntent(typeStr), planTarget);
 
     // 保留 metadata 用于审计跟踪
     Plan enrichedPlan =
@@ -170,7 +170,7 @@ public final class GuardrailVerificatorAdapter implements Verificator {
     Plan plan =
         lastPlan != null
             ? lastPlan
-            : Plan.fastPath("Guardrail post-verify (no pre-plan)", "UNKNOWN", "");
+            : Plan.fastPath("Guardrail post-verify (no pre-plan)", Plan.Intent.ANALYZE, "");
 
     AuditResult result = guardrailService.verifyResult(obsMap, plan);
 
@@ -244,5 +244,15 @@ public final class GuardrailVerificatorAdapter implements Verificator {
   /** 获取内部的 GuardrailService 实例（可直接注册/卸载验证器）。 */
   public GuardrailService guardrailService() {
     return guardrailService;
+  }
+
+  /** Map string action type to Plan.Intent. */
+  private static Plan.Intent toIntent(String type) {
+    return switch (type) {
+      case "FINISH" -> Plan.Intent.FINISH;
+      case "TOOL_CALL" -> Plan.Intent.SEARCH;
+      case "REVISION" -> Plan.Intent.REVISION;
+      default -> Plan.Intent.ANALYZE;
+    };
   }
 }

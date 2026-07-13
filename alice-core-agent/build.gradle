@@ -34,6 +34,9 @@ dependencies {
     // vert.x
     implementation 'io.vertx:vertx-core:5.0.8'
 
+    // JGrapht: in-memory directed graph for PPAO state machine (AgentStateGraph)
+    implementation 'org.jgrapht:jgrapht-core:1.5.2'
+
     // ACP Java SDK
     implementation 'com.agentclientprotocol:acp-core:0.9.0'
 

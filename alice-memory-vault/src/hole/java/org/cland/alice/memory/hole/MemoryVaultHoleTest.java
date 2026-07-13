@@ -651,10 +651,10 @@ public class MemoryVaultHoleTest {
     // 1. SopGraph — 构建 DAG
     var graph =
         SopGraph.builder("weather", "天气查询")
-            .addNode("parse", "LLM_INFERENCE", "parse_query")
-            .addNode("api", "TOOL_CALL", "weather_api")
-            .addNode("format", "LLM_INFERENCE", "format_response")
-            .addNode("finish", "FINISH", "FINISH")
+            .addNode("parse", Plan.Intent.ANALYZE, "parse_query")
+            .addNode("api", Plan.Intent.SEARCH, "weather_api")
+            .addNode("format", Plan.Intent.ANALYZE, "format_response")
+            .addNode("finish", Plan.Intent.FINISH, "FINISH")
             .addEdge("parse", "api")
             .addEdge("api", "format")
             .addEdge("format", "finish")

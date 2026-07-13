@@ -193,6 +193,51 @@ public final class PromptManager {
   }
 
   // ========================================================================
+  // Planner Prompt (双路径决策策略)
+  // ========================================================================
+
+  /**
+   * 构建 Planner 决策 prompt，用于 FastPath/SlowPath 的 LLM 推理环节。
+   *
+   * <p>使用 {@code planner.ftl} 模板渲染，包含用户任务、观察、执行结果、错误等上下文。
+   *
+   * @param userTask 用户原始需求
+   * @param lastObservation 上一轮执行结果（可为空）
+   * @param lastActionResult 上一轮 Action 执行结果（可为空）
+   * @param error 错误信息（可为空）
+   * @return 完整的 planner prompt 字符串
+   */
+  public static String buildPlannerPrompt(
+      String userTask, String lastObservation, String lastActionResult, String error) {
+    Map<String, Object> data = new HashMap<>();
+    data.put("userTask", userTask != null ? userTask : "");
+    if (lastObservation != null && !lastObservation.isBlank()) {
+      data.put("lastObservation", lastObservation);
+    }
+    if (lastActionResult != null && !lastActionResult.isBlank()) {
+      data.put("lastActionResult", lastActionResult);
+    }
+    if (error != null && !error.isBlank()) {
+      data.put("error", error);
+    }
+    return render(PLANNER, data);
+  }
+
+  /**
+   * 从上下文中提取字段并构建 Planner prompt。
+   *
+   * @param context Planner 接收的上下文 Map（含 prompt, lastObservation, lastActionResult, error 等）
+   * @return 完整的 planner prompt 字符串
+   */
+  public static String buildPlannerPrompt(Map<String, Object> context) {
+    return buildPlannerPrompt(
+        (String) context.getOrDefault("prompt", ""),
+        (String) context.getOrDefault("lastObservation", null),
+        (String) context.getOrDefault("lastActionResult", null),
+        (String) context.getOrDefault("error", null));
+  }
+
+  // ========================================================================
   // Micro Loop System Prompt (静态 system role 内容)
   // ========================================================================
 

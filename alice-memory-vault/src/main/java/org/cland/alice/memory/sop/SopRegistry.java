@@ -3,6 +3,7 @@ package org.cland.alice.memory.sop;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import org.cland.alice.core.planner.Plan;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -242,12 +243,26 @@ public final class SopRegistry {
       public Builder addStep(String actionType, String target) {
         return addStep(
             new SopGraph.SopNode(
-                "step-" + (steps != null ? steps.size() : 0), actionType, target, Map.of(), null));
+                "step-" + (steps != null ? steps.size() : 0),
+                toIntent(actionType),
+                target,
+                Map.of(),
+                null));
       }
 
       public SopTemplate build() {
         return new SopTemplate(this);
       }
     }
+  }
+
+  /** Map String to Plan.Intent. */
+  private static Plan.Intent toIntent(String type) {
+    return switch (type) {
+      case "FINISH" -> Plan.Intent.FINISH;
+      case "TOOL_CALL" -> Plan.Intent.SEARCH;
+      case "REVISION" -> Plan.Intent.REVISION;
+      default -> Plan.Intent.ANALYZE;
+    };
   }
 }

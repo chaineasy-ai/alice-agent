@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import org.cland.alice.core.planner.Plan;
 import org.jgrapht.Graph;
 import org.jgrapht.graph.DefaultDirectedGraph;
 import org.jgrapht.graph.DefaultEdge;
@@ -32,10 +33,10 @@ import org.slf4j.LoggerFactory;
  *
  * <pre>{@code
  * SopGraph graph = SopGraph.builder("weather-sop", "天气查询流程")
- *     .addNode("start", "LLM_INFERENCE", "parse_query")
- *     .addNode("check", "TOOL_CALL", "get_weather")
- *     .addNode("format", "LLM_INFERENCE", "format_response")
- *     .addNode("end", "FINISH", "FINISH")
+ *     .addNode("start", Plan.Intent.ANALYZE, "parse_query")
+ *     .addNode("check", Plan.Intent.SEARCH, "get_weather")
+ *     .addNode("format", Plan.Intent.ANALYZE, "format_response")
+ *     .addNode("end", Plan.Intent.FINISH, "FINISH")
  *     .addEdge("start", "check")
  *     .addEdge("check", "format")
  *     .addEdge("format", "end")
@@ -43,7 +44,7 @@ import org.slf4j.LoggerFactory;
  *
  * // 拓扑排序遍历
  * for (SopNode node : graph.topologicalOrder()) {
- *     System.out.println(node.actionType() + " → " + node.target());
+ *     System.out.println(node.intent() + " → " + node.target());
  * }
  * }</pre>
  */
@@ -250,24 +251,24 @@ public final class SopGraph {
       return this;
     }
 
-    public Builder addNode(String id, String actionType, String target) {
-      nodes.add(new SopNode(id, actionType, target, Map.of(), null));
+    public Builder addNode(String id, Plan.Intent intent, String target) {
+      nodes.add(new SopNode(id, intent, target, Map.of(), null));
       return this;
     }
 
     public Builder addNode(
-        String id, String actionType, String target, Map<String, Object> parameters) {
-      nodes.add(new SopNode(id, actionType, target, parameters, null));
+        String id, Plan.Intent intent, String target, Map<String, Object> parameters) {
+      nodes.add(new SopNode(id, intent, target, parameters, null));
       return this;
     }
 
     public Builder addNode(
         String id,
-        String actionType,
+        Plan.Intent intent,
         String target,
         Map<String, Object> parameters,
         String thought) {
-      nodes.add(new SopNode(id, actionType, target, parameters, thought));
+      nodes.add(new SopNode(id, intent, target, parameters, thought));
       return this;
     }
 
@@ -298,19 +299,19 @@ public final class SopGraph {
   public static final class SopNode {
 
     private final String id;
-    private final String actionType;
+    private final Plan.Intent intent;
     private final String target;
     private final Map<String, Object> parameters;
     private final String thought;
 
     public SopNode(
         String id,
-        String actionType,
+        Plan.Intent intent,
         String target,
         Map<String, Object> parameters,
         String thought) {
       this.id = Objects.requireNonNull(id, "id must not be null");
-      this.actionType = Objects.requireNonNull(actionType, "actionType must not be null");
+      this.intent = Objects.requireNonNull(intent, "intent must not be null");
       this.target = target;
       this.parameters = parameters != null ? Map.copyOf(parameters) : Map.of();
       this.thought = thought;
@@ -320,8 +321,16 @@ public final class SopGraph {
       return id;
     }
 
+    /**
+     * @deprecated use {@link #intent()}
+     */
+    @Deprecated
     public String actionType() {
-      return actionType;
+      return intent.toActionString();
+    }
+
+    public Plan.Intent intent() {
+      return intent;
     }
 
     public String target() {
@@ -350,7 +359,7 @@ public final class SopGraph {
 
     @Override
     public String toString() {
-      return "SopNode{" + "id='" + id + '\'' + ", action=" + actionType + ":" + target + '}';
+      return "SopNode{" + "id='" + id + '\'' + ", action=" + intent + ":" + target + '}';
     }
   }
 

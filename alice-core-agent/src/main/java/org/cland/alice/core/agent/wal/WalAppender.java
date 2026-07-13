@@ -186,6 +186,22 @@ public final class WalAppender {
   }
 
   /**
+   * Appends a planner message with metadata.
+   *
+   * @param sessionId session identifier
+   * @param content planner prompt or response text
+   * @param metadata extended metadata (spanType=planner_prompt, etc.)
+   * @return assigned message ID
+   */
+  public long appendPlanner(String sessionId, String content, Map<String, Object> metadata) {
+    RawMessage msg =
+        RawMessage.create(0, sessionId, "planner", content, null, null, null, 0, metadata);
+    long id = store.appendMessage(msg);
+    log.debug("Appended PLANNER message id={} session={}", id, sessionId);
+    return id;
+  }
+
+  /**
    * Appends a tool_register message with metadata.
    *
    * @param sessionId session identifier

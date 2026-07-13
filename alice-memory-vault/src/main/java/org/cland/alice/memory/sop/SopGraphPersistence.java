@@ -3,6 +3,7 @@ package org.cland.alice.memory.sop;
 import java.io.*;
 import java.nio.file.Path;
 import java.util.*;
+import org.cland.alice.core.planner.Plan;
 import org.jgrapht.graph.DefaultDirectedGraph;
 import org.jgrapht.nio.Attribute;
 import org.jgrapht.nio.AttributeType;
@@ -261,7 +262,8 @@ public final class SopGraphPersistence {
 
     importer.setVertexFactory(
         id -> {
-          SopGraph.SopNode placeholder = new SopGraph.SopNode(id, "UNKNOWN", "", Map.of(), null);
+          SopGraph.SopNode placeholder =
+              new SopGraph.SopNode(id, Plan.Intent.ANALYZE, "", Map.of(), null);
           result.registerNode(placeholder);
           return placeholder;
         });
@@ -338,7 +340,7 @@ public final class SopGraphPersistence {
         String thought = attrs.get(ATTR_THOUGHT);
         Map<String, Object> params = deserializeParameters(paramsStr);
         if (thought == null || thought.isBlank() || "null".equals(thought)) thought = null;
-        builder.addNode(nodeId, actionType, target, params, thought);
+        builder.addNode(nodeId, toIntent(actionType), target, params, thought);
       }
       for (SopGraph.SopEdge edge : graph.edgeSet()) {
         String sourceId = graph.getEdgeSource(edge).id();
@@ -392,5 +394,15 @@ public final class SopGraphPersistence {
       }
     }
     return Map.copyOf(result);
+  }
+
+  /** Map GraphML string back to Plan.Intent. */
+  private static Plan.Intent toIntent(String type) {
+    return switch (type) {
+      case "FINISH" -> Plan.Intent.FINISH;
+      case "TOOL_CALL" -> Plan.Intent.SEARCH;
+      case "REVISION" -> Plan.Intent.REVISION;
+      default -> Plan.Intent.ANALYZE;
+    };
   }
 }

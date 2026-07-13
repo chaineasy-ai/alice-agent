@@ -47,8 +47,18 @@ public class AgentContext {
     VERIFYING_POST,
     REFLECTING,
     REVISION,
-    FINISH
+    FINISH;
+
+    /** 判断是否为终态（无合法出边）。 */
+    public boolean isTerminal() {
+      return this == FINISH;
+    }
   }
+
+  /** 当前 PPAO 阶段 */
+
+  /** 状态机图实例 — 每个 context 持有自己的副本，支持多 agent 不同拓扑。 */
+  private final PhaseStateGraph phaseGraph;
 
   // ========== 构造 ==========
 
@@ -59,6 +69,7 @@ public class AgentContext {
     this.attributes = new ConcurrentHashMap<>();
     this.thoughtChain = new StringBuilder();
     this.currentPhase = Phase.START;
+    this.phaseGraph = new AgentStateGraph();
   }
 
   public AgentContext(int maxIterations) {
@@ -68,6 +79,7 @@ public class AgentContext {
     this.attributes = new ConcurrentHashMap<>();
     this.thoughtChain = new StringBuilder();
     this.currentPhase = Phase.START;
+    this.phaseGraph = new AgentStateGraph();
   }
 
   public AgentContext(String sessionId) {
@@ -77,6 +89,7 @@ public class AgentContext {
     this.attributes = new ConcurrentHashMap<>();
     this.thoughtChain = new StringBuilder();
     this.currentPhase = Phase.START;
+    this.phaseGraph = new AgentStateGraph();
   }
 
   public AgentContext(String sessionId, int maxIterations) {
@@ -86,6 +99,7 @@ public class AgentContext {
     this.attributes = new ConcurrentHashMap<>();
     this.thoughtChain = new StringBuilder();
     this.currentPhase = Phase.START;
+    this.phaseGraph = new AgentStateGraph();
   }
 
   // ========== Session ==========
@@ -135,24 +149,14 @@ public class AgentContext {
     this.currentPhase = target;
   }
 
-  /** 判断阶段转换是否合法 */
-  private static boolean canTransitionTo(Phase from, Phase to) {
-    return switch (from) {
-      case START -> to == Phase.PERCEIVING;
-      case PERCEIVING -> to == Phase.PLANNING;
-      case PLANNING -> to == Phase.VERIFYING_PRE || to == Phase.REVISION;
-      case VERIFYING_PRE -> to == Phase.ACTING || to == Phase.REVISION;
-      case ACTING ->
-          to == Phase.ACTING // Micro-ReAct 自循环
-              || to == Phase.OBSERVING // Macro: 退出 Micro 进入 Observe
-              || to == Phase.REVISION // Micro 内 Revision 跳出
-              || to == Phase.FINISH; // 致命错误时直接结束
-      case OBSERVING -> to == Phase.VERIFYING_POST || to == Phase.REVISION || to == Phase.FINISH;
-      case VERIFYING_POST -> to == Phase.REFLECTING || to == Phase.FINISH || to == Phase.REVISION;
-      case REFLECTING -> to == Phase.PLANNING || to == Phase.REVISION || to == Phase.FINISH;
-      case REVISION -> to == Phase.PLANNING;
-      case FINISH -> false; // 终态
-    };
+  /** 判断阶段转换是否合法 — 委托给 {@link PhaseStateGraph}。 */
+  private boolean canTransitionTo(Phase from, Phase to) {
+    return phaseGraph.canTransition(from, to);
+  }
+
+  /** 获取当前状态机图实例（用于外部查询如 isTerminal）。 */
+  public PhaseStateGraph phaseGraph() {
+    return phaseGraph;
   }
 
   // ========== 思考链 ==========

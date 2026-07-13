@@ -202,7 +202,7 @@ public final class GuardrailToolProxy {
     return Plan.builder()
         .type(Plan.Type.FAST_PATH)
         .summary("GuardrailToolProxy: " + toolName)
-        .addStep(Plan.Step.of("TOOL_CALL", toolName, params != null ? params : Map.of()))
+        .addStep(Plan.Step.of(Plan.Intent.SEARCH, toolName, params != null ? params : Map.of()))
         .build();
   }
 

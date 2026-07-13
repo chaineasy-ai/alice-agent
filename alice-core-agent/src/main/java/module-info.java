@@ -16,6 +16,7 @@ module alice.agent.alice.core.agent.main {
   requires alice.agent.alice.env.adapter.main;
   requires io.vertx.core;
   requires com.google.common;
+  requires org.jgrapht.core;
   requires freemarker;
   requires com.fasterxml.jackson.databind;
   requires com.fasterxml.jackson.core;

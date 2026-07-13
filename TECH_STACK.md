@@ -39,8 +39,9 @@ updated: "2026-06-30"
 | **JGrapht** | 1.5.2 | `alice-memory-vault` | In-memory DAG for SOP (Standard Operating Procedure) workflows; provides `DirectedAcyclicGraph`, topological sort, graph traversal |
 | **JGrapht IO** | 1.5.2 | `alice-memory-vault` | GraphML import/export for SOP graph persistence (`~/.alice/sops/*.graphml`) |
 | **JGrapht Ext** | 1.5.2 | `alice-memory-vault` | Extended graph algorithms (future use) |
+| **JGraphX** | 4.2.2 | `alice-memory-vault` | Graph visualization (mxGraph) — renders SOP DAGs as interactive diagrams; complements JGrapht's in-memory graph with a visual layer |
 
-Key integration: `SopGraph` wraps JGrapht's `DefaultDirectedGraph<SopNode, SopEdge>` with SOP-specific node/edge types in `alice-memory-vault`'s `org.cland.alice.memory.sop` package. The SOP state machine is always in memory — GraphML is used solely for save/restore.
+Key integration: `SopGraph` wraps JGrapht's `DefaultDirectedGraph<SopNode, SopEdge>` with SOP-specific node/edge types in `alice-memory-vault`'s `org.cland.alice.memory.sop` package. The SOP DAG is always in memory (JGrapht) — GraphML is used solely for save/restore, and JGraphX for optional visual rendering.
 
 ## AI / Model Integration
 
