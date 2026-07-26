@@ -615,6 +615,12 @@ public class Agent implements AgentFacade {
     vertx.close();
   }
 
+  /** 取消当前 PPAO 执行。可用于 TUI ESC / CLI Ctrl+C 中断。 */
+  public void cancel() {
+    executor.cancel();
+    logger.info("[Agent] Execution cancelled");
+  }
+
   // ========== 辅助 ==========
 
   /** 直接调用 LLM（回退逻辑） */

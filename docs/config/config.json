@@ -3,5 +3,6 @@
   "default_verbose": false,
   "max_iterations": 10,
   "max_micro_depth": 30,
+  "skip_micro": false,
   "action_timeout_ms": 30000
 }

@@ -7,12 +7,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * 静态规划器 — 将 SOP 模板直接解析为 {@link Plan} 步骤列表。
+ * 静态规划器 — 将 SOP 模板解析为链式步骤列表，每次返回下一步。
  *
- * <p>完全跳过模型生成，保证确定性执行。适用于 SOP 明确的任务（如"查询天气"、"发送邮件"等标准流程）。
- *
- * <p>作为 {@code alice-core-planner} 中 {@link org.cland.alice.core.planner.PlannerService
- * PlannerService} 的静态规划函数注入。
+ * <p>通过 AgentContext 中的 {@code sopActive} / {@code sopSteps} / {@code sopStepIdx} 追踪进度。 不修改传入的
+ * context（不可变快照），SOP 状态通过 Plan.metadata 返回，由调用方写入 AgentContext。
  */
 public final class StaticPlanner {
 
@@ -25,39 +23,95 @@ public final class StaticPlanner {
   }
 
   /**
-   * 根据上下文匹配并生成静态规划。
+   * 匹配 SOP 并返回当前步骤。
    *
-   * @param context 规划器上下文的只读快照（来自 {@code alice-core-planner}）
-   * @return 静态 {@link Plan}，如果没有匹配的 SOP 则返回 null
+   * <p>已激活时（{@code sopActive=true}）取 {@code sopStepIdx} 对应的步骤。 未激活时匹配 prompt，命中则返回第一步并激活。
+   *
+   * @param context 只读快照，含 {@code prompt}、{@code sopActive}、{@code sopSteps}、{@code sopStepIdx}
+   * @return Plan（单步），SOP 已完成或无匹配时返回 null
    */
   public Plan plan(Map<String, Object> context) {
+    // ── 已激活：取下一步 ──
+    if (Boolean.TRUE.equals(context.get("sopActive"))) {
+      return nextStep(context);
+    }
+
+    // ── 未激活：匹配 prompt ──
     String prompt = (String) context.getOrDefault("prompt", "");
     if (prompt == null || prompt.isBlank()) return null;
 
     SopRegistry.SopTemplate template = sopRegistry.match(prompt);
-    if (template == null) {
-      logger.debug("[StaticPlanner] No matching SOP for prompt");
+    if (template == null) return null;
+
+    // 从 graph 构建步骤链
+    SopGraph graph = sopRegistry.getGraph(template.id());
+    if (graph == null) return null;
+
+    var steps = graph.topologicalOrder();
+    if (steps.isEmpty()) return null;
+
+    logger.info(
+        "[StaticPlanner] Matched SOP '{}' ({} steps, keywords: {})",
+        graph.id(),
+        steps.size(),
+        graph.keywords());
+
+    // 构建 Plan for first step
+    var first = steps.get(0);
+    return buildPlan(graph.id(), steps, first, 0);
+  }
+
+  /** 返回下一步。从 context 读取状态，通过 metadata 传出给调用方。 */
+  private Plan nextStep(Map<String, Object> context) {
+    String sopId = (String) context.get("sopId");
+    int idx =
+        context.containsKey("sopStepIdx") ? ((Number) context.get("sopStepIdx")).intValue() : 0;
+    @SuppressWarnings("unchecked")
+    var steps = (java.util.List<SopGraph.SopNode>) context.get("sopSteps");
+
+    if (steps == null || idx >= steps.size()) {
+      logger.info(
+          "[StaticPlanner] SOP '{}' completed (step {}/{})",
+          sopId,
+          idx,
+          steps != null ? steps.size() : 0);
       return null;
     }
 
-    logger.info("[StaticPlanner] Matched SOP: {}", template.id());
+    var node = steps.get(idx);
+    return buildPlan(sopId, steps, node, idx);
+  }
 
-    Plan.Builder builder =
-        Plan.builder()
-            .type(Plan.Type.STATIC)
-            .summary("Static plan from SOP: " + template.id())
-            .metadata(Map.of("sopId", template.id()));
+  /** 构建单步 Plan，进度状态写入 metadata。 */
+  private Plan buildPlan(
+      String sopId, java.util.List<SopGraph.SopNode> allSteps, SopGraph.SopNode node, int idx) {
+    int nextIdx = idx + 1;
+    boolean hasNext = nextIdx < allSteps.size();
 
-    for (SopGraph.SopNode node : template.steps()) {
-      builder.addStep(node.intent(), node.target(), node.parameters(), node.thought());
+    var meta = new java.util.LinkedHashMap<String, Object>();
+    meta.put("sopId", sopId);
+    meta.put("sopStepIdx", nextIdx); // 下一步索引（调用方写入上下文）
+    meta.put("sopActive", hasNext); // 是否还有后续
+    meta.put("sopSteps", allSteps); // 所有步骤（供后续迭代）
+    if (hasNext) {
+      var next = allSteps.get(nextIdx);
+      meta.put("sopNext", next.id() + "(" + next.intent() + ")");
     }
 
-    // 如果模板步骤中没有 FINISH，自动添加
-    boolean hasFinish = template.steps().stream().anyMatch(n -> n.intent() == Plan.Intent.FINISH);
-    if (!hasFinish) {
-      builder.addStep(Plan.Step.of(Plan.Intent.FINISH, "FINISH"));
-    }
+    logger.info(
+        "[StaticPlanner] SOP '{}' step {}/{}: intent={}, target={}{}",
+        sopId,
+        idx + 1,
+        allSteps.size(),
+        node.intent(),
+        node.target(),
+        hasNext ? " → next: " + meta.get("sopNext") : " (final)");
 
-    return builder.build();
+    return Plan.builder()
+        .type(Plan.Type.STATIC)
+        .summary("SOP " + sopId + " step " + (idx + 1) + "/" + allSteps.size())
+        .addStep(Plan.Step.of(node.intent(), node.target(), node.parameters(), node.thought()))
+        .metadata(Map.copyOf(meta))
+        .build();
   }
 }

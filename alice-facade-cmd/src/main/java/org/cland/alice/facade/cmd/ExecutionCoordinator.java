@@ -14,6 +14,9 @@ import org.cland.alice.core.agent.wal.WalSession;
 import org.cland.alice.facade.cmd.config.AliceConfigStore;
 import org.cland.alice.facade.cmd.config.RunConfig;
 import org.cland.alice.facade.cmd.render.OutputRenderer;
+import org.cland.alice.memory.sop.SopGraphPersistence;
+import org.cland.alice.memory.sop.SopRegistry;
+import org.cland.alice.memory.sop.StaticPlanner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -81,17 +84,20 @@ public final class ExecutionCoordinator {
     try {
       // 1. 构建 AgentConfig
       int maxIterations = AgentConfig.DEFAULT_MAX_ITERATIONS;
+      boolean skipMicro = AgentConfig.DEFAULT_SKIP_MICRO;
       try {
-        String iterStr = new AliceConfigStore().get("agent.max_iterations");
+        AliceConfigStore store = new AliceConfigStore();
+        String iterStr = store.get("agent.max_iterations");
         if (iterStr != null && !iterStr.isBlank()) {
           int parsed = Integer.parseInt(iterStr);
           if (parsed > 0) maxIterations = parsed;
         }
+        String skipStr = store.get("skip_micro");
+        if (skipStr != null && !skipStr.isBlank()) {
+          skipMicro = Boolean.parseBoolean(skipStr);
+        }
       } catch (Exception e) {
-        logger.debug(
-            "Failed to read agent.max_iterations from config, using default {}",
-            AgentConfig.DEFAULT_MAX_ITERATIONS,
-            e);
+        logger.debug("Failed to read config, using defaults", e);
       }
 
       String effectiveModel = modelOverride != null ? modelOverride : config.model();
@@ -99,6 +105,7 @@ public final class ExecutionCoordinator {
           AgentConfig.builder()
               .defaultModelId(effectiveModel)
               .maxIterations(maxIterations)
+              .skipMicro(skipMicro)
               .debug(config.verbose())
               .build();
 
@@ -138,6 +145,38 @@ public final class ExecutionCoordinator {
               .withWal(wal)
               .withGuardrail(new GuardrailVerificatorAdapter());
       logger.debug("Agent created: {} session={} walDir={}", agent.agentId(), sessionId, sessionId);
+
+      // 3c. 动态加载 SOP — 从 ~/.alice/sops/*.graphml 自动加载所有 SOP
+      var sopRegistry = new SopRegistry();
+      var sopsDir = java.nio.file.Paths.get(System.getProperty("user.home"), ".alice", "sops");
+      if (java.nio.file.Files.isDirectory(sopsDir)) {
+        try (var stream = java.nio.file.Files.newDirectoryStream(sopsDir, "*.graphml")) {
+          for (var path : stream) {
+            try {
+              var graph = SopGraphPersistence.load(path.toFile());
+              sopRegistry.register(graph);
+              logger.info(
+                  "[SOP] Loaded graph: {} ({} nodes, {} edges, keywords: {})",
+                  graph.id(),
+                  graph.nodes().size(),
+                  graph.edges().size(),
+                  graph.keywords());
+            } catch (Exception e) {
+              logger.warn("[SOP] Failed to load {}: {}", path.getFileName(), e.getMessage());
+            }
+          }
+        } catch (Exception e) {
+          logger.warn("[SOP] Failed to scan sops directory: {}", e.getMessage());
+        }
+      } else {
+        logger.debug("[SOP] No sops directory at {}, skipping SOP loading", sopsDir);
+      }
+      if (!sopRegistry.graphIds().isEmpty()) {
+        var staticPlanner = new StaticPlanner(sopRegistry);
+        agent.withStaticPlanner(staticPlanner::plan);
+        logger.info(
+            "[SOP] StaticPlanner enabled with {} SOP graph(s)", sopRegistry.graphIds().size());
+      }
 
       // 4. 注册内置工具（read_file, write_file, grep, run）到 ToolRegistry
       org.cland.alice.tool.gateway.ToolRegistry tr =

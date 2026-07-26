@@ -66,6 +66,7 @@ CLI 点分隔键名自动转换为 JSON 下划线键名：
 | `default.verbose` | `default_verbose` | bool | `false` | 默认详细模式 |
 | `max_iterations` | `max_iterations` | int | `10` | 最大 PPAO 迭代次数 |
 | `max_micro_depth` | `max_micro_depth` | int | `30` | Micro-ReAct 最大递归深度（熔断阈值），高于 Macro 迭代以支持多步骤工具链 |
+| `skip_micro` | `skip_micro` | bool | `false` | 是否跳过 Micro-ReAct 战术循环。为 true 时仅执行 Macro 循环（Plan → Verify → Act → Observe → Verify → Reflect），跳过 LLM 推理和工具调用 |
 | `action_timeout_ms` | `action_timeout_ms` | int | `30000` | Action 执行超时（毫秒） |
 
 #### 模型选择（可选覆盖）
@@ -77,6 +78,7 @@ CLI 点分隔键名自动转换为 JSON 下划线键名：
 | `default.model` | `default_model` | `gpt-4o-mini` | 默认模型 ID（可选覆盖；主配置见 model.json 的 `default_model`） |
 | `agent.max_iterations` | `max_iterations` | `10` | 最大迭代次数（同 `max_iterations`，可选覆盖） |
 | `agent.max_micro_depth` | `max_micro_depth` | `30` | Micro-ReAct 最大递归深度（同 `max_micro_depth`，可选覆盖） |
+| `agent.skip_micro` | `skip_micro` | `false` | 跳过 Micro-ReAct（同 `skip_micro`，可选覆盖） |
 
 > **注意**：`openai.*` / `anthropic.*` 等提供商配置键已从 `config.json` 迁移至 `model.json`。
 > 在 `AliceConfigStore` 中仍然可以 get/set 这些旧键，但模型初始化流程不再读取它们。

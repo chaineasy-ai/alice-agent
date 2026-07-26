@@ -100,6 +100,15 @@ public class MicroReActEngine {
   }
 
   /**
+   * 返回当前 AgentConfig，供 {@link ActPhase} 等外部组件读取。
+   *
+   * @return AgentConfig 实例
+   */
+  public AgentConfig config() {
+    return config;
+  }
+
+  /**
    * 注入 {@link GuardrailToolProxy}，为每个 TOOL_CALL 启用 Guardrail 预检/后检。
    *
    * @param proxy GuardrailToolProxy 实例

@@ -323,6 +323,10 @@ public class AliceTuiLauncher implements AutoCloseable {
 
   private void handleInterrupt(ControlCmd.InterruptCmd interrupt) {
     logger.info("Interrupt requested: {}", interrupt.cause());
+    // 取消正在执行的 Agent 任务
+    if (agent != null) {
+      agent.cancel();
+    }
     if ("user-exit".equals(interrupt.cause()) || interrupt.cause().contains("exit")) {
       this.running = false;
     }

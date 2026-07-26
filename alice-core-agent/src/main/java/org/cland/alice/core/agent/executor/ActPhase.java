@@ -35,6 +35,16 @@ public class ActPhase implements MacroLoopPhase {
       return Future.succeededFuture(input);
     }
 
+    // skipMicro: 跳过 Micro-ReAct 战术循环，仅执行 Macro 循环
+    if (microEngine.config().skipMicro()) {
+      logger.info("[PPAO] Act: skipMicro=true, skipping Micro-ReAct loop, action={}", action);
+      ctx.transitionTo(AgentContext.Phase.ACTING);
+      ctx.appendThought("Act: skipMicro enabled, skipped tactical loop");
+      ctx.put("__skip_micro", "true");
+      return Future.succeededFuture(
+          new StepWithContext(ctx, new StepResult.Continue(Action.finish())));
+    }
+
     logger.info("[PPAO] Act: initial action={}", action);
     ctx.transitionTo(AgentContext.Phase.ACTING);
 

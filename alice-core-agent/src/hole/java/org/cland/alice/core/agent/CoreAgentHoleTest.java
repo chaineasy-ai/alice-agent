@@ -3,7 +3,9 @@ package org.cland.alice.core.agent;
 import java.util.Map;
 import org.cland.alice.core.agent.executor.AgentExecutor;
 import org.cland.alice.core.agent.lifecycle.Action;
+import org.cland.alice.core.agent.lifecycle.PlanToIntentConverter;
 import org.cland.alice.core.agent.result.StepResult;
+import org.cland.alice.core.planner.Plan;
 
 /**
  * Hole test entry point for alice-core-agent.
@@ -13,7 +15,7 @@ import org.cland.alice.core.agent.result.StepResult;
  *
  * <p>Usage (via Gradle): ./gradlew :alice-core-agent:runHoleTest --args="<key>"
  *
- * <p>Supported keys: context, stepResult, action, executor, all
+ * <p>Supported keys: context, stepResult, action, executor, intent, all
  *
  * <p>Exit 0 = PASS, 1 = FAIL.
  */
@@ -28,11 +30,13 @@ public class CoreAgentHoleTest {
       case "stepResult" -> testStepResultSealed();
       case "action" -> testActionBuilder();
       case "executor" -> testAgentExecutor();
+      case "intent" -> testIntentCompositeWithModel();
       case "all" -> {
         testAgentContext();
         testStepResultSealed();
         testActionBuilder();
         testAgentExecutor();
+        testIntentCompositeWithModel();
       }
       default -> fail("Unknown key: " + args[0]);
     }
@@ -154,6 +158,161 @@ public class CoreAgentHoleTest {
     assertTrue("AgentExecutor class loads", executorClass != null);
 
     System.out.println("PASS: AGT-P04 AgentExecutor");
+  }
+
+  // ==================== AGT-P05: Intent composite with model ====================
+
+  static void testIntentCompositeWithModel() {
+    // --- TC-INTENT-01: ANALYZE intent → LLM_INFERENCE Action with model target ---
+    {
+      Plan plan = Plan.fastPath("Analyze the data", Plan.Intent.ANALYZE, "deepseek-v4-flash");
+      Map<String, Object> intent =
+          PlanToIntentConverter.planToIntent(plan, Map.of("prompt", "analyze this"));
+      assertEq("ANALYZE intent type", "LLM_INFERENCE", intent.get("type"));
+      assertEq("ANALYZE intent target (model)", "deepseek-v4-flash", intent.get("target"));
+      assertTrue("ANALYZE intent has prompt", intent.containsKey("prompt"));
+
+      Action action = PlanToIntentConverter.mapToAction(intent);
+      assertEq("ANALYZE Action type", Action.Type.LLM_INFERENCE, action.type());
+      assertEq("ANALYZE Action model target", "deepseek-v4-flash", action.target());
+      System.out.println("  ✅ [INTENT-01] ANALYZE → LLM_INFERENCE with model target");
+    }
+
+    // --- TC-INTENT-02: SEARCH intent → TOOL_CALL Action ---
+    {
+      Plan plan = Plan.fastPath("Search web", Plan.Intent.SEARCH, "web_search");
+      Map<String, Object> intent = PlanToIntentConverter.planToIntent(plan, Map.of());
+      assertEq("SEARCH intent type", "TOOL_CALL", intent.get("type"));
+      assertEq("SEARCH intent target (tool)", "web_search", intent.get("target"));
+
+      Action action = PlanToIntentConverter.mapToAction(intent);
+      assertEq("SEARCH Action type", Action.Type.TOOL_CALL, action.type());
+      assertEq("SEARCH Action tool target", "web_search", action.target());
+      System.out.println("  ✅ [INTENT-02] SEARCH → TOOL_CALL with tool target");
+    }
+
+    // --- TC-INTENT-03: ANSWER intent → FINISH Action ---
+    {
+      Plan plan = Plan.fastPath("Answer directly", Plan.Intent.ANSWER, "FINISH");
+      Map<String, Object> intent = PlanToIntentConverter.planToIntent(plan, Map.of());
+      assertEq("ANSWER intent type", "FINISH", intent.get("type"));
+
+      Action action = PlanToIntentConverter.mapToAction(intent);
+      assertEq("ANSWER Action type", Action.Type.FINISH, action.type());
+      System.out.println("  ✅ [INTENT-03] ANSWER → FINISH");
+    }
+
+    // --- TC-INTENT-04: FINISH intent → FINISH Action ---
+    {
+      Plan plan = Plan.fastPath("Done", Plan.Intent.FINISH, "FINISH");
+      Map<String, Object> intent = PlanToIntentConverter.planToIntent(plan, Map.of());
+      assertEq("FINISH intent type", "FINISH", intent.get("type"));
+
+      Action action = PlanToIntentConverter.mapToAction(intent);
+      assertEq("FINISH Action type", Action.Type.FINISH, action.type());
+      System.out.println("  ✅ [INTENT-04] FINISH → FINISH");
+    }
+
+    // --- TC-INTENT-05: CODE intent → LLM_INFERENCE with model target ---
+    {
+      Plan plan =
+          Plan.builder()
+              .type(Plan.Type.FAST_PATH)
+              .summary("Write code")
+              .addStep(Plan.Intent.CODE, "gpt-4o")
+              .build();
+      Map<String, Object> intent =
+          PlanToIntentConverter.planToIntent(plan, Map.of("prompt", "write a function"));
+      assertEq("CODE intent type", "LLM_INFERENCE", intent.get("type"));
+      assertEq("CODE intent model target", "gpt-4o", intent.get("target"));
+
+      Action action = PlanToIntentConverter.mapToAction(intent);
+      assertEq("CODE Action type", Action.Type.LLM_INFERENCE, action.type());
+      assertEq("CODE Action model", "gpt-4o", action.target());
+      System.out.println("  ✅ [INTENT-05] CODE → LLM_INFERENCE with model target");
+    }
+
+    // --- TC-INTENT-06: GENERATE intent → LLM_INFERENCE with default model fallback ---
+    {
+      // When Plan step has no specific model target, defaults to "gpt-4o-mini"
+      Plan plan =
+          Plan.builder()
+              .type(Plan.Type.FAST_PATH)
+              .summary("Generate content")
+              .addStep(Plan.Intent.GENERATE, null)
+              .build();
+      Map<String, Object> intent =
+          PlanToIntentConverter.planToIntent(plan, Map.of("prompt", "write a poem"));
+      assertEq("GENERATE intent type", "LLM_INFERENCE", intent.get("type"));
+      assertEq("GENERATE fallback model", "gpt-4o-mini", intent.get("target"));
+
+      Action action = PlanToIntentConverter.mapToAction(intent);
+      assertEq("GENERATE Action fallback model", "gpt-4o-mini", action.target());
+      System.out.println("  ✅ [INTENT-06] GENERATE → LLM_INFERENCE with default model");
+    }
+
+    // --- TC-INTENT-07: REVISION intent → REVISION Action with feedback ---
+    {
+      Plan plan =
+          Plan.builder()
+              .type(Plan.Type.SLOW_PATH)
+              .summary("Revise code")
+              .addStep(
+                  Plan.Intent.REVISION,
+                  "REVISION",
+                  Map.of("feedback", "Use better variable names"),
+                  null)
+              .build();
+      Map<String, Object> intent = PlanToIntentConverter.planToIntent(plan, Map.of());
+      assertEq("REVISION intent type", "REVISION", intent.get("type"));
+      assertTrue("REVISION has feedback", intent.containsKey("feedback"));
+
+      Action action = PlanToIntentConverter.mapToAction(intent);
+      assertEq("REVISION Action type", Action.Type.REVISION, action.type());
+      assertEq(
+          "REVISION feedback param",
+          "Use better variable names",
+          action.parameters().get("feedback"));
+      System.out.println("  ✅ [INTENT-07] REVISION → REVISION with feedback");
+    }
+
+    // --- TC-INTENT-08: Multi-step Plan → only first step taken ---
+    {
+      Plan plan =
+          Plan.builder()
+              .type(Plan.Type.SLOW_PATH)
+              .summary("Multi-step task")
+              .addStep(
+                  Plan.Intent.ANALYZE,
+                  "deepseek-v4-flash",
+                  Map.of("prompt", "analyze logs"),
+                  "Step 1: analyze")
+              .addStep(Plan.Intent.CODE, "gpt-4o", Map.of("prompt", "fix bug"), "Step 2: code fix")
+              .addStep(Plan.Intent.FINISH, "FINISH")
+              .build();
+      Map<String, Object> intent = PlanToIntentConverter.planToIntent(plan, Map.of());
+      // Only first step (ANALYZE) should be taken
+      assertEq("Multi-step intent type", "LLM_INFERENCE", intent.get("type"));
+      assertEq(
+          "Multi-step intent target (first step model)", "deepseek-v4-flash", intent.get("target"));
+      assertTrue("Multi-step has thought from first step", intent.containsKey("thought"));
+      assertEq("Multi-step thought content", "Step 1: analyze", intent.get("thought"));
+      System.out.println("  ✅ [INTENT-08] Multi-step Plan → only first step converted");
+    }
+
+    // --- TC-INTENT-09: Empty Plan → default LLM_INFERENCE with fallback model ---
+    {
+      Plan emptyPlan = Plan.builder().type(Plan.Type.FAST_PATH).summary("empty").build();
+      // Empty steps list → planToIntent returns default LLM_INFERENCE
+      Map<String, Object> intent =
+          PlanToIntentConverter.planToIntent(emptyPlan, Map.of("prompt", "hello"));
+      assertEq("Empty plan intent type", "LLM_INFERENCE", intent.get("type"));
+      assertEq("Empty plan fallback target", "gpt-4o-mini", intent.get("target"));
+      assertEq("Empty plan prompt passthrough", "hello", intent.get("prompt"));
+      System.out.println("  ✅ [INTENT-09] Empty Plan → default LLM_INFERENCE");
+    }
+
+    System.out.println("PASS: AGT-P05 Intent composite with model (9 scenarios)");
   }
 
   // ==================== Assertion helpers ====================

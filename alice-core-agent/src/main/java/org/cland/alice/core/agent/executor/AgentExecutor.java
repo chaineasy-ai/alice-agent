@@ -67,6 +67,9 @@ public class AgentExecutor {
   /** Agent 执行流事件监听器列表（Observer 模式） */
   private final List<AgentEventListener> listeners = new CopyOnWriteArrayList<>();
 
+  /** 取消标志 — 设置后 PPAO 循环在下一个安全点终止 */
+  private volatile boolean cancelled;
+
   public AgentExecutor(Vertx vertx, Agent agent) {
     this.vertx = Objects.requireNonNull(vertx, "vertx must not be null");
     this.agent = Objects.requireNonNull(agent, "agent must not be null");
@@ -156,6 +159,12 @@ public class AgentExecutor {
   // 公共 API
   // ========================================================================
 
+  /** 取消当前 PPAO 执行。可在任意线程安全调用。 */
+  public void cancel() {
+    this.cancelled = true;
+    logger.info("[Cancel] PPAO execution cancelled");
+  }
+
   /**
    * 启动 PPAO 循环。
    *
@@ -218,6 +227,13 @@ public class AgentExecutor {
    * 然后根据终止条件决定是退出还是递归进入下一轮。
    */
   private Future<AgentContext> loopBody(AgentContext context) {
+    // 检查取消信号
+    if (cancelled) {
+      logger.warn("[PPAO] Cancelled at loopBody start");
+      context.put("result", "[Cancelled]");
+      context.transitionTo(AgentContext.Phase.FINISH);
+      return Future.succeededFuture(context);
+    }
     // 检查是否应提前终止
     if (agent.shouldFinish(context, null)) {
       logger.info(
@@ -407,6 +423,19 @@ public class AgentExecutor {
         }
       }
 
+      // SOP 状态：从 Plan.metadata 提取，写入 AgentContext（可变）
+      Object sopActive = plan.metadata().get("sopActive");
+      if (sopActive != null) {
+        context.put("sopActive", sopActive);
+        context.put("sopId", plan.metadata().getOrDefault("sopId", ""));
+        context.put("sopStepIdx", plan.metadata().getOrDefault("sopStepIdx", 0));
+        context.put("sopSteps", plan.metadata().get("sopSteps"));
+        logger.debug(
+            "[Plan] SOP state synced: active={}, stepIdx={}",
+            sopActive,
+            plan.metadata().get("sopStepIdx"));
+      }
+
       Map<String, Object> intent = planToIntent(plan, context.asMap());
       nextAction = mapToAction(intent);
     } else {
@@ -479,6 +508,17 @@ public class AgentExecutor {
 
     if (action == null) {
       return Future.succeededFuture(stepWithCtx);
+    }
+
+    // skipMicro: 跳过 Micro-ReAct 战术循环，仅执行 Macro 循环
+    if (config.skipMicro()) {
+      logger.info(
+          "[PPAO] Act: skipMicro=true, skipping Micro-ReAct loop, initial action={}", action);
+      ctx.transitionTo(AgentContext.Phase.ACTING);
+      ctx.appendThought("Act: skipMicro enabled, skipped tactical loop");
+      ctx.put("__skip_micro", "true");
+      return Future.succeededFuture(
+          new StepWithContext(ctx, new StepResult.Continue(Action.finish())));
     }
 
     logger.info("[PPAO] Act: entering Micro-ReAct loop, initial action={}", action);
@@ -700,8 +740,8 @@ public class AgentExecutor {
             }
 
             @SuppressWarnings("unchecked")
-            java.util.Set<String> readFiles =
-                (java.util.Set<String>) updatedCtx.get("__read_files");
+            java.util.Map<String, String> readFiles =
+                (java.util.Map<String, String>) updatedCtx.get("__read_files");
 
             var virtualExecutor = Executors.newVirtualThreadPerTaskExecutor();
             List<CompletableFuture<ParallelToolResult>> parallelFutures = new ArrayList<>();
@@ -714,9 +754,12 @@ public class AgentExecutor {
               // read_file cache skip
               if ("read_file".equals(tc.name()) && readFiles != null) {
                 Object pathObj = params.get("path");
-                if (pathObj instanceof String path && readFiles.contains(path)) {
+                if (pathObj instanceof String path && readFiles.containsKey(path)) {
+                  String cachedContent = readFiles.get(path);
                   logger.info(
-                      "[Dispatch/TOOL_CALL] read_file skipped (already read, parallel): {}", path);
+                      "[Dispatch/TOOL_CALL] read_file skipped (already read, parallel): {} (serving {} chars from cache)",
+                      path,
+                      cachedContent != null ? cachedContent.length() : 0);
                   parallelFutures.add(
                       CompletableFuture.completedFuture(
                           new ParallelToolResult(
@@ -725,8 +768,14 @@ public class AgentExecutor {
                               ToolResult.builder()
                                   .status(
                                       org.cland.alice.tool.gateway.engine.ToolResult.Status.SUCCESS)
-                                  .summary("[CACHED] " + path + " was already read.")
-                                  .rawData("[CACHED] " + path)
+                                  .summary(
+                                      "[CACHED] "
+                                          + path
+                                          + " was already read ("
+                                          + (cachedContent != null ? cachedContent.length() : 0)
+                                          + " chars).")
+                                  .rawData(
+                                      cachedContent != null ? cachedContent : "[CACHED] " + path)
                                   .metadata(Map.of("toolName", tc.name(), "cached", "true"))
                                   .build(),
                               true)));
@@ -778,8 +827,8 @@ public class AgentExecutor {
 
                       var batchLog = new StringBuilder();
                       @SuppressWarnings("unchecked")
-                      java.util.Set<String> updatedReadFiles =
-                          (java.util.Set<String>) updatedCtx.get("__read_files");
+                      java.util.Map<String, String> updatedReadFiles =
+                          (java.util.Map<String, String>) updatedCtx.get("__read_files");
 
                       for (int i = 0; i < parallelFutures.size(); i++) {
                         ParallelToolResult ptr = parallelFutures.get(i).join();
@@ -815,10 +864,14 @@ public class AgentExecutor {
                             Object pathObj = ptr.params.get("path");
                             if (pathObj instanceof String p && !p.isBlank()) {
                               if (updatedReadFiles == null) {
-                                updatedReadFiles = new java.util.HashSet<>();
+                                updatedReadFiles = new java.util.HashMap<>();
                                 updatedCtx.put("__read_files", updatedReadFiles);
                               }
-                              updatedReadFiles.add(p);
+                              String raw =
+                                  tr.rawData() != null
+                                      ? tr.rawData()
+                                      : (tr.summary() != null ? tr.summary() : "");
+                              updatedReadFiles.put(p, raw);
                             }
                           }
 
@@ -838,11 +891,20 @@ public class AgentExecutor {
                         } else {
                           // Fire action + observe for cached tools too (TUI pairing)
                           fireOnAction(tc.name(), ptr.params);
+                          String cachedRaw =
+                              tr.rawData() != null && !tr.rawData().isBlank()
+                                  ? tr.rawData()
+                                  : (tr.summary() != null ? tr.summary() : "");
                           fireOnObserve(
                               "[CACHED] " + tc.name() + " was already read in a previous step.",
                               "[CACHED] " + tc.name(),
                               0L);
-                          batchLog.append("[CACHED] ").append(tc.name()).append("\n\n");
+                          batchLog
+                              .append("Tool ")
+                              .append(tc.name())
+                              .append(" returned (cached):\n")
+                              .append(cachedRaw)
+                              .append("\n\n");
                         }
                       }
 
@@ -863,9 +925,11 @@ public class AgentExecutor {
                             updatedCtx.containsKey("prompt")
                                 ? updatedCtx.get("prompt").toString()
                                 : "";
+                        java.util.Set<String> readFilePaths =
+                            updatedReadFiles != null ? updatedReadFiles.keySet() : null;
                         String userContent =
                             org.cland.alice.core.agent.prompt.PromptManager.buildMicroUserContent(
-                                actionLog, rawPrompt, updatedReadFiles);
+                                actionLog, rawPrompt, readFilePaths);
                         microReActStep(
                                 updatedCtx,
                                 Action.llmInference(config.defaultModelId(), userContent),
@@ -1163,16 +1227,23 @@ public class AgentExecutor {
       Object pathObj = action.parameters().get("path");
       if (pathObj instanceof String path && !path.isBlank()) {
         @SuppressWarnings("unchecked")
-        java.util.Set<String> readFiles = (java.util.Set<String>) ctx.get("__read_files");
-        if (readFiles != null && readFiles.contains(path)) {
-          logger.info("[Dispatch/TOOL_CALL] read_file skipped (already read): {}", path);
+        java.util.Map<String, String> readFiles =
+            (java.util.Map<String, String>) ctx.get("__read_files");
+        if (readFiles != null && readFiles.containsKey(path)) {
+          String cachedContent = readFiles.get(path);
+          logger.info(
+              "[Dispatch/TOOL_CALL] read_file skipped (already read): {} (serving {} chars from cache)",
+              path,
+              cachedContent != null ? cachedContent.length() : 0);
           return Future.succeededFuture(
               new StepWithContext(
                   ctx,
                   new StepResult.Continue(
                       null,
                       Observation.success(
-                          "[CACHED] " + path + " was already read in a previous step."))));
+                          cachedContent != null
+                              ? cachedContent
+                              : "[CACHED] " + path + " was already read in a previous step."))));
         }
       }
     }
@@ -1256,13 +1327,17 @@ public class AgentExecutor {
                     Object pathObj = action.parameters().get("path");
                     if (pathObj instanceof String path && !path.isBlank()) {
                       @SuppressWarnings("unchecked")
-                      java.util.Set<String> readFiles =
-                          (java.util.Set<String>) ctx.get("__read_files");
+                      java.util.Map<String, String> readFiles =
+                          (java.util.Map<String, String>) ctx.get("__read_files");
                       if (readFiles == null) {
-                        readFiles = new java.util.HashSet<>();
+                        readFiles = new java.util.HashMap<>();
                         ctx.put("__read_files", readFiles);
                       }
-                      readFiles.add(path);
+                      String fileContent =
+                          result.rawData() != null
+                              ? result.rawData()
+                              : (result.summary() != null ? result.summary() : "");
+                      readFiles.put(path, fileContent);
                     }
                   }
 
@@ -1305,10 +1380,13 @@ public class AgentExecutor {
                   // 通过 PromptManager 构建 Micro User Content（user role 部分）
                   String rawPrompt = ctx.containsKey("prompt") ? ctx.get("prompt").toString() : "";
                   @SuppressWarnings("unchecked")
-                  java.util.Set<String> readFiles = (java.util.Set<String>) ctx.get("__read_files");
+                  java.util.Map<String, String> readFiles =
+                      (java.util.Map<String, String>) ctx.get("__read_files");
+                  java.util.Set<String> readFilePaths =
+                      readFiles != null ? readFiles.keySet() : null;
                   String userContent =
                       PromptManager.buildMicroUserContent(
-                          actionLogBuilder.toString(), rawPrompt, readFiles);
+                          actionLogBuilder.toString(), rawPrompt, readFilePaths);
                   return new StepResult.Continue(
                       Action.llmInference(config.defaultModelId(), userContent),
                       Observation.success(

@@ -59,9 +59,26 @@ Each hole injects known input at the module boundary and verifies the output sha
 | **Assertion** | `getSession() != null` after create; state transition clean |
 | **Unit ref** | `AgentContextSpec.groovy` — session state management |
 
-### AGT-P04: (skipped — SubAgentManager not yet implemented)
+### AGT-P04: AgentExecutor class loads
 
-### AGT-P04: SubAgentManager register/list/lookup (skipped — no SubAgentManager impl)
+| Field | Value |
+|-------|-------|
+| **Target** | `AgentExecutor` class loading |
+| **Input** | Verify class loads and DEFAULT_MAX_ITERATIONS > 0 |
+| **Expected** | Class loads, constant exists |
+| **Assertion** | `AgentExecutor.class != null` |
+
+### AGT-P05: Intent composite with model routing
+
+| Field | Value |
+|-------|-------|
+| **Target** | `PlanToIntentConverter.planToIntent()` + `mapToAction()` |
+| **Input** | Plans with various `Plan.Intent` values (ANALYZE, SEARCH, CODE, GENERATE, ANSWER, FINISH, REVISION) and model targets |
+| **Expected** | Each intent produces correct `Action.Type` with correct model/tool target |
+| **Assertion** | `ANALYZE→LLM_INFERENCE`, `SEARCH→TOOL_CALL`, `ANSWER→FINISH`, etc. with proper model routing |
+| **Unit ref** | `PlanToIntentConverter` (9 scenarios in CoreAgentHoleTest) |
+
+### AGT-P06: SubAgentManager register/list/lookup (skipped — no SubAgentManager impl)
 
 | Field | Value |
 |-------|-------|

@@ -11,7 +11,6 @@ See:
 """
 
 import os
-import subprocess
 import sys
 import unittest
 
@@ -21,26 +20,20 @@ PROJECT_ROOT = os.path.normpath(
 
 MODULE = "alice-core-agent"
 
+# Insert project root so we can import e2e/helpers
+sys.path.insert(0, os.path.join(PROJECT_ROOT, "e2e"))
+from helpers import run_gradle_task
 
-def run_hole(key: str, timeout: int = 30) -> "subprocess.CompletedProcess":
-    cmd = [
-        "cmd", "/c",
-        "gradlew.bat",
-        f":{MODULE}:runHoleTest",
-        f"--args={key}",
-    ]
-    result = subprocess.run(
-        cmd,
-        cwd=PROJECT_ROOT,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
+
+def run_hole(key: str, timeout: int = 60) -> "subprocess.CompletedProcess":
+    """Run a CoreAgentHoleTest probe via Gradle."""
+    return run_gradle_task(
+        f":{MODULE}:runHoleTest", f"--args={key}", timeout=timeout
     )
-    return result
 
 
 class TestCoreAgentHoles(unittest.TestCase):
-    """Hole tests for alice-core-agent — 4 probes via Java CoreAgentHoleTest."""
+    """Hole tests for alice-core-agent — 5 probes via Java CoreAgentHoleTest."""
 
     def test_agt_p01_agent_context(self):
         """AGT-P01: AgentContext session lifecycle."""
@@ -82,13 +75,23 @@ class TestCoreAgentHoles(unittest.TestCase):
             "PASS:", result.stdout,
             msg=f"AGT-P04: unexpected output: {result.stdout[-200:]}")
 
+    def test_agt_p05_intent_composite(self):
+        """AGT-P05: Intent composite with model routing."""
+        result = run_hole("intent")
+        self.assertEqual(
+            result.returncode, 0,
+            msg=f"AGT-P05 failed: {result.stdout[-200:]}")
+        self.assertIn(
+            "PASS:", result.stdout,
+            msg=f"AGT-P05: unexpected output: {result.stdout[-200:]}")
+
 
 if __name__ == "__main__":
     print("=" * 60)
     print(f"  Hole Test: {MODULE}")
     print(f"  Module: {os.path.join(PROJECT_ROOT, MODULE)}")
     print("=" * 60)
-    print(f"  Holes: AGT-P01..P04 (4 probes)")
+    print(f"  Holes: AGT-P01..P05 (5 probes)")
     print(f"  Prober: CoreAgentHoleTest (Java Exec)")
     print("=" * 60)
     unittest.main(verbosity=2)

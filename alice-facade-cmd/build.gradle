@@ -33,6 +33,7 @@ dependencies {
     implementation project(':alice-model')
     implementation project(':alice-agent-command')
     implementation project(':alice-tool-gateway')
+    implementation project(':alice-core-planner')
 
     // vert.x（AgentCore 依赖）
     implementation 'io.vertx:vertx-core:5.0.8'

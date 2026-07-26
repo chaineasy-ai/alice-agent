@@ -398,11 +398,17 @@ public final class SopGraphPersistence {
 
   /** Map GraphML string back to Plan.Intent. */
   private static Plan.Intent toIntent(String type) {
-    return switch (type) {
-      case "FINISH" -> Plan.Intent.FINISH;
-      case "TOOL_CALL" -> Plan.Intent.SEARCH;
-      case "REVISION" -> Plan.Intent.REVISION;
-      default -> Plan.Intent.ANALYZE;
-    };
+    if (type == null || type.isBlank()) return Plan.Intent.ANALYZE;
+    try {
+      return Plan.Intent.valueOf(type.toUpperCase());
+    } catch (IllegalArgumentException e) {
+      // Fallback: map legacy action-type strings to intents
+      return switch (type.toUpperCase()) {
+        case "FINISH" -> Plan.Intent.FINISH;
+        case "TOOL_CALL" -> Plan.Intent.SEARCH;
+        case "REVISION" -> Plan.Intent.REVISION;
+        default -> Plan.Intent.ANALYZE;
+      };
+    }
   }
 }

@@ -27,10 +27,14 @@ public final class AgentConfig {
   /** 默认 Action 超时（30 秒） */
   public static final long DEFAULT_ACTION_TIMEOUT_MS = 30_000;
 
+  /** 默认跳过 Micro-ReAct（仅执行 Macro 循环） */
+  public static final boolean DEFAULT_SKIP_MICRO = false;
+
   private final String defaultModelId;
   private final int maxIterations;
   private final int maxMicroDepth;
   private final long actionTimeoutMs;
+  private final boolean skipMicro;
   private final boolean preVerifyEnabled;
   private final boolean postVerifyEnabled;
   private final boolean debug;
@@ -42,6 +46,7 @@ public final class AgentConfig {
         builder.maxMicroDepth > 0 ? builder.maxMicroDepth : DEFAULT_MAX_MICRO_DEPTH;
     this.actionTimeoutMs =
         builder.actionTimeoutMs > 0 ? builder.actionTimeoutMs : DEFAULT_ACTION_TIMEOUT_MS;
+    this.skipMicro = builder.skipMicro;
     this.preVerifyEnabled = builder.preVerifyEnabled;
     this.postVerifyEnabled = builder.postVerifyEnabled;
     this.debug = builder.debug;
@@ -70,6 +75,10 @@ public final class AgentConfig {
     return maxMicroDepth;
   }
 
+  public boolean skipMicro() {
+    return skipMicro;
+  }
+
   public long actionTimeoutMs() {
     return actionTimeoutMs;
   }
@@ -93,6 +102,7 @@ public final class AgentConfig {
     private int maxIterations;
     private int maxMicroDepth;
     private long actionTimeoutMs;
+    private boolean skipMicro;
     private boolean preVerifyEnabled = true;
     private boolean postVerifyEnabled = true;
     private boolean debug;
@@ -126,6 +136,11 @@ public final class AgentConfig {
 
     public Builder postVerifyEnabled(boolean postVerifyEnabled) {
       this.postVerifyEnabled = postVerifyEnabled;
+      return this;
+    }
+
+    public Builder skipMicro(boolean skipMicro) {
+      this.skipMicro = skipMicro;
       return this;
     }
 
