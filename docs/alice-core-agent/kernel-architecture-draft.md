@@ -127,7 +127,7 @@ updated: "2026-09-09"
 | 关系 | 性质 | 承载物 |
 |---|---|---|
 | Kernel ↔ Agent | 组合/委托 + 依赖反转 | ①执行契约接口 + ②装配方法 |
-| Kernel ↔ 策略(planner/prompt/guardrail/memory/model) | 注入反转(DIP) | 钩子接口：调用点与签名由内核定，实现由 Agent 注入；planner 拆为三职能挂点（§5.1）：STRATEGIZE 审慎节点实现 / SOP 匹配 / System-1 路由工具 |
+| Kernel ↔ 策略(planner/prompt/guardrail/memory/model) | 注入反转(DIP) | 钩子接口：调用点与签名由内核定，实现由 Agent 注入；planner 能力内聚（模块不拆，D10）：STRATEGIZE 审慎后端 + SOP 匹配，System-1 路由折叠进 actor |
 | Kernel ↔ 世界(模型/工具/文件/人) | Decision/Effect 双通道 | LLM/人 = Decision 源（语义决策，推进结构槽位）；工具/文件 = Effect 源（副作用；写经 GuardrailToolProxy 校验，默认无，D11） |
 | Kernel ↔ 数据真相 | 服务订阅 | WAL/Checkpoint 接口（结构性事实）；memory/vault=语用记忆，是策略输入 |
 | Kernel ↔ Facade | **无直接关系** | 穿透禁止 |
@@ -177,8 +177,8 @@ interface MemoryAccess  { /* ... */ }                             // 现 AgentSe
 
 | 职能 | 回答的问题 | 认知级别 | 生命周期/触发 | 归属 |
 |---|---|---|---|---|
-| **战略规划（STRATEGIZE）** | 任务本质与含糊性、值不值得做、走哪条路线（SOP/自由/深思考）、模型与预算分配、成功判据与终止边界 | System-2，刻意审慎 | 会话起点**必达** + **反思回路重入**（ARBITRATE 判路线偏差 / 修订超阈值 / 用户显式要求）；**无前置复杂度评估**（D9：规划不足靠执行后反思迭代修正） | 内核图上的**审慎决策复合节点**；内部可再展开审慎子图（MCTS/方案比较/选模型/SOP 匹配） |
-| **执行步骤规划** | 把选定路线拆成有序 goal 图（子图骨架） | 结构性产出 | goal 执行途中按需（模型或 SOP 触发） | 规划服务/工具（`decompose`/`apply_sop` 返回结构化 goal 建议，可按权限写入其建议区）；**goal 图的绑定（从建议到账本事实）只在 STRATEGIZE/ARBITRATE 决策点发生**（D11） |
+| **战略规划（STRATEGIZE）** | 任务本质与含糊性、值不值得做、走哪条路线（SOP/自由/深思考）、模型与预算分配、成功判据与终止边界 | System-2，刻意审慎 | 会话起点**必达** + **反思回路重入**（ARBITRATE 判路线偏差 / 修订超阈值 / 用户显式要求）；**无前置复杂度评估**（D9：规划不足靠执行后反思迭代修正） | 内核图上的**审慎决策复合节点**；审慎后端 = alice-core-planner（**模块不拆**，D10：Fast/Slow 路径、MCTS、SOP 匹配、选模型）；决策循环内也可直接调 tool 层 `plan` 工具（同一后端） |
+| **执行步骤规划** | 把选定路线拆成有序 goal 图（子图骨架） | 结构性产出 | goal 执行途中按需（模型或 SOP 触发） | 规划工具（tool 层 `plan`/`decompose`/`apply_sop`，内部委托 PlannerService；返回结构化 goal 建议，写经 GuardrailToolProxy 校验）；**goal 图的绑定（从建议到账本事实）只在 STRATEGIZE/ARBITRATE 决策点发生**（D11） |
 | **路由分类（System-1）** | 这一步先答、先调工具、还是直接结束 | 即时决策 | 战术子图每一步 DECIDE 内 | **折叠进 actor 的 tool 选择**；必要时保留低成本路由工具/模型作实现 |
 
 **现状代码判据**：FastPath 词分类是"路由"而非"战略"（只产出 intent 词+FINISH，不触碰任务本质与路线）；SlowPath/MCTS 是战略审慎的雏形；SOP static 是执行步骤规划的雏形；`planToIntent()` 只取 `steps[0]` = 三职能被压平后又被丢弃。
@@ -331,6 +331,7 @@ Adapter（更外面）      : vendor codec/transport（OpenAI/Gemma/未来多模
 | `planToIntent` 只取第一步 / `Plan.Step` | 账本 goal 图 + 游标 | 删除单步丢弃：goal 图为账本槽位，游标逐一推进（修 P2） |
 | `plan()` 每轮强制 planner LLM 调用 + 双模型/双 WAL | 删除 | 路由折叠进 actor；战略审慎进 STRATEGIZE 复合节点（消每轮成本与战略架空，修 P1/P3） |
 | `FastPathStrategy` 词分类 | System-1 路由工具实现（可并入 actor tool schema） | 不再充当"战略"（判据见 §5.1） |
+| `PlannerService`（聚合根） | alice-core-planner 保持（**不拆**，D10），定位=战略规划 | STRATEGIZE 审慎后端 + tool 层 `plan` 工具内部委托；System-1 路由分类移出模块 |
 | `SlowPathStrategy`/`ThinkingTree`(MCTS) | STRATEGIZE 内部审慎子图素材 | 由 STRATEGIZE 节点按预算装配（§5.2 / §6.3 `reasoning` kind） |
 | `StaticPlanner`/`SopRegistry` | 规划服务后端（`apply_sop` 类，返回 SOP 步骤建议） | 供 STRATEGIZE/ARBITRATE 决策点绑定 goal 图，而非宏层独占阶段 |
 | 效果仅回流文本（`__action_log` ad-hoc 写 ctx） | 接线 GuardrailToolProxy（P6）+ 扩展 Validator | 工具写权复用现有 guardrail 体系（默认无）：外部资源 scope=`PermissionSandboxValidator`；槽位写=新增 Validator 在 effect 边界校验；goal 图等结构槽位仅决策/仲裁点绑定（WAL 审计/回放无歧义） |
@@ -339,7 +340,7 @@ Adapter（更外面）      : vendor codec/transport（OpenAI/Gemma/未来多模
 
 ## 8. 开放决策点（评审时逐条捋）
 
-- [ ] D1 策略挂点：Planner 拆为**三职能挂点**（STRATEGIZE 审慎节点实现 / SOP 匹配 / System-1 路由工具，见 §5.1）；Guardrail/PromptProvider 为钩子；Effect/Gateway 属内核循环边界而非策略
+- [ ] D1 策略挂点：Planner 以**模块内聚**提供 STRATEGIZE 审慎后端与 `plan` 工具（模块不拆，D10），内核只见统一规划钩子；Guardrail/PromptProvider 为钩子；Effect/Gateway 属内核循环边界而非策略
 - [ ] D2 执行契约粒度：`execute` **每会话一次**；goal 图游标与战术子图展开都是内核执行语义（§5），"每目标一次"的并发契约变体由子图/子 agent 递归表达（会话级契约最简）
 - [ ] D3 AgentExecutor 去留：原样收编为 legacy 实现 vs 直接重写新实现
 - [ ] D4 内核哲学：~~运行时/VM 式（agent-agnostic）~~ vs Agent 微架构式（认识 LLM-Agent 决策循环 + 目标推进/仲裁）→ **评审反馈：倾向 Agent 微架构式**，VM 纪律仅作实现纪律不作哲学边界（见 §3 评审注与 §3.1 "决策循环语义"）
@@ -348,7 +349,7 @@ Adapter（更外面）      : vendor codec/transport（OpenAI/Gemma/未来多模
 - [ ] D7 内核接口名与包结构（`org.cland.alice.core.agent.kernel`?）
 - [ ] D8 verifyPost(artifact, goal) 的目标比对语义（谁提供"目标达成判据"）
 - [ ] D9 ~~前置复杂度/新颖性门评估~~ → **已定：不做评估**。STRATEGIZE 触发 = 会话起点必达 + 反思回路重入（ARBITRATE 判路线偏差 / 修订超阈值 / 用户显式要求）；规划不足由执行后的验证/反思迭代修正（§5.1、§5.3 要点 1）
-- [ ] D10 `alice-core-planner` 新形态：PlannerService 拆为何物——STRATEGIZE 审慎子图实现 + SOP 匹配规划服务 + 路由工具；模块包结构/导出面如何变
+- [ ] D10 ~~PlannerService 拆解~~ → **已定：模块不拆**。alice-core-planner 保持聚合根，定位 = **战略规划**（Fast/Slow 路径、MCTS、SOP 匹配、选模型）；System-1 路由分类移出（折叠进 actor 的 tool 选择）。**tool 层新增 `plan` 工具**（注册于 ToolRegistry，同后端委托 PlannerService），供 STRATEGIZE 审慎与决策循环内按需调用；产出结构化 goal 建议，绑定仍限决策/仲裁点（D11）。包结构/导出面维持现状
 - [ ] D11 槽位写权限 → **已定：不造新机制，权限体系已有**（alice-guardrail：`PermissionSandboxValidator` 管外部资源 scope；`GuardrailToolProxy` 为 P6 装配点，Pre/PostValidator 链是扩展口）。补的仅是"槽位写"这一新检查目标：登记一个 Validator（如 `LedgerScopeValidator`）在 effect 边界校验写目标槽位与工具 scope。无默认写权；goal 图/route/预算/游标等**结构/仲裁槽位**仍仅在内核 decision/仲裁点变更。校验器清单与规则细节待定
 - [ ] D12 会话预算语义 → **已定：多级预算**。会话 token 预算 / goal 内效果数与深度 / 嵌套子图深度上限；取代 maxIterations / maxMicroDepth 单计数（§5.4）。各级默认值与超限行为待定
 
