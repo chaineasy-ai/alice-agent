@@ -332,6 +332,29 @@ Session: execute(SessionRequest)                    ← Loop(R0) 解释器, 账�
 - **保留并重定位**：verifyPre/Post 语义→gate 节点；SOP/StaticPlanner→规划服务（供决策点调用）；FastPath/SlowPath→System-1 路由工具 与 STRATEGIZE 审慎子图素材。
 - 现有 `AgentStateGraph`（Phase 有向图 + ACTING 自环）作为"扁平的会话图"先行实现：自环即"战术子图退化为一个循环节点"的特例；新模型是其严格超集（节点可带内部图）。
 
+### 5.6 与原实现 Loop 的逐维差异对照
+
+> 现状实现依据 [loop-llm-interaction.md](./loop-llm-interaction.md)（AgentExecutor 实际跑法）；目标态 = 本文 §5.2/§5.3。
+
+| 维度 | 原实现（AgentExecutor） | 新架构（Loop = 图解释器） | 差异性质 |
+|---|---|---|---|
+| 组织形态 | 固定线性链 `loopBody` 递归：Perceive→Plan→VerifyPre→[Act⊃Micro]→Observe→VerifyPost→Reflect；Phase 图仅是校验壳（ACTING 自环标注 micro） | 嵌套有向图 + 单一解释器 R0：六原语 decision/effect/gate/observe/terminal/composite，composite 可展开子图 | 载体改变：编排 → 图 |
+| 驱动主体 | 手写递归 + 条件（`shouldFinish`/REVISION/迭代）散布在 loopBody/reflect/verifyPost | 解释器机械遍历；位置 = 节点 + 展开帧栈；终止/修订/预算全在图注解与 exit port | 逻辑归属改变 |
+| Plan | 每 macro 轮**强制** planner LLM 调用（FastPath 词分类 / SlowPath MCTS / SOP），`planToIntent` 只吃 `steps[0]` | STRATEGIZE 复合决策（起点 `force` + 反思重入，无每轮无条件跑、无前置复杂度评估 D9）；`plan`/`apply_sop` 是工具 | Plan 从"阶段"降为"节点 + 工具" |
+| 多目标 | 无 goal 实体；每次重规划、单步消费（P2） | goal 图 = 账本槽位 + 游标；写点绑定，"下一个 goal"是图事实 | 结构级新增 |
+| "完成"判定 | 模型 `finish_reason=stop` → `StepResult.Finish` → `shouldFinish()=true` → **直通会话 FINISH**（P1） | `finish-goal` 只是 goal 级终端判据提交 → exit port → verifyPost(g) → ARBITRATE；会话终止仅会话级终端（判据内容 D8 暂维持原语义） | 分层修复 P1 |
+| 修订/反思 | verifyPre/Post 规则拦 → `Action.revision` → 回 PLANNING（不重 Perceive，P5） | 反思 = verifyPost(g) gate + ARBITRATE decision：FAIL → 回 TAO 修订重跑；路线偏差/修订超限 → 回规划；刷新随回路携带 | 回路边结构化 |
+| 状态/上下文 | `AgentContext` + 各处 `ctx.put`；actionLog 截尾重建（P8）；WAL 只记录不回放 | Ledger 槽位 + **唯一两处写点**（decision 落账 / gate·仲裁）；observe 重建上下文；WAL trace 可回放恢复游标 | 单一真相源 |
+| 效果写权 | 工具结果拼文本回流；`GuardrailToolProxy` 存在但未接线（P6） | 写经 GuardrailToolProxy（P6 装配）+ guardrail Validator 权限检查；结构/仲裁槽位工具碰不到（D11） | 补守卫 + 权限模型 |
+| 预算/迭代 | `maxIterations`（macro 轮，且 P4 双计数）/ `maxMicroDepth` | 图注解多级预算（D12）：token / 效果数 / 嵌套深度；遍历步数单一来源 | 预算语义升级 |
+| 模型角色 | Planner LLM + Actor LLM 双角色双配置，每轮 planner 双 WAL | Decision 源统一语义（STRATEGIZE 审慎与战术 DECIDE 共用词表 R1）；System-1 分类折叠进 actor 工具选择（D10） | 砍"每轮分类"伪战略 |
+| LLM 触点 | `dispatchLlmInference` 内嵌协议词/prompt/tools | `Inferencer` 语义契约；六段 pipeline 归执行层实现（D5） | 边界外移 |
+| 迭代控制 | 双层计数嵌套（macro 递归 + micro 递归） | 展开帧栈单一栈；深度 = expansion 注解 | 消除双环 |
+
+**保留同构**：ReAct 本质（决策→效果→观察）；actor LLM 当决策源；工具当 effect；guardrail 规则体系；WAL/Checkpoint；HITL；事件流（Thought/Action/Observe ≈ decision/effect/observe）；003 子 agent 递归（新 = 同契约图嵌套）。
+
+**被删除**：每轮强制 Plan；`planToIntent`/`steps[0]`；skipMicro 与"宏轮"概念；GuardrailToolProxy"不存在"（改为接线，P6）。
+
 ## 6. 文本 LLM Pipeline
 
 ### 6.1 定位
