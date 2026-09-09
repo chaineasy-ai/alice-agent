@@ -1,20 +1,22 @@
 ---
-title: "alice-core-agent — Kernel 架构与执行工作流设计草案 (Draft)"
-summary: "三层架构（Facade/Agent/Kernel）与内核执行语义草案：内核的定义与关系、图语义执行工作流（会话图 + 战术子图展开）、plan 三职能拆解（写权复用 guardrail 权限体系、决策/仲裁落账）、执行契约接口、多级预算、文本 LLM pipeline 阶段模型、与现状代码的迁移对照。Draft 状态，供评审迭代。"
+title: "Alice Agent — Kernel 架构与执行工作流"
+summary: "三层架构（Facade/Agent/Kernel）与内核执行语义：内核的定义与关系、图元模型（R0–R4 执行推导）、规划→TAO→反思会话骨架、plan 三职能拆解（写权复用 guardrail 权限体系、决策/仲裁落账）、执行契约接口（Loop）、多级预算、文本 LLM pipeline 阶段模型、与现状代码的迁移对照。2026-09-09 评审定稿。"
 read_when:
   - "重构 AgentExecutor / 定义内核接口时"
   - "讨论执行工作流（图语义、战术子图展开、终止仲裁）时"
   - "设计文本 LLM pipeline / 动态 prompt 加载扩展点时"
 scope:
   - "alice-core-agent"
-status: "draft"
+status: "active"
 updated: "2026-09-09"
 ---
 
-# Alice Agent — Kernel 架构与执行工作流设计草案
+# Alice Agent — Kernel 架构与执行工作流
 
-> **状态：DRAFT。** 本文是设计讨论的沉淀稿，不代表已实现。所有接口名、规则编号均为草案，
-> 有待逐条评审。现状描述以当前代码（AgentExecutor 单体实现）为准。
+> **状态：正式（2026-09-09 评审定稿）**。本文由前版草案升级为架构基线，是 alice-core-agent 执行模型的设计依据：
+> **内核 = 图元模型的解释器（`Loop`），执行逻辑由图设计决定**（§5.2 R0–R4）；标准会话骨架 = 规划 → TAO → 反思（§5.3）。
+> 决策点已定：D1–D7、D9–D12；**唯一开放：D8**（verifyPost 的目标达成判据由谁提供）。
+> 现 `AgentExecutor` / `Phase` 图为 legacy 先行实现；接口与类型名留待实现期敲定（§4 注）。
 
 ## 1. 背景与动机
 
@@ -133,7 +135,7 @@ updated: "2026-09-09"
 | Kernel ↔ Facade | **无直接关系** | 穿透禁止 |
 | Kernel ↔ 嵌套会话(003 子 agent) | 同契约递归 | SessionRequest/Result 作为普通消息 |
 
-## 4. 执行契约接口草案（第一刀）
+## 4. 执行契约接口（第一刀）
 
 ```java
 // ── ① 执行契约：内核对外(Agent)暴露的最小面 ───────────────────────
@@ -165,7 +167,7 @@ interface MemoryAccess  { /* ... */ }                             // 现 AgentSe
 //   SessionResult（AgentContext/PhaseStateGraph 降为 legacy 先行实现）
 ```
 
-> 主接口名已定：`Loop`（D7，2026-09-09 评审）。其余命名（子接口/类型名）仍待定，此处仅定"形状"。
+> 主接口名已定：`Loop`（D7，2026-09-09 评审）。其余命名（子接口/类型名）待实现期敲定，此处仅定"形状"。
 
 ## 5. 执行工作流：图语义版（会话图 + 战术子图展开）
 
@@ -330,7 +332,7 @@ Session: execute(SessionRequest)                    ← Loop(R0) 解释器, 账�
 - **保留并重定位**：verifyPre/Post 语义→gate 节点；SOP/StaticPlanner→规划服务（供决策点调用）；FastPath/SlowPath→System-1 路由工具 与 STRATEGIZE 审慎子图素材。
 - 现有 `AgentStateGraph`（Phase 有向图 + ACTING 自环）作为"扁平的会话图"先行实现：自环即"战术子图退化为一个循环节点"的特例；新模型是其严格超集（节点可带内部图）。
 
-## 6. 文本 LLM Pipeline 草案
+## 6. 文本 LLM Pipeline
 
 ### 6.1 定位
 
@@ -358,7 +360,7 @@ Provider    (roles/上下文   (system/user/   retry/timeout/ (extract:      (�
                                                           tool_calls)
 ```
 
-| 段 | 接口(草案名) | 职责 | 现状代码 | 扩展点 |
+| 段 | 接口(暂定名) | 职责 | 现状代码 | 扩展点 |
 |---|---|---|---|---|
 | ① | `PromptResolver` | 按 role/phase/model/session 取模板与规则 | `PromptManager.build*`（static，无接口） | 动态加载：registerSource/版本/多级覆盖 |
 | ② | `MessageAssembler` | 上下文注入：`<read_files>/<tool_result>`/lastFeedback | `buildMicroUserContent` 手拼 | 每角色一个 assembler |
@@ -415,7 +417,7 @@ Adapter（更外面）      : vendor codec/transport（OpenAI/Gemma/未来多模
 | `SlowPathStrategy`/`ThinkingTree`(MCTS) | STRATEGIZE 内部审慎子图素材 | 由 STRATEGIZE 节点按预算装配（§5.2 / §6.3 `reasoning` kind） |
 | `StaticPlanner`/`SopRegistry` | 规划服务后端（`apply_sop` 类，返回 SOP 步骤建议） | 供 STRATEGIZE/ARBITRATE 决策点绑定 goal 图，而非宏层独占阶段 |
 | 效果仅回流文本（`__action_log` ad-hoc 写 ctx） | 接线 GuardrailToolProxy（P6）+ 扩展 Validator | 工具写权复用现有 guardrail 体系（默认无）：外部资源 scope=`PermissionSandboxValidator`；槽位写=新增 Validator 在 effect 边界校验；goal 图等结构槽位仅决策/仲裁点绑定（WAL 审计/回放无歧义） |
-| 草案 GoalQueue / `goalIndex` | 账本 goal 槽位 | goal 图数据形态 + 游标（§5.3） |
+| `GoalQueue` 旧提案（`goalIndex`） | 账本 goal 槽位 | goal 图数据形态 + 游标（§5.3） |
 | 手写 `extractReasoningFromRaw` 等 | ResponseDecoder | 按 vendor 拆 parser |
 
 ## 8. 开放决策点（评审时逐条捋）

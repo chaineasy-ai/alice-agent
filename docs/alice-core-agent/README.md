@@ -24,7 +24,7 @@ updated: "2026-06-26"
 | [KEY_LOG.md](./KEY_LOG.md) | AgentExecutor 关键日志索引 — PPAO 各阶段的 INFO/WARN/DEBUG 日志标记速查 |
 | [STORY.md](./STORY.md) | PPAO 提示词流故事 — 从前端页面编写场景看多层次提示词流转 |
 | [loop-llm-interaction.md](./loop-llm-interaction.md) | Loop ↔ LLM 交互 — Planner/Actor 双模型角色、ASCII + Mermaid 时序、实际发送的 payload 明细、与设计的偏差 |
-| [kernel-architecture-draft.md](./kernel-architecture-draft.md) | **草案** — 三层架构（Facade/Agent/Kernel）与内核执行语义、文本 LLM pipeline 阶段模型、现状迁移对照 |
+| [kernel-architecture.md](./kernel-architecture.md) | **正式（2026-09-09 定稿）** — 三层架构与内核执行语义：图元模型 R0–R4、规划→TAO→反思会话骨架、pipeline 阶段模型、现状迁移对照 |
 | [Agent WAL RawMessage Storage & SFT Training Data Export Technical Specification.md](./Agent%20WAL%20RawMessage%20Storage%20%26%20SFT%20Training%20Data%20Export%20Technical%20Specification.md) | WAL RawMessage 消息规范 — 分布式追踪、SFT 训练数据导出的技术规范 (V1.1) |
 | [e2e/hole_test_core_agent.py](./e2e/hole_test_core_agent.py) | Core Agent 模块 Hole 测试 — 模块边界探测脚本 |
 | [e2e/scene-executor-endpoints.md](./e2e/scene-executor-endpoints.md) | Executor 端点场景文档 — 端到端测试用例 |
