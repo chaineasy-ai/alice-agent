@@ -137,7 +137,7 @@ updated: "2026-09-09"
 
 ```java
 // ── ① 执行契约：内核对外(Agent)暴露的最小面 ───────────────────────
-interface ExecutionKernel {                              // 取代 getExecutor() 暴露
+interface Loop {                                  // 主接口名=Loop(D7)；取代 getExecutor() 暴露
     Future<SessionResult> execute(SessionRequest req);   // 进入会话闭环
     void cancel();                                       // 安全点取消语义
     KernelState state();                                 // 阶段/迭代/目标游标 只读快照
@@ -165,7 +165,7 @@ interface MemoryAccess  { /* ... */ }                             // 现 AgentSe
 //   SessionResult（AgentContext/PhaseStateGraph 降为 legacy 先行实现）
 ```
 
-> 命名全部待定（ExecutionKernel/WorkflowEngine/…）。此处仅定"形状"，不锁定名字。
+> 主接口名已定：`Loop`（D7，2026-09-09 评审）。其余命名（子接口/类型名）仍待定，此处仅定"形状"。
 
 ## 5. 执行工作流：图语义版（会话图 + 战术子图展开）
 
@@ -342,11 +342,11 @@ Adapter（更外面）      : vendor codec/transport（OpenAI/Gemma/未来多模
 
 - [ ] D1 策略挂点：Planner 以**模块内聚**提供 STRATEGIZE 审慎后端与 `plan` 工具（模块不拆，D10），内核只见统一规划钩子；Guardrail/PromptProvider 为钩子；Effect/Gateway 属内核循环边界而非策略
 - [ ] D2 执行契约粒度：`execute` **每会话一次**；goal 图游标与战术子图展开都是内核执行语义（§5），"每目标一次"的并发契约变体由子图/子 agent 递归表达（会话级契约最简）
-- [ ] D3 AgentExecutor 去留：原样收编为 legacy 实现 vs 直接重写新实现
+- [ ] D3 AgentExecutor 去留 → **已定：手术式抽取**。从 `AgentExecutor` 拆出"LLM 内核"部分（决策循环骨架、infer 触点、语义决策/终止/仲裁语义）入新内核 `Loop`；**其余不动**（WAL 记录点、事件分发、现有编排保持原样）。MicroReActEngine 等死代码收敛（P0）仍待决
 - [ ] D4 内核哲学：~~运行时/VM 式（agent-agnostic）~~ vs Agent 微架构式（认识 LLM-Agent 决策循环 + 目标推进/仲裁）→ **评审反馈：倾向 Agent 微架构式**，VM 纪律仅作实现纪律不作哲学边界（见 §3 评审注与 §3.1 "决策循环语义"）
-- [ ] D5 文本 LLM pipeline：六段是否够/每段是否独立接口；④ 超时重试归属确认
-- [ ] D6 Prompt 动态加载的具体形态（registerSource 优先级、watch 热更、session 级隔离）
-- [ ] D7 内核接口名与包结构（`org.cland.alice.core.agent.kernel`?）
+- [ ] D5 文本 LLM pipeline → **已澄清边界**：六段是**执行/策略层实现**，**内核不需要**——内核只依赖 `Inferencer.infer()` 语义契约 + `Status/Decision`/流式预留。六段拆不拆独立接口属 pipeline 策略层内部可维护性决策（与内核解耦，可先内部实现、后按 kind spec 装配）；④ 超时/重试归 pipeline 策略（内核只管"一次 Infer 有超时上限"）
+- [ ] D6 Prompt 动态加载的具体形态 → **已定**：优先级 内置 < `~/.alice/prompts` < 会话级；**不 watch 热更**（新增 `/reload` 命令手动刷新）；PromptKey 简化按 kind + 文件名路由，不做 role/phase/model/session 全组合
+- [ ] D7 内核接口名与包结构 → **已定**：主接口名 **`Loop`**；**不建新模块**，放 alice-core-agent 内子包（`org.cland.alice.core.agent.kernel`? 仍待确认最终包名）
 - [ ] D8 verifyPost(artifact, goal) 的目标比对语义（谁提供"目标达成判据"）
 - [ ] D9 ~~前置复杂度/新颖性门评估~~ → **已定：不做评估**。STRATEGIZE 触发 = 会话起点必达 + 反思回路重入（ARBITRATE 判路线偏差 / 修订超阈值 / 用户显式要求）；规划不足由执行后的验证/反思迭代修正（§5.1、§5.3 要点 1）
 - [ ] D10 ~~PlannerService 拆解~~ → **已定：模块不拆**。alice-core-planner 保持聚合根，定位 = **战略规划**（Fast/Slow 路径、MCTS、SOP 匹配、选模型）；System-1 路由分类移出（折叠进 actor 的 tool 选择）。**tool 层新增 `plan` 工具**（注册于 ToolRegistry，同后端委托 PlannerService），供 STRATEGIZE 审慎与决策循环内按需调用；产出结构化 goal 建议，绑定仍限决策/仲裁点（D11）。包结构/导出面维持现状
