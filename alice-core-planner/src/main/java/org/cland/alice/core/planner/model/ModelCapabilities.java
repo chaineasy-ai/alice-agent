@@ -46,20 +46,17 @@ public enum ModelCapabilities {
     return delegate.supports(Capability.VISION);
   }
 
-  /** 从 alice-model 的 Capability 转换。 */
+  /**
+   * 从 alice-model 的 Capability 转换。
+   *
+   * <p>{@code Capability} 是枚举，仅存在 NONE/FUNCTION_CALL/VISION/STREAMING/ALL 五个实例；
+   * 故只需在值表内匹配，不存在需要按位组合的输入。
+   */
   public static ModelCapabilities fromCapability(Capability cap) {
     if (cap == null) return NONE;
     for (ModelCapabilities mc : values()) {
       if (mc.delegate == cap) return mc;
     }
-    boolean func = cap.supports(Capability.FUNCTION_CALL);
-    boolean stream = cap.supports(Capability.STREAMING);
-    boolean vision = cap.supports(Capability.VISION);
-    if (func && stream && vision) return ALL;
-    if (func && stream) return ALL;
-    if (func) return FUNCTION_CALL;
-    if (stream) return STREAMING;
-    if (vision) return VISION;
     return NONE;
   }
 }

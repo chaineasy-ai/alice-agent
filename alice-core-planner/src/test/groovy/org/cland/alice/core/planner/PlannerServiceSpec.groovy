@@ -34,8 +34,8 @@ class PlannerServiceSpec extends Specification {
         def plan = Plan.builder()
             .type(Plan.Type.FAST_PATH)
             .summary("Test plan")
-            .addStep(Plan.Step.of("LLM_INFERENCE", "gpt-4o-mini"))
-            .addStep(Plan.Step.of("FINISH", "FINISH"))
+            .addStep(Plan.Step.of(Plan.Intent.ANALYZE, "gpt-4o-mini"))
+            .addStep(Plan.Step.of(Plan.Intent.FINISH, "FINISH"))
             .build()
 
         then:
@@ -49,7 +49,7 @@ class PlannerServiceSpec extends Specification {
 
     def "Plan.fastPath should create single-step fast path plan"() {
         when:
-        def plan = Plan.fastPath("Quick task", "LLM_INFERENCE", "gpt-4o-mini")
+        def plan = Plan.fastPath("Quick task", Plan.Intent.ANALYZE, "gpt-4o-mini")
 
         then:
         plan.type() == Plan.Type.FAST_PATH
@@ -60,9 +60,9 @@ class PlannerServiceSpec extends Specification {
     def "Plan.staticPlan should create multi-step static plan"() {
         given:
         def steps = [
-            Plan.Step.of("TOOL_CALL", "search_web"),
-            Plan.Step.of("LLM_INFERENCE", "gpt-4o"),
-            Plan.Step.of("FINISH", "FINISH")
+            Plan.Step.of(Plan.Intent.SEARCH, "search_web"),
+            Plan.Step.of(Plan.Intent.ANALYZE, "gpt-4o"),
+            Plan.Step.of(Plan.Intent.FINISH, "FINISH")
         ]
 
         when:
@@ -75,7 +75,7 @@ class PlannerServiceSpec extends Specification {
 
     def "Plan.Step should convert to action map"() {
         when:
-        def step = Plan.Step.of("TOOL_CALL", "search_api", [query: "test"], "Search for results")
+        def step = Plan.Step.of(Plan.Intent.SEARCH, "search_api", [query: "test"], "Search for results")
         def actionMap = step.toActionMap()
 
         then:
@@ -166,13 +166,13 @@ class PlannerServiceSpec extends Specification {
         given:
         def tree = new ThinkingTree([:])
 
-        def generators = [
-            { ThinkingNode p -> ThinkingNode.builder().actionType("LLM_INFERENCE").actionTarget("gpt-4o").build() } as Function<ThinkingNode, ThinkingNode>,
-            { ThinkingNode p -> ThinkingNode.builder().actionType("TOOL_CALL").actionTarget("search").build() } as Function<ThinkingNode, ThinkingNode>
+        def children = [
+            ThinkingNode.builder().actionType("LLM_INFERENCE").actionTarget("gpt-4o").build(),
+            ThinkingNode.builder().actionType("TOOL_CALL").actionTarget("search").build()
         ]
 
         when:
-        tree.expand(tree.root(), generators)
+        tree.expand(tree.root(), children)
 
         then:
         tree.nodeCount() == 3
@@ -185,7 +185,7 @@ class PlannerServiceSpec extends Specification {
         given:
         def tree = new ThinkingTree([:])
         tree.expand(tree.root(), [
-            { ThinkingNode p -> ThinkingNode.builder().actionType("LLM_INFERENCE").actionTarget("test").build() } as Function<ThinkingNode, ThinkingNode>
+            ThinkingNode.builder().actionType("LLM_INFERENCE").actionTarget("test").build()
         ])
         def child = tree.getChildren(tree.root())[0]
 
@@ -199,20 +199,21 @@ class PlannerServiceSpec extends Specification {
         tree.root().visits() == 1
     }
 
-    def "ThinkingTree bestPath should return path from root to leaf"() {
+    def "ThinkingTree pathFromRoot should return path from root to leaf"() {
         given:
         def tree = new ThinkingTree([:])
-        tree.expand(tree.root(), [
-            { ThinkingNode p -> ThinkingNode.builder().actionType("LLM_INFERENCE").actionTarget("gpt-4o").reward(1.0).visits(5).build() } as Function<ThinkingNode, ThinkingNode>,
-            { ThinkingNode p -> ThinkingNode.builder().actionType("TOOL_CALL").actionTarget("search").reward(0.5).visits(3).build() } as Function<ThinkingNode, ThinkingNode>
-        ])
+        def child = ThinkingNode.builder().actionType("LLM_INFERENCE").actionTarget("gpt-4o").build()
+        tree.expand(tree.root(), [child])
+        def grandChild = ThinkingNode.builder().actionType("TOOL_CALL").actionTarget("search").build()
+        tree.expand(child, [grandChild])
 
         when:
-        def path = tree.bestPath()
+        def path = tree.pathFromRoot(grandChild)
 
         then:
-        path.size() >= 1
+        path.size() == 3
         path[0].isRoot()
+        path[-1] == grandChild
     }
 
     // ========================================================================
@@ -222,7 +223,7 @@ class PlannerServiceSpec extends Specification {
     def "StrategySelector should route simple tasks to fast path"() {
         given:
         def fastPath = Stub(DecisionStrategy)
-        fastPath.decide(_) >> Plan.fastPath("Fast", "FINISH", "FINISH")
+        fastPath.decide(_) >> Plan.fastPath("Fast", Plan.Intent.FINISH, "FINISH")
 
         def slowPath = Stub(DecisionStrategy)
         def selector = StrategySelector.builder()
@@ -244,7 +245,7 @@ class PlannerServiceSpec extends Specification {
         slowPath.decide(_) >> Plan.builder()
                 .type(Plan.Type.SLOW_PATH)
                 .summary("Complex")
-                .addStep("FINISH", "FINISH")
+                .addStep(Plan.Intent.FINISH, "FINISH")
                 .build()
 
         def selector = StrategySelector.builder()
@@ -266,7 +267,7 @@ class PlannerServiceSpec extends Specification {
         slowPath.decide(_) >> Plan.builder()
                 .type(Plan.Type.SLOW_PATH)
                 .summary("Long")
-                .addStep("FINISH", "FINISH")
+                .addStep(Plan.Intent.FINISH, "FINISH")
                 .build()
         def selector = StrategySelector.builder()
             .fastPath(fastPath)
@@ -282,8 +283,8 @@ class PlannerServiceSpec extends Specification {
 
     def "StrategySelector should route by keyword to slow path"() {
         given:
-        def fastPath = Stub(DecisionStrategy) { decide(!null) >> Plan.fastPath("Fast", "FINISH", "FINISH") }
-        def slowPath = Stub(DecisionStrategy) { decide(!null) >> Plan.builder().type(Plan.Type.SLOW_PATH).summary("Keyword").addStep("FINISH", "FINISH").build() }
+        def fastPath = Stub(DecisionStrategy) { decide(!null) >> Plan.fastPath("Fast", Plan.Intent.FINISH, "FINISH") }
+        def slowPath = Stub(DecisionStrategy) { decide(!null) >> Plan.builder().type(Plan.Type.SLOW_PATH).summary("Keyword").addStep(Plan.Intent.FINISH, "FINISH").build() }
         def selector = StrategySelector.builder()
             .fastPath(fastPath)
             .slowPath(slowPath)
@@ -310,7 +311,7 @@ class PlannerServiceSpec extends Specification {
         slowPath.decide(_) >> Plan.builder()
                 .type(Plan.Type.SLOW_PATH)
                 .summary("Feedback")
-                .addStep("FINISH", "FINISH")
+                .addStep(Plan.Intent.FINISH, "FINISH")
                 .build()
         def selector = StrategySelector.builder()
             .fastPath(fastPath)
@@ -331,7 +332,7 @@ class PlannerServiceSpec extends Specification {
         slowPath.decide(_) >> Plan.builder()
                 .type(Plan.Type.SLOW_PATH)
                 .summary("Error")
-                .addStep("FINISH", "FINISH")
+                .addStep(Plan.Intent.FINISH, "FINISH")
                 .build()
         def selector = StrategySelector.builder()
             .fastPath(fastPath)
@@ -347,8 +348,8 @@ class PlannerServiceSpec extends Specification {
 
     def "StrategySelector should accept custom complexity function"() {
         given:
-        def fastPath = Stub(DecisionStrategy) { decide(_) >> Plan.fastPath("F", "FINISH", "FINISH") }
-        def slowPath = Stub(DecisionStrategy) { decide(_) >> Plan.builder().type(Plan.Type.SLOW_PATH).summary("S").addStep("FINISH", "FINISH").build() }
+        def fastPath = Stub(DecisionStrategy) { decide(_) >> Plan.fastPath("F", Plan.Intent.FINISH, "FINISH") }
+        def slowPath = Stub(DecisionStrategy) { decide(_) >> Plan.builder().type(Plan.Type.SLOW_PATH).summary("S").addStep(Plan.Intent.FINISH, "FINISH").build() }
         // 自定义函数：所有含 "custom_slow" 的走 Slow
         def selector = StrategySelector.builder()
             .fastPath(fastPath)
@@ -535,8 +536,8 @@ class PlannerServiceSpec extends Specification {
                     .type(Plan.Type.STATIC)
                     .summary("Mock static plan")
                     .metadata([sopId: "search_workflow"])
-                    .addStep("TOOL_CALL", "search_web")
-                    .addStep("LLM_INFERENCE", "gpt-4o")
+                    .addStep(Plan.Intent.SEARCH, "search_web")
+                    .addStep(Plan.Intent.ANALYZE, "gpt-4o")
                     .build()
             }
             return null
@@ -570,7 +571,7 @@ class PlannerServiceSpec extends Specification {
         def mockStaticPlanner = { null } as Function<Map<String, Object>, Plan>
 
         def fastPath = Stub(DecisionStrategy) {
-            decide(_) >> Plan.fastPath("Fast fallback", "FINISH", "FINISH")
+            decide(_) >> Plan.fastPath("Fast fallback", Plan.Intent.FINISH, "FINISH")
         }
         def slowPath = Stub(DecisionStrategy)
         def selector = StrategySelector.builder()

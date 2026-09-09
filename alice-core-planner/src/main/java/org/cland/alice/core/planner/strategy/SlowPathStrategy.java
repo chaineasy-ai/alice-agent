@@ -44,6 +44,15 @@ public final class SlowPathStrategy implements DecisionStrategy {
       return Plan.builder()
           .type(Plan.Type.SLOW_PATH)
           .summary("Task completed via slow path")
+          .metadata(
+              Map.of(
+                  "path", "slow",
+                  "treeNodes", 0,
+                  "treeDepth", 0,
+                  "mctsIterations", 0,
+                  "rootChildren", 0,
+                  "bestAction", "FINISH->FINISH",
+                  "bestAvgReward", 0.0))
           .addStep(Plan.Step.of(Plan.Intent.FINISH, "FINISH"))
           .build();
     }
@@ -65,7 +74,9 @@ public final class SlowPathStrategy implements DecisionStrategy {
                     "treeDepth",
                     mctsResult.treeDepth(),
                     "mctsIterations",
-                    10,
+                    mctsResult.iterationsRun(),
+                    "rootChildren",
+                    mctsResult.rootChildren(),
                     "bestAction",
                     mctsResult.actionType() + "->" + mctsResult.actionTarget(),
                     "bestAvgReward",
@@ -109,8 +120,7 @@ public final class SlowPathStrategy implements DecisionStrategy {
 
   /** 构建 MctsEngine。优先使用注入的组件，否则使用默认 Macro 层实现。 */
   private MctsEngine buildEngine(Builder builder) {
-    ThinkingTree tree =
-        builder.tree != null ? builder.tree : new ThinkingTree(Map.of("state", "init"));
+    ThinkingTree tree = builder.tree;
     Expander expander = builder.expander != null ? builder.expander : defaultMacroExpander();
     Simulator simulator =
         builder.simulator != null ? builder.simulator : defaultHeuristicSimulator();
@@ -249,6 +259,9 @@ public final class SlowPathStrategy implements DecisionStrategy {
     }
 
     public SlowPathStrategy build() {
+      if (tree == null) {
+        throw new IllegalStateException("tree must be provided");
+      }
       return new SlowPathStrategy(this);
     }
   }

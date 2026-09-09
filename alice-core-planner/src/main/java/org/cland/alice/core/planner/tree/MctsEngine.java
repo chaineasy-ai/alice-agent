@@ -95,12 +95,14 @@ public final class MctsEngine {
         iterations,
         explorationConstant);
 
+    int iterationsRun = 0;
     for (int i = 0; i < iterations; i++) {
       if (tokenBudget.isExhausted()) {
         logger.warn("[MctsEngine] Token budget exhausted at iteration {}", i + 1);
         break;
       }
       iterate(i + 1);
+      iterationsRun++;
     }
 
     ThinkingNode bestChild = tree.bestChildByAvgReward();
@@ -108,16 +110,23 @@ public final class MctsEngine {
         (bestChild != null && bestChild.visits() > 0)
             ? bestChild.reward() / bestChild.visits()
             : 0.0;
+    int rootChildren = tree.getChildren(tree.root()).size();
 
     logger.info(
-        "[MctsEngine] Completed {} iterations: bestChild={}, nodes={}, depth={}",
-        iterations,
+        "[MctsEngine] Completed {} iterations: bestChild={}, nodes={}, depth={}, rootChildren={}",
+        iterationsRun,
         bestChild != null ? bestChild.actionType() + "->" + bestChild.actionTarget() : "none",
         tree.nodeCount(),
-        tree.depth());
+        tree.depth(),
+        rootChildren);
 
     return new MctsResult(
-        bestChild, tree.nodeCount(), tree.depth(), Math.round(bestAvgReward * 100.0) / 100.0);
+        bestChild,
+        tree.nodeCount(),
+        tree.depth(),
+        iterationsRun,
+        rootChildren,
+        Math.round(bestAvgReward * 100.0) / 100.0);
   }
 
   /** 单次 MCTS 迭代： Selection → Expansion → Simulation → Backpropagation。 */
@@ -190,10 +199,17 @@ public final class MctsEngine {
    * @param bestChild 根节点下 avg_reward 最高的子节点（下一步执行动作）
    * @param totalNodes 搜索树总节点数
    * @param treeDepth 搜索树深度
+   * @param iterationsRun 实际执行的迭代次数（预算耗尽时可能小于配置值）
+   * @param rootChildren 根节点的候选子节点数
    * @param bestAvgReward 最佳子节点的平均奖励
    */
   public record MctsResult(
-      ThinkingNode bestChild, int totalNodes, int treeDepth, double bestAvgReward) {
+      ThinkingNode bestChild,
+      int totalNodes,
+      int treeDepth,
+      int iterationsRun,
+      int rootChildren,
+      double bestAvgReward) {
 
     /** 是否有可用结果。 */
     public boolean hasResult() {

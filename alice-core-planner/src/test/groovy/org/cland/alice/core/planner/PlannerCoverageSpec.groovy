@@ -8,6 +8,7 @@ import org.cland.alice.core.planner.strategy.DecisionStrategy
 import org.cland.alice.core.planner.strategy.FastPathStrategy
 import org.cland.alice.core.planner.strategy.SlowPathStrategy
 import org.cland.alice.core.planner.strategy.StrategySelector
+import org.cland.alice.core.planner.tree.MctsEngine
 import org.cland.alice.core.planner.tree.ThinkingNode
 import org.cland.alice.core.planner.tree.ThinkingTree
 import org.cland.alice.model.CallStatus
@@ -133,22 +134,25 @@ class PlannerCoverageSpec extends Specification {
     // ThinkingTree — 补充 Edge Cases
     // ========================================================================
 
-    def "ThinkingTree evaluate should set reward on node"() {
+    def "MctsEngine simulator should set reward on expanded child"() {
         given:
         def tree = new ThinkingTree([prompt: "test"])
-        def node = ThinkingNode.builder()
-            .actionType("LLM_INFERENCE")
-            .actionTarget("gpt-4o")
+        def engine = MctsEngine.builder(tree)
+            .expander({ ThinkingNode leaf ->
+                [ThinkingNode.builder().actionType("LLM_INFERENCE").actionTarget("gpt-4o").build()]
+            } as MctsEngine.Expander)
+            .simulator({ ThinkingNode n -> 3.14d } as MctsEngine.Simulator)
+            .iterations(1)
             .build()
 
         when:
-        tree.evaluate(node, new Function<Map<String, Object>, Double>() {
-            @Override
-            Double apply(Map<String, Object> state) { return 3.14d }
-        })
+        engine.run()
 
         then:
-        node.reward() == 3.14d
+        def child = tree.getChildren(tree.root())[0]
+        child.reward() == 3.14d
+        child.visits() == 1
+        tree.root().reward() == 3.14d
     }
 
     def "ThinkingTree expand already expanded node should warn and skip"() {
@@ -156,12 +160,12 @@ class PlannerCoverageSpec extends Specification {
         def tree = new ThinkingTree([:])
         // First expand
         tree.expand(tree.root(), [
-            { ThinkingNode p -> ThinkingNode.builder().actionType("A1").actionTarget("T1").build() } as Function
+            ThinkingNode.builder().actionType("A1").actionTarget("T1").build()
         ])
 
         when: // Second expand on same node should skip
         tree.expand(tree.root(), [
-            { ThinkingNode p -> ThinkingNode.builder().actionType("A2").actionTarget("T2").build() } as Function
+            ThinkingNode.builder().actionType("A2").actionTarget("T2").build()
         ])
 
         then: // No new children added
@@ -181,7 +185,7 @@ class PlannerCoverageSpec extends Specification {
         given:
         def tree = new ThinkingTree([:])
         tree.expand(tree.root(), [
-            { ThinkingNode p -> ThinkingNode.builder().actionType("A").actionTarget("T").visits(0).reward(0.0).build() } as Function
+            ThinkingNode.builder().actionType("A").actionTarget("T").visits(0).reward(0.0).build()
         ])
 
         expect:
@@ -193,7 +197,7 @@ class PlannerCoverageSpec extends Specification {
         def tree = new ThinkingTree([:])
 
         expect:
-        tree.selectBestChild(tree.root()) == null
+        tree.selectBestChild(tree.root(), Math.sqrt(2)) == null
     }
 
     def "ThinkingTree pathFromRoot for root node"() {
@@ -208,19 +212,20 @@ class PlannerCoverageSpec extends Specification {
         path[0].isRoot()
     }
 
-    def "ThinkingTree bestLeaf returns root for empty tree"() {
+    def "ThinkingTree root is a leaf on an empty tree"() {
         given:
         def tree = new ThinkingTree([:])
 
         expect:
-        tree.bestLeaf().isRoot()
+        tree.root().isLeaf()
+        tree.bestChildByAvgReward() == null
     }
 
     def "ThinkingTree forEach visits all nodes"() {
         given:
         def tree = new ThinkingTree([:])
         tree.expand(tree.root(), [
-            { ThinkingNode p -> ThinkingNode.builder().actionType("LLM").actionTarget("test").build() } as Function
+            ThinkingNode.builder().actionType("LLM").actionTarget("test").build()
         ])
 
         def visited = []
@@ -237,7 +242,7 @@ class PlannerCoverageSpec extends Specification {
         given:
         def tree = new ThinkingTree([prompt: "serialize_test"])
         tree.expand(tree.root(), [
-            { ThinkingNode p -> ThinkingNode.builder().actionType("TOOL").actionTarget("search").build() } as Function
+            ThinkingNode.builder().actionType("TOOL").actionTarget("search").build()
         ])
 
         when:
@@ -255,7 +260,7 @@ class PlannerCoverageSpec extends Specification {
         given:
         def tree = new ThinkingTree([:])
         tree.expand(tree.root(), [
-            { ThinkingNode p -> ThinkingNode.builder().actionType("LLM").actionTarget("test").build() } as Function
+            ThinkingNode.builder().actionType("LLM").actionTarget("test").build()
         ])
 
         expect:
@@ -291,19 +296,23 @@ class PlannerCoverageSpec extends Specification {
         tree.tokenBudget() == budget
     }
 
-    def "ThinkingTree mctsIteration with exhausted budget should not expand"() {
+    def "MctsEngine with exhausted budget should not expand"() {
         given:
         def tree = new ThinkingTree([:])
-        // Create a budget that exhausts after 0 tokens (use of(1,1) then consume to exhaust)
+        // Create a budget that exhausts after 1 token, then consume it
         def budget = TokenBudget.of(1, 100)
-        tree.setTokenBudget(budget)
-        // Consume the single token so budget is exhausted
         budget.consume(ThinkingNode.builder().build())
+        def engine = MctsEngine.builder(tree)
+            .expander({ ThinkingNode leaf ->
+                [ThinkingNode.builder().actionType("A").actionTarget("T").build()]
+            } as MctsEngine.Expander)
+            .simulator({ ThinkingNode n -> 1.0d } as MctsEngine.Simulator)
+            .iterations(10)
+            .tokenBudget(budget)
+            .build()
 
         when:
-        tree.mctsIteration(1, 10,
-            { ThinkingNode n -> [ThinkingNode.builder().actionType("A").actionTarget("T").build()] } as Function,
-            { Map s -> 1.0d } as Function)
+        engine.run()
 
         then:
         tree.nodeCount() == 1  // no expansion happened
@@ -434,7 +443,7 @@ class PlannerCoverageSpec extends Specification {
         given:
         // Must provide all builder dependencies to avoid NPE
         def fastPath = Stub(DecisionStrategy) {
-            decide(_) >> Plan.fastPath("fallback", "FINISH", "FINISH")
+            decide(_) >> Plan.fastPath("fallback", Plan.Intent.FINISH, "FINISH")
         }
         def slowPath = Stub(DecisionStrategy)
         def selector = StrategySelector.builder()
@@ -597,7 +606,8 @@ class PlannerCoverageSpec extends Specification {
         plan.type() == Plan.Type.SLOW_PATH
         plan.steps().size() == 1
         plan.steps()[0].actionType() == "FINISH"
-        plan.metadata()["treeNodes"] >= 1
+        plan.metadata()["path"] == "slow"
+        plan.metadata().containsKey("treeNodes")
     }
 
     // ========================================================================
