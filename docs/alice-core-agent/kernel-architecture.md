@@ -15,7 +15,7 @@ updated: "2026-09-09"
 
 > **状态：正式（2026-09-09 评审定稿）**。本文由前版草案升级为架构基线，是 alice-core-agent 执行模型的设计依据：
 > **内核 = 图元模型的解释器（`Loop`），执行逻辑由图设计决定**（§5.2 R0–R4）；标准会话骨架 = 规划 → TAO → 反思（§5.3）。
-> 决策点已定：D1–D7、D9–D12；**唯一开放：D8**（verifyPost 的目标达成判据由谁提供）。
+> 决策点已定：D1–D7、D9–D12；**D8 暂维持现状**（目标达成判据沿用原实现语义，见 §8），待实现期再定。
 > 现 `AgentExecutor` / `Phase` 图为 legacy 先行实现；接口与类型名留待实现期敲定（§4 注）。
 
 ## 1. 背景与动机
@@ -323,7 +323,7 @@ Session: execute(SessionRequest)                    ← Loop(R0) 解释器, 账�
 | 层 | 谁可结束 | 判据来源 | 预算 |
 |---|---|---|---|
 | goal | 战术子图内 finish/熔断/显式 abort | verifyPost(artifact, g) + ARBITRATE（策略提供判据，内核执行） | goal 内效果数/深度（熔断） |
-| 会话 | 仅会话仲裁点 | STRATEGIZE 写入的成功判据/终止边界 + shouldFinish | **多级预算（D12）**：会话 token 预算 / goal 内效果数与深度 / 嵌套子图深度上限（取代 maxIterations / maxMicroDepth 单计数） |
+| 会话 | 仅会话仲裁点 | shouldFinish（D8 未定：维持原实现语义 = 模型 finish / 规则后检 / 迭代预算，§8）+ 会话级 terminal | **多级预算（D12）**：会话 token 预算 / goal 内效果数与深度 / 嵌套子图深度上限（取代 maxIterations / maxMicroDepth 单计数） |
 | 修订 | 修订次数上限 | goal 槽位计数 | 每 goal 修订预算 |
 
 ### 5.5 相对旧模型的删改对照
@@ -429,7 +429,7 @@ Adapter（更外面）      : vendor codec/transport（OpenAI/Gemma/未来多模
 - [ ] D5 文本 LLM pipeline → **已澄清边界**：六段是**执行/策略层实现**，**内核不需要**——内核只依赖 `Inferencer.infer()` 语义契约 + `Status/Decision`/流式预留。六段拆不拆独立接口属 pipeline 策略层内部可维护性决策（与内核解耦，可先内部实现、后按 kind spec 装配）；④ 超时/重试归 pipeline 策略（内核只管"一次 Infer 有超时上限"）
 - [ ] D6 Prompt 动态加载的具体形态 → **已定**：优先级 内置 < `~/.alice/prompts` < 会话级；**不 watch 热更**（新增 `/reload` 命令手动刷新）；PromptKey 简化按 kind + 文件名路由，不做 role/phase/model/session 全组合
 - [ ] D7 内核接口名与包结构 → **已定**：主接口名 **`Loop`**；**不建新模块**，放 alice-core-agent 内子包（`org.cland.alice.core.agent.kernel`? 仍待确认最终包名）
-- [ ] D8 verifyPost(artifact, goal) 的目标比对语义（谁提供"目标达成判据"）
+- [ ] D8 verifyPost(artifact, goal) 的目标比对语义（谁提供"目标达成判据"）→ **暂维持现状（2026-09-09）**：不引入结构化 goal 判据机制；判定沿用原实现——模型 `finish_reason`（goal 级判据提交）+ 规则后检（HallucinationDetector 等）+ 迭代预算兜底。goal 级 vs 会话级分层架构保留（P1 修复），但"判据内容由谁提供/如何比对"留待实现期连同 verifyPost(g)/ARBITRATE 落地时再定
 - [ ] D9 ~~前置复杂度/新颖性门评估~~ → **已定：不做评估**。STRATEGIZE 触发 = 会话起点必达 + 反思回路重入（ARBITRATE 判路线偏差 / 修订超阈值 / 用户显式要求）；规划不足由执行后的验证/反思迭代修正（§5.1、§5.3 要点 1）
 - [ ] D10 ~~PlannerService 拆解~~ → **已定：模块不拆**。alice-core-planner 保持聚合根，定位 = **战略规划**（Fast/Slow 路径、MCTS、SOP 匹配、选模型）；System-1 路由分类移出（折叠进 actor 的 tool 选择）。**tool 层新增 `plan` 工具**（注册于 ToolRegistry，同后端委托 PlannerService），供 STRATEGIZE 审慎与决策循环内按需调用；产出结构化 goal 建议，绑定仍限决策/仲裁点（D11）。包结构/导出面维持现状
 - [ ] D11 槽位写权限 → **已定：不造新机制，权限体系已有**（alice-guardrail：`PermissionSandboxValidator` 管外部资源 scope；`GuardrailToolProxy` 为 P6 装配点，Pre/PostValidator 链是扩展口）。补的仅是"槽位写"这一新检查目标：登记一个 Validator（如 `LedgerScopeValidator`）在 effect 边界校验写目标槽位与工具 scope。无默认写权；goal 图/route/预算/游标等**结构/仲裁槽位**仍仅在内核 decision/仲裁点变更。校验器清单与规则细节待定
