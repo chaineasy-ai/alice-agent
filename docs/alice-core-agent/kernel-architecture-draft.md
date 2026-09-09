@@ -268,44 +268,54 @@ while true:
 
 执行逻辑由图设计决定在此闭合：**图怎么搭 → 解释器就怎么走**；换行为=换图/换注解/换节点上挂的策略，内核一行不改。
 
-### 5.3 实例化：一次 execute 的图游走（示例会话图，语义由 §5.2 模型导出）
+### 5.3 实例化：标准会话骨架 = 规划 → TAO → 反思
+
+> 元模型只有 6 种原语；**规划 / TAO / 反思是三个"命名装配模式"**（由原语组成的标准骨架），
+> 且**递归同构**：goal 的子 goal、子 agent（003）都是同一骨架。映射：
+
+| 命名阶段 | 由哪些原语装配 | 作用 |
+|---|---|---|
+| **规划 STRATEGIZE** | composite + 内部 decision/effect（审慎子图：MCTS / `plan` 工具 / SOP 匹配） | 写点① 落账：route / goal 图 / 成功判据 / 预算 |
+| **TAO** | ACT(g) composite 展开的标准战术子图：**Thought**(decision) → **Action**(effect) → **Observe**(observe) → 回 Thought | 在一个 goal 内循环，直到判据 / 熔断 / abort |
+| **反思** | 一段 **gate(verifyPost(g)) + decision(ARBITRATE)** 链 | PASS / FAIL(修订) / 路线偏差(回规划) 三出口 |
 
 ```
-Session: execute(SessionRequest)                         ← 内核驱动, 账本唯一真相
- │
- ▼
-会话图（战略 frame）
- START ─► PERCEIVE?(可选) ─► STRATEGIZE(复合=审慎决策)    ← 起点必达
-                                   │  写账本: route / goal 图 / success 判据 / 预算
-                                   ▼
-        ┌── for goal g in goal 图 (账本游标逐一推进) ───────────────┐
-        │                                                          │
-        │   ACT(g) = 复合节点 → 展开为战术子图 (ReAct)               │
-        │   ┌────────────────────────────────────────────────────┐ │
-        │   │ entry(g) ─► DECIDE ─► effect(权限) ─► OBSERVE  │ │
-        │   │     ▲                                  │           │ │
-        │   │     └──────────────────────────────────┘           │ │
-        │   │   工具 = effect 之一(decompose/apply_sop/read…)     │ │
-        │   │   退出: 模型 finish(goal 判据) / 熔断 / 显式 abort   │ │
-        │   └──────────────────────┬─────────────────────────────┘ │
-        │                          │ exit port: goal-done|fail|abort
-        │                          ▼                                │
-        │   verifyPost(g, artifact)  ← gate 带目标上下文            │
-        │   ARBITRATE(g): done→游标+1 | fail→修订(预算-1, 回 ACT(g))│
-        │                 abort→跳过/终止(策略/HITL)                │
-        └──────────────────────────────────────────────────────────┘
- ▼ 会话终止: 会话仲裁点(finish/error/cancel) → WAL 沉淀 → 呈现
+Session: execute(SessionRequest)                    ← Loop(R0) 解释器, 账本唯一真相
+  ▼
+规划 STRATEGIZE (composite; start 边 force 必达)
+│   内部: 审慎子图 (deep-think / plan 工具 / SOP 匹配…)
+│   写点①: route | goal 图 | 成功判据 | 预算  → 账本
+  ▼
+┌────────── for g in goal 图 (账本游标) ─────────────────────┐
+│                                                          │
+│  TAO = ACT(g) composite → 展开战术子图                    │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │   Thought ──► Action ──► Observe ─┐                │  │
+│  │   decision     effect    回流      │   (模型/工具/   │  │
+│  │      ▲         (权限门)            │    观察的循环)   │  │
+│  │      └────────────────────────────┘                │  │
+│  │   原语: decision(LLM/人) → effect → observe         │  │
+│  │   退出: finish-goal / 熔断 / abort  (goal 级终端)     │  │
+│  └────────────────────────┬───────────────────────────┘  │
+│                           ▼  (exit port)                 │
+│  反思 = verifyPost(g) gate + ARBITRATE decision          │
+│     PASS         → 游标+1 → 下一 goal                     │
+│     FAIL         → revise(反馈) ──► 回 TAO(同 goal 重跑)  │
+│     路线偏差/修订超限 → ────────► 回 规划(STRATEGIZE)     │
+│     abort        → 跳过 / 会话终止 (策略/HITL)           │
+└───────────────────────────┬──────────────────────────────┘
+                            ▼  全部 goal 完成 / cancel / 预算耗尽
+  会话 terminal (finish / error / cancel) → WAL 沉淀 → 呈现
 ```
 
 要点：
 
-1. 战略不是"必经阶段链"：STRATEGIZE 是**审慎决策复合节点**——起点必达，其后仅由**反思回路**重入（ARBITRATE 判路线偏差 / 修订超阈值 / 用户显式要求）。**不做前置复杂度评估**（D9）：规划不足由执行后的验证/反思迭代修正，不预测不预判。不再每轮无条件跑（消除现状每轮 planner 强制调用的成本与战略架空）。
-2. 战术子图只在 ACT(g) 展开时存在：它不是另一个"环"，而是 goal 节点的**内部图**（战术=战略的子图）。模型 finish = 提交该 goal 的判据，**不自动终结会话**（修 P1）。
-3. plan 不再是阶段：执行步骤规划 = 战术子图内可调用的**规划工具**，返回结构化 goal 建议（写经 GuardrailToolProxy 校验）；goal 图从建议到账本事实的**绑定只在决策点**（STRATEGIZE/ARBITRATE）发生（D11）。多目标天然是账本里的图，游标逐一推进，消灭 `steps[0]` 丢弃（修 P2）。
-4. verifyPre/verifyPost 从"拦 Action 的阶段"变成**图边上的 gate 节点**：Pre 拦 STRATEGIZE/ACT 出口，Post 拦 goal 出口且带 g 上下文（修 P6/P7）。
-5. skipMicro 语义消失：没有"宏轮"概念，只有"直接执行 vs 展开战术子图"两种节点选择（修 P3）。
-6. PERCEIVE 只在需要刷新环境/记忆的门控处重入，随 STRATEGIZE 或修订回路携带，不再绑定固定阶段链（修 P5）。
-
+1. **三段循环观**：一次会话 = 规划一次（起点必达）+ 每个 goal 一次 TAO + 一次反思。三条回路全部是**图结构**：① TAO 内部自环（Thought→Action→Observe）；② 反思 FAIL → 回 TAO（同 goal 修订重跑）；③ 反思路线偏差 / 修订超限 → 回规划（重新审慎，重写 goal 图）。不存在"每轮无条件重新规划"（修 P1/P3 的战略架空与每轮成本）。
+2. 规划不是"阶段"，而是**审慎决策复合**：起点 `force` 必达（D9），其后仅当反思判"路线偏差/修订超限"或用户显式要求才回到它；**不做前置复杂度评估**。
+3. TAO 是 ACT(g) 的内部子图（战术 = 战略的子图）：Thought 原语 = decision（一次 LLM/人决策），Action = effect（经 GuardrailToolProxy 权限门），Observe = observe（回流）。模型"回答/完成" = R1 词表里的 `finish-goal`，只是 goal 级判据提交，**不终结会话**（修 P1）。
+4. goal 图 = 账本槽位 + 游标，"下一 goal"是图事实（修 P2）；goal 内可再调 `plan`/`decompose`/`apply_sop` 产出子骨架建议，绑定仍只走写点（D11）。
+5. verifyPre/verifyPost = gate 节点（Post 带 g 上下文，修 P7）；工具权限 = `GuardrailToolProxy` 装配点（修 P6）。
+6. PERCEIVE 刷新随"回规划 / 修订"回路携带（修 P5）；skipMicro 与"宏轮"概念消失——展开与否是节点/边选择（修 P3）。
 ### 5.4 终止权与预算（§5.2 R2/R3 的实例化汇总）
 
 | 层 | 谁可结束 | 判据来源 | 预算 |
