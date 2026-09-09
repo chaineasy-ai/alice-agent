@@ -54,7 +54,7 @@ class ValidatorCoverageSpec extends Specification {
     def "ToolExistenceValidator non-TOOL_CALL steps are skipped"() {
         given:
         def v = new ToolExistenceValidator(registryWith("tool1"))
-        def plan = Plan.fastPath("test", "LLM_INFERENCE", "gpt-4o")
+        def plan = Plan.fastPath("test", Plan.Intent.ANALYZE, "gpt-4o")
 
         expect:
         v.check(plan).isPassed()
@@ -65,7 +65,7 @@ class ValidatorCoverageSpec extends Specification {
         def v = new ToolExistenceValidator(registryWith("tool1"))
         def plan = Plan.builder()
             .type(Plan.Type.FAST_PATH).summary("null")
-            .addStep(Plan.Step.of("TOOL_CALL", null))
+            .addStep(Plan.Step.of(Plan.Intent.SEARCH, null))
             .build()
 
         expect:
@@ -77,7 +77,7 @@ class ValidatorCoverageSpec extends Specification {
         def v = new ToolExistenceValidator(registryWith("search_web"))
         def plan = Plan.builder()
             .type(Plan.Type.FAST_PATH).summary("search")
-            .addStep(Plan.Step.of("TOOL_CALL", "search_web"))
+            .addStep(Plan.Step.of(Plan.Intent.SEARCH, "search_web"))
             .build()
 
         expect:
@@ -89,7 +89,7 @@ class ValidatorCoverageSpec extends Specification {
         def v = new ToolExistenceValidator(registryWith("search_web"))
         def plan = Plan.builder()
             .type(Plan.Type.FAST_PATH).summary("bad")
-            .addStep(Plan.Step.of("TOOL_CALL", "nonexistent_tool"))
+            .addStep(Plan.Step.of(Plan.Intent.SEARCH, "nonexistent_tool"))
             .build()
 
         expect:
@@ -101,7 +101,7 @@ class ValidatorCoverageSpec extends Specification {
         def v = new ToolExistenceValidator(registryWith())
         def plan = Plan.builder()
             .type(Plan.Type.FAST_PATH).summary("empty")
-            .addStep(Plan.Step.of("TOOL_CALL", "any"))
+            .addStep(Plan.Step.of(Plan.Intent.SEARCH, "any"))
             .build()
 
         expect:
@@ -124,7 +124,7 @@ class ValidatorCoverageSpec extends Specification {
     def "LogicSanityValidator single step returns ALLOW"() {
         given:
         def v = new LogicSanityValidator()
-        def plan = Plan.fastPath("test", "FINISH", "FINISH")
+        def plan = Plan.fastPath("test", Plan.Intent.FINISH, "FINISH")
 
         expect:
         v.check(plan).isPassed()
@@ -134,9 +134,9 @@ class ValidatorCoverageSpec extends Specification {
         given:
         def v = new LogicSanityValidator()
         def plan = Plan.builder().type(Plan.Type.FAST_PATH).summary("normal")
-            .addStep(Plan.Step.of("LLM_INFERENCE", "gpt-4o"))
-            .addStep(Plan.Step.of("TOOL_CALL", "search_web"))
-            .addStep(Plan.Step.of("FINISH", "FINISH"))
+            .addStep(Plan.Step.of(Plan.Intent.ANALYZE, "gpt-4o"))
+            .addStep(Plan.Step.of(Plan.Intent.SEARCH, "search_web"))
+            .addStep(Plan.Step.of(Plan.Intent.FINISH, "FINISH"))
             .build()
 
         expect:
@@ -147,11 +147,11 @@ class ValidatorCoverageSpec extends Specification {
         given:
         def v = new LogicSanityValidator()
         def plan = Plan.builder().type(Plan.Type.FAST_PATH).summary("cycle")
-            .addStep(Plan.Step.of("TOOL_CALL", "search"))
-            .addStep(Plan.Step.of("TOOL_CALL", "search"))
-            .addStep(Plan.Step.of("TOOL_CALL", "search"))
-            .addStep(Plan.Step.of("TOOL_CALL", "search"))
-            .addStep(Plan.Step.of("FINISH", "FINISH"))
+            .addStep(Plan.Step.of(Plan.Intent.SEARCH, "search"))
+            .addStep(Plan.Step.of(Plan.Intent.SEARCH, "search"))
+            .addStep(Plan.Step.of(Plan.Intent.SEARCH, "search"))
+            .addStep(Plan.Step.of(Plan.Intent.SEARCH, "search"))
+            .addStep(Plan.Step.of(Plan.Intent.FINISH, "FINISH"))
             .build()
 
         expect:
@@ -162,8 +162,8 @@ class ValidatorCoverageSpec extends Specification {
         given:
         def v = new LogicSanityValidator()
         def plan = Plan.builder().type(Plan.Type.FAST_PATH).summary("no-finish")
-            .addStep(Plan.Step.of("LLM_INFERENCE", "gpt-4o"))
-            .addStep(Plan.Step.of("TOOL_CALL", "search"))
+            .addStep(Plan.Step.of(Plan.Intent.ANALYZE, "gpt-4o"))
+            .addStep(Plan.Step.of(Plan.Intent.SEARCH, "search"))
             .build()
 
         expect:
@@ -174,8 +174,8 @@ class ValidatorCoverageSpec extends Specification {
         given:
         def v = new LogicSanityValidator()
         def plan = Plan.builder().type(Plan.Type.FAST_PATH).summary("revision")
-            .addStep(Plan.Step.of("LLM_INFERENCE", "gpt-4o"))
-            .addStep(Plan.Step.of("REVISION", "REVISION"))
+            .addStep(Plan.Step.of(Plan.Intent.ANALYZE, "gpt-4o"))
+            .addStep(Plan.Step.of(Plan.Intent.REVISION, "REVISION"))
             .build()
 
         expect:
@@ -186,7 +186,7 @@ class ValidatorCoverageSpec extends Specification {
         given:
         def v = new LogicSanityValidator()
         def plan = Plan.builder().type(Plan.Type.FAST_PATH).summary("single")
-            .addStep(Plan.Step.of("FINISH", "FINISH"))
+            .addStep(Plan.Step.of(Plan.Intent.FINISH, "FINISH"))
             .build()
 
         expect:
@@ -219,7 +219,7 @@ class ValidatorCoverageSpec extends Specification {
     def "ToolMicroLoopValidator no tool steps returns ALLOW"() {
         given:
         def v = new ToolMicroLoopValidator(registryWith("t"))
-        def plan = Plan.fastPath("test", "LLM_INFERENCE", "gpt-4o")
+        def plan = Plan.fastPath("test", Plan.Intent.ANALYZE, "gpt-4o")
 
         expect:
         v.check(plan).isPassed()
@@ -229,9 +229,9 @@ class ValidatorCoverageSpec extends Specification {
         given:
         def v = new ToolMicroLoopValidator(registryWith("search_web"))
         def plan = Plan.builder().type(Plan.Type.FAST_PATH).summary("normal")
-            .addStep(Plan.Step.of("TOOL_CALL", "search_web"))
-            .addStep(Plan.Step.of("LLM_INFERENCE", "gpt-4o"))
-            .addStep(Plan.Step.of("FINISH", "FINISH"))
+            .addStep(Plan.Step.of(Plan.Intent.SEARCH, "search_web"))
+            .addStep(Plan.Step.of(Plan.Intent.ANALYZE, "gpt-4o"))
+            .addStep(Plan.Step.of(Plan.Intent.FINISH, "FINISH"))
             .build()
 
         expect:
@@ -242,10 +242,10 @@ class ValidatorCoverageSpec extends Specification {
         given:
         def v = new ToolMicroLoopValidator(registryWith("search"), 5, 10, 3)
         def plan = Plan.builder().type(Plan.Type.FAST_PATH).summary("looping")
-            .addStep(Plan.Step.of("TOOL_CALL", "search"))
-            .addStep(Plan.Step.of("TOOL_CALL", "search"))
-            .addStep(Plan.Step.of("TOOL_CALL", "search"))
-            .addStep(Plan.Step.of("TOOL_CALL", "search"))
+            .addStep(Plan.Step.of(Plan.Intent.SEARCH, "search"))
+            .addStep(Plan.Step.of(Plan.Intent.SEARCH, "search"))
+            .addStep(Plan.Step.of(Plan.Intent.SEARCH, "search"))
+            .addStep(Plan.Step.of(Plan.Intent.SEARCH, "search"))
             .build()
 
         expect:
@@ -257,7 +257,7 @@ class ValidatorCoverageSpec extends Specification {
         def v = new ToolMicroLoopValidator(registryWith("search"), 1, 10, 5)
         v.recordCall("search", [q: "java"])
         def plan = Plan.builder().type(Plan.Type.FAST_PATH).summary("repeat")
-            .addStep(Plan.Step.of("TOOL_CALL", "search", [q: "java"]))
+            .addStep(Plan.Step.of(Plan.Intent.SEARCH, "search", [q: "java"]))
             .build()
 
         expect:
@@ -271,7 +271,7 @@ class ValidatorCoverageSpec extends Specification {
         v.recordCall("search", [q: "2"])
         v.recordCall("search", [q: "3"])
         def plan = Plan.builder().type(Plan.Type.FAST_PATH).summary("excessive")
-            .addStep(Plan.Step.of("TOOL_CALL", "search", [q: "4"]))
+            .addStep(Plan.Step.of(Plan.Intent.SEARCH, "search", [q: "4"]))
             .build()
 
         expect:
@@ -313,7 +313,7 @@ class ValidatorCoverageSpec extends Specification {
         given:
         def v = new ToolMicroLoopValidator(registryWith("valid_tool"), 3, 10, 3)
         def plan = Plan.builder().type(Plan.Type.FAST_PATH).summary("unknown")
-            .addStep(Plan.Step.of("TOOL_CALL", "unknown_tool"))
+            .addStep(Plan.Step.of(Plan.Intent.SEARCH, "unknown_tool"))
             .build()
 
         expect:
@@ -341,7 +341,7 @@ class ValidatorCoverageSpec extends Specification {
     def "ToolResultValidator no TOOL_CALL steps returns ALLOW"() {
         given:
         def v = new ToolResultValidator(registryWith("t"))
-        def plan = Plan.fastPath("inference", "LLM_INFERENCE", "gpt-4o")
+        def plan = Plan.fastPath("inference", Plan.Intent.ANALYZE, "gpt-4o")
 
         expect:
         v.check([:], plan).isPassed()
@@ -351,7 +351,7 @@ class ValidatorCoverageSpec extends Specification {
         given:
         def v = new ToolResultValidator(registryWith("t"))
         def plan = Plan.builder().type(Plan.Type.FAST_PATH).summary("null-target")
-            .addStep(Plan.Step.of("TOOL_CALL", null))
+            .addStep(Plan.Step.of(Plan.Intent.SEARCH, null))
             .build()
 
         expect:
@@ -362,7 +362,7 @@ class ValidatorCoverageSpec extends Specification {
         given:
         def v = new ToolResultValidator(registryWith("registered_tool"))
         def plan = Plan.builder().type(Plan.Type.FAST_PATH).summary("unregistered")
-            .addStep(Plan.Step.of("TOOL_CALL", "unknown_tool"))
+            .addStep(Plan.Step.of(Plan.Intent.SEARCH, "unknown_tool"))
             .build()
 
         expect:

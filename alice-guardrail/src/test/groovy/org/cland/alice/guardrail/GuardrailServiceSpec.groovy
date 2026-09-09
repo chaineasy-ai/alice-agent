@@ -21,7 +21,7 @@ class GuardrailServiceSpec extends Specification {
     def "GRD-P01: verifyPlan returns ALLOW for a legal, safe plan"() {
         given:
         def service = new GuardrailService()
-        def plan = Plan.fastPath("say hello", "LLM_INFERENCE", "greeting")
+        def plan = Plan.fastPath("say hello", Plan.Intent.ANALYZE, "greeting")
 
         when:
         def result = service.verifyPlan(plan)
@@ -37,7 +37,7 @@ class GuardrailServiceSpec extends Specification {
         def plan = Plan.builder()
                 .type(Plan.Type.FAST_PATH)
                 .summary("delete data")
-                .addStep("TOOL_CALL", "DROP TABLE users")
+                .addStep(Plan.Intent.SEARCH, "DROP TABLE users")
                 .build()
 
         when:
@@ -52,7 +52,7 @@ class GuardrailServiceSpec extends Specification {
         given:
         def service = new GuardrailService()
         service.registerPreValidator(new PermissionSandboxValidator())
-        def plan = Plan.fastPath("access system", "TOOL_CALL", "/etc/passwd")
+        def plan = Plan.fastPath("access system", Plan.Intent.SEARCH, "/etc/passwd")
 
         when:
         def result = service.verifyPlan(plan)
@@ -79,7 +79,7 @@ class GuardrailServiceSpec extends Specification {
     def "GRD-P02: verifyResult returns ALLOW for a valid observation"() {
         given:
         def service = new GuardrailService()
-        def plan = Plan.fastPath("query data", "TOOL_CALL", "database")
+        def plan = Plan.fastPath("query data", Plan.Intent.SEARCH, "database")
         def observation = [
                 "status" : "SUCCESS",
                 "summary": "Query returned 5 rows",
@@ -97,7 +97,7 @@ class GuardrailServiceSpec extends Specification {
     def "GRD-P02: verifyResult returns INVALID for FAILURE observation"() {
         given:
         def service = new GuardrailService()
-        def plan = Plan.fastPath("query data", "TOOL_CALL", "database")
+        def plan = Plan.fastPath("query data", Plan.Intent.SEARCH, "database")
         def observation = [
                 "status" : "FAILURE",
                 "summary": "Connection timeout",
@@ -129,7 +129,7 @@ class GuardrailServiceSpec extends Specification {
         def service = new GuardrailService()
         def hallucinationDetector = new HallucinationDetector()
         service.registerPostValidator(hallucinationDetector)
-        def plan = Plan.fastPath("search", "TOOL_CALL", "web")
+        def plan = Plan.fastPath("search", Plan.Intent.SEARCH, "web")
         def observation = [
                 "status" : "SUCCESS",
                 "summary": "search completed",

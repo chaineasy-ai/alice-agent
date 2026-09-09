@@ -20,7 +20,7 @@ class PermissionSandboxValidatorSpec extends Specification {
 
     def "GRD-P05: check returns ALLOW for a safe, bounded target"() {
         given:
-        def plan = Plan.fastPath("read temp file", "TOOL_CALL", "/tmp/data.txt")
+        def plan = Plan.fastPath("read temp file", Plan.Intent.SEARCH, "/tmp/data.txt")
 
         when:
         def result = validator.check(plan)
@@ -32,7 +32,7 @@ class PermissionSandboxValidatorSpec extends Specification {
 
     def "GRD-P05: check returns REJECT for /etc/ target"() {
         given:
-        def plan = Plan.fastPath("read config", "TOOL_CALL", "/etc/shadow")
+        def plan = Plan.fastPath("read config", Plan.Intent.SEARCH, "/etc/shadow")
 
         when:
         def result = validator.check(plan)
@@ -44,7 +44,7 @@ class PermissionSandboxValidatorSpec extends Specification {
 
     def "GRD-P05: check returns REJECT for rm -rf / command"() {
         given:
-        def plan = Plan.fastPath("wipe system", "TOOL_CALL", "rm -rf /")
+        def plan = Plan.fastPath("wipe system", Plan.Intent.SEARCH, "rm -rf /")
 
         when:
         def result = validator.check(plan)
@@ -56,7 +56,7 @@ class PermissionSandboxValidatorSpec extends Specification {
 
     def "GRD-P05: check returns REJECT for /proc/ target"() {
         given:
-        def plan = Plan.fastPath("read proc", "TOOL_CALL", "/proc/self/mem")
+        def plan = Plan.fastPath("read proc", Plan.Intent.SEARCH, "/proc/self/mem")
 
         when:
         def result = validator.check(plan)
@@ -69,8 +69,8 @@ class PermissionSandboxValidatorSpec extends Specification {
     def "GRD-P05: check returns ALLOW for custom added forbidden prefix"() {
         given:
         validator.addForbiddenPrefix("/home/secret/")
-        def blockedPlan = Plan.fastPath("access secret", "TOOL_CALL", "/home/secret/keys.txt")
-        def safePlan = Plan.fastPath("access public", "TOOL_CALL", "/home/public/readme.txt")
+        def blockedPlan = Plan.fastPath("access secret", Plan.Intent.SEARCH, "/home/secret/keys.txt")
+        def safePlan = Plan.fastPath("access public", Plan.Intent.SEARCH, "/home/public/readme.txt")
 
         expect:
         !validator.check(blockedPlan).isPassed()

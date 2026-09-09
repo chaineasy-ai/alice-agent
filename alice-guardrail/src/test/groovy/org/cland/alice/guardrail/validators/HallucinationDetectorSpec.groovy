@@ -15,7 +15,7 @@ import spock.lang.Title
 class HallucinationDetectorSpec extends Specification {
 
     def detector = new HallucinationDetector()
-    def plan = Plan.fastPath("search", "TOOL_CALL", "web")
+    def plan = Plan.fastPath("search", Plan.Intent.SEARCH, "web")
 
     // ── GRD-P04: HallucinationDetector ───────────────────────────────
 
@@ -85,7 +85,7 @@ class HallucinationDetectorSpec extends Specification {
 
     def "GRD-P04: check returns ALLOW for empty rawData with FINISH plan (no type check)"() {
         given:
-        def finishPlan = Plan.fastPath("done", "FINISH", "completed")
+        def finishPlan = Plan.fastPath("done", Plan.Intent.FINISH, "completed")
         def observation = [
                 "status" : "SUCCESS",
                 "summary": "Task completed",
