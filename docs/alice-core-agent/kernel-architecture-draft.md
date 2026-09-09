@@ -1,14 +1,14 @@
 ---
 title: "alice-core-agent — Kernel 架构与执行工作流设计草案 (Draft)"
-summary: "三层架构（Facade/Agent/Kernel）与内核执行语义草案：内核的定义与关系、执行契约接口、终止与仲裁规则、文本 LLM pipeline 阶段模型、与现状代码的迁移对照。Draft 状态，供评审迭代。"
+summary: "三层架构（Facade/Agent/Kernel）与内核执行语义草案：内核的定义与关系、图语义执行工作流（会话图 + 战术子图展开）、plan 三职能拆解（效果只读、决策/仲裁落账）、执行契约接口、多级预算、文本 LLM pipeline 阶段模型、与现状代码的迁移对照。Draft 状态，供评审迭代。"
 read_when:
   - "重构 AgentExecutor / 定义内核接口时"
-  - "讨论执行工作流（Goal 编排、终止仲裁）时"
+  - "讨论执行工作流（图语义、战术子图展开、终止仲裁）时"
   - "设计文本 LLM pipeline / 动态 prompt 加载扩展点时"
 scope:
   - "alice-core-agent"
 status: "draft"
-updated: "2026-09-04"
+updated: "2026-09-09"
 ---
 
 # Alice Agent — Kernel 架构与执行工作流设计草案
@@ -70,27 +70,34 @@ updated: "2026-09-04"
 
 ## 3. 内核定义：它管什么，不管什么
 
-**一句话**：内核 = 确定性执行基底；智能是跑在它上面的应用。
+**一句话**：内核 = 承载 LLM-Agent 决策循环的执行基底。执行以**嵌套图 + 账本状态**表达：循环骨架与语义（决策→效果→观察→再决策，何时问、结果算什么、如何推进/回退/仲裁）和图的结构语义（战术=战略子图、复合节点展开、递归嵌套）在内核；"智能内容"（提示词、协议编解码、模型供应商、工具实现）在外。
 
-### 3.1 内核管七类"功能语义"
+> **评审反馈（2026-09-09）**：早期表述"内核 = 确定性执行基底；智能是跑在它上面的应用"被否。若 LLM 只被当作与工具同级的一个 effect、循环主体外置，内核会退化为哑循环驱动，P1/P2/P3/P5/P8 这类"循环决策归属"缺陷无法根治（详见 §8 D4）。同日二次评审追加两点：
+> ① 循环不是"双层双环"，而是**图语义**——战术执行是战略节点的子图展开（§5）；
+> ② "plan"不是一个阶段/一个对象，而是**三个层级的职能**（战略规划 / 执行步骤规划 / System-1 路由，§5.1）——本次评审把三者从压平的 `Plan` 中拆开。
+
+### 3.1 内核管的九类"功能语义"
 
 | 语义域 | 内核定义 | 反例（不属于内核） |
 |---|---|---|
-| 状态语义 | 状态集、合法迁移（Phase 图）、游标推进、谁能改状态 | 状态里装什么业务字段 |
-| 效果语义 | effect 调度、副作用记录、结果如何变观察 | 工具名/参数含义/文件格式 |
-| 终止语义 | 谁可结束什么（micro→目标，仲裁→会话）、预算与熔断 | 何时"算完成"的业务判据 |
-| 验证语义 | 门在哪些执行点被询问、拦截后流向哪里 | 校验规则内容 |
-| 失败语义 | 失败→诊断→重试/回退/放弃 的结构化路径 | 具体错误含义 |
+| **决策循环语义（核心）** | 战术子图（ReAct）与 STRATEGIZE 审慎决策都经统一 decision-loop 语义驱动：Decision 源（LLM/人）产出决策 → 推进图游标与账本 → 效果执行 → Observation 回流 → 再决策；内核决定"何时问、结果算什么、是否继续/如何回退/仲裁" | 提示词与上下文内容、工具 schema、模型协议细节、厂商词翻译 |
+| **图与展开语义** | 执行结构是嵌套有向图：节点类型（decision/effect/gate/observe/terminal/composite）与边语义（guard/port/路由）由内核定；复合节点（STRATEGIZE、goal、ACT）可展开为子图——战术=战略子图；子 agent = 同契约递归图 | 子图内部装什么业务、用什么模型、节点内容 |
+| 状态语义 | 账本（Ledger）是唯一状态真相：槽位（goal 图/route/artifact/预算/修订计数）与游标**只在内核的 decision/仲裁点变更**；效果无写权限（D11） | 槽位里装什么业务值 |
+| 效果语义 | 效果调度、副作用记录、结果如何变观察；效果**只读**——返回 observation（可含结构化数据/建议），无写权限 | 工具名/参数含义/文件格式 |
+| 终止语义 | 谁可结束什么（goal 判据提交→仲裁；会话终止→会话仲裁点）；预算/熔断/超时 | "何时算完成"的业务判据 |
+| 验证语义 | 门在哪些图边被询问、拦截后流向哪里 | 校验规则内容 |
+| 失败语义 | 失败→诊断→重试/回退/放弃的结构化路径（含每 goal 修订预算） | 具体错误含义 |
 | 时间语义 | 超时点、挂起点、恢复点、WAL 事务边界 | 等待多久合适 |
-| 并发/嵌套语义 | 会话可嵌套（子 agent=同契约）、效果可并行、取消传播 | 子任务做什么 |
+| 并发/嵌套语义 | 会话可嵌套（子 agent=同契约图）、效果可并行、取消传播 | 子任务做什么 |
 
-### 3.2 内核的五件事
+### 3.2 内核的六件事
 
-1. **状态账本（Ledger）** — 已发生(trace)/在哪(游标)/信什么(context)；唯一由内核写入。
-2. **循环驱动与仲裁（Loop）** — 活性责任全在内核：推进、预算、熔断、超时、终止；"决策"委托钩子。
-3. **世界交互协议（Boundary）** — 工具/LLM/人输入对内核是同一抽象：**一个 effect，返回一个 observation**。
-4. **门（Gates）** — verifyPre/verifyPost/HITL/预算 = 固定执行点上的钩子位；内核强制询问，不实现策略。
-5. **持久化与控制通道** — WAL/Checkpoint 定义"一步完成的含义"；cancel/feedback/resume 的中断语义。
+1. **状态账本（Ledger）** — 已发生(trace)/在哪(图游标、goal 游标)/信什么(context、槽位快照)。账本唯一由内核在 **decision / 仲裁点**写入（append/游标推进/预算扣减等规则不可被绕过）；效果与策略只提供 observation 与决策输入，**无写权限**（D11）。
+2. **图结构与展开（Graph/Refinement）** — 会话图（战略 frame）与战术子图的装载、展开、收缩及入口/出口绑定：复合节点（STRATEGIZE、goal、ACT）展开为子图运行，子图 exit port 映射回外层出边；子 agent = 同契约递归嵌套。结构语义在内核；planner/SOP/工具返回的步骤 DAG 只提供**子图骨架素材**，落账形态由内核规则约束。
+3. **循环驱动与仲裁（Loop）** — 活性责任全在内核：决策循环（ReAct）骨架、预算、熔断、超时、终止、转向。"本轮决策的内容"（调哪个工具/回答什么/判停理由/是否进入审慎）委托 Decision 源（LLM/人/规则）；"哪些执行点必须产生决策、决策如何推进图与账本"由内核定。
+4. **世界交互协议（Boundary）** — 两类推进源，**不可同构**：**Decision 源**（LLM/人/规则）= 产出语义决策，**唯一**能推进循环/游标/账本的力量；**Effect 源**（工具/文件/IO）= 只读副作用，返回 observation（可结构化），无写权限。工具的 execute 是 effect，LLM 的 infer 是决策请求——前者是后者的后果，不是同级抽象。
+5. **门（Gates）** — verifyPre/verifyPost/HITL/预算 = 图边上的固定钩子位；内核强制询问，不实现策略。verifyPost 必须带目标上下文（修 P7/D8）。
+6. **持久化与控制通道** — WAL/Checkpoint 定义"一步完成的含义"；cancel/feedback/resume 的中断语义。
 
 ### 3.3 内核与各方的关系
 
@@ -106,13 +113,13 @@ updated: "2026-09-04"
                                     (execute/    ▼
                                      cancel/   ┌──────────────────────────┐
                                      state)    │ L3 KERNEL (执行语义)      │
-                                     ▲         │ 状态机/仲裁/门/账本/时间   │
+                                     ▲         │ 决策循环/子图展开/仲裁 │
                                      │         └─────┬───────────┬────────┘
-                                     │ ③ 回调 SPI   │ ④ effect   │ ⑤ 服务
-                             策略钩子实现 ◄─────────┤            │
-                        (planner/guardrail/   │ 效果通道     │  基础设施
-                         prompt/memory/       │ (模型/工具/  │  (WAL/checkpoint
-                         model-adapter)       │  人=同一抽象) │   事件/时钟/HITL)
+                                     │ ③ 回调 SPI   │ ④ 双通道     │ ⑤ 服务
+                             策略钩子实现 ◄─────────┤             │
+                        (planner/guardrail/   │ LLM/人=决策源 │ 基础设施
+                         prompt/memory/       │ 工具/文件=    │ (WAL/checkpoint
+                         model-adapter)       │ Effect 源     │  事件/时钟/HITL)
                                              ▼            ▼
                                           World         Durable Store
 ```
@@ -120,8 +127,8 @@ updated: "2026-09-04"
 | 关系 | 性质 | 承载物 |
 |---|---|---|
 | Kernel ↔ Agent | 组合/委托 + 依赖反转 | ①执行契约接口 + ②装配方法 |
-| Kernel ↔ 策略(planner/prompt/guardrail/memory/model) | 注入反转(DIP) | 钩子接口：调用点与签名由内核定，实现由 Agent 注入 |
-| Kernel ↔ 世界(模型/工具/文件/人) | 效果通道 | `Effect` 抽象（调度→记录→观察） |
+| Kernel ↔ 策略(planner/prompt/guardrail/memory/model) | 注入反转(DIP) | 钩子接口：调用点与签名由内核定，实现由 Agent 注入；planner 拆为三职能挂点（§5.1）：STRATEGIZE 审慎节点实现 / SOP 匹配 / System-1 路由工具 |
+| Kernel ↔ 世界(模型/工具/文件/人) | Decision/Effect 双通道 | LLM/人 = Decision 源（语义决策，推进账本）；工具/文件 = Effect 源（只读，返回 observation，无写权限，D11） |
 | Kernel ↔ 数据真相 | 服务订阅 | WAL/Checkpoint 接口（结构性事实）；memory/vault=语用记忆，是策略输入 |
 | Kernel ↔ Facade | **无直接关系** | 穿透禁止 |
 | Kernel ↔ 嵌套会话(003 子 agent) | 同契约递归 | SessionRequest/Result 作为普通消息 |
@@ -138,7 +145,7 @@ interface ExecutionKernel {                              // 取代 getExecutor()
 }
 
 // ── ② 策略钩子：内核执行点依赖的接口（由 Agent 装配注入）──────────
-interface GoalPlanner   { Plan plan(PlanningCtx ctx); }          // 现 PlannerService(含 SOP)
+interface GoalPlanner   { Plan plan(PlanningCtx ctx); }  // legacy: 现 PlannerService。新模型拆三挂点(§5.1)：STRATEGIZE 审慎 / SOP 匹配 / 路由工具
 interface ToolGateway   { Future<ToolResult> invoke(ToolCall tc); }      // 现 ExecutionEngine
 interface Guardrail     { boolean pre(Step s);
                           boolean post(Artifact a, Goal g); }    // Post 必须带目标上下文(修 P7)
@@ -153,43 +160,104 @@ interface HitlChannel   { Future<String> suspend(String reason); }  // 现 execu
 interface MemoryAccess  { /* ... */ }                             // 现 AgentSession
 
 // ── ③ 内核数据类型/状态机（属内核，不属实现）─────────────────────
-// AgentContext / PhaseStateGraph / StepResult(sealed) / Goal(+goalIndex 队列) / SessionResult
+// Ledger(槽位: goal 图/route/artifact/预算/修订计数) / 图基元(decision/effect/
+//   gate/observe/terminal/composite) / EffectOutput(只读 observation) / StepResult(sealed) /
+//   SessionResult（AgentContext/PhaseStateGraph 降为 legacy 先行实现）
 ```
 
 > 命名全部待定（ExecutionKernel/WorkflowEngine/…）。此处仅定"形状"，不锁定名字。
 
-## 5. 目标执行工作流（Goal 推进环，修 P1/P2）
+## 5. 执行工作流：图语义版（会话图 + 战术子图展开）
+
+> 取代旧"Goal 推进环 / 战术双环"表述（2026-09-09 评审）。两条定论：
+> ① **plan 是战略规划**，不是简单的执行步骤规划——三者（战略/步骤/路由）此前被压平进一个 `Plan` 对象；
+> ② 循环架构是**嵌套图语义**：战略定 frame，战术是战略节点的**子图展开**，不存在并行的"双环"。
+
+### 5.1 plan 三职能拆解（禁止混淆）
+
+| 职能 | 回答的问题 | 认知级别 | 生命周期/触发 | 归属 |
+|---|---|---|---|---|
+| **战略规划（STRATEGIZE）** | 任务本质与含糊性、值不值得做、走哪条路线（SOP/自由/深思考）、模型与预算分配、成功判据与终止边界 | System-2，刻意审慎 | 会话起点**必达** + **反思回路重入**（ARBITRATE 判路线偏差 / 修订超阈值 / 用户显式要求）；**无前置复杂度评估**（D9：规划不足靠执行后反思迭代修正） | 内核图上的**审慎决策复合节点**；内部可再展开审慎子图（MCTS/方案比较/选模型/SOP 匹配） |
+| **执行步骤规划** | 把选定路线拆成有序 goal 图（子图骨架） | 结构性产出 | goal 执行途中按需（模型或 SOP 触发） | 只读规划服务/工具（`decompose`/`apply_sop` 返回结构化 goal 建议）；**绑定为账本 goal 图只在 STRATEGIZE/ARBITRATE 决策点发生**（D11） |
+| **路由分类（System-1）** | 这一步先答、先调工具、还是直接结束 | 即时决策 | 战术子图每一步 DECIDE 内 | **折叠进 actor 的 tool 选择**；必要时保留低成本路由工具/模型作实现 |
+
+**现状代码判据**：FastPath 词分类是"路由"而非"战略"（只产出 intent 词+FINISH，不触碰任务本质与路线）；SlowPath/MCTS 是战略审慎的雏形；SOP static 是执行步骤规划的雏形；`planToIntent()` 只取 `steps[0]` = 三职能被压平后又被丢弃。
+
+### 5.2 图基元
+
+**节点类型（内核唯一定义）**：
+
+| 节点 | 语义 |
+|---|---|
+| `decision` | 必须产生一次决策（Decision 源：LLM/人/规则），决策结果映射到出边，推进图与账本 |
+| `effect` | 只读副作用：执行并返回 observation（可结构化）；**无写权限**（D11） |
+| `gate` | 图边上的固定钩子位（verifyPre/Post、HITL、预算）；内核强制询问 |
+| `observe` | 汇总效果结果/记忆刷新，回流为下一决策上下文 |
+| `terminal` | goal 级：`goal-done` / `goal-fail` / `abort`；会话级：`finish` / `error` / `cancel` |
+| `composite` | 可展开为子图的节点（STRATEGIZE、goal、ACT），含 entry port / exit port |
+
+**边语义**：有向边带 guard（gate 位）与 payload 路由（decision 结果 → 具体出边）；子图 terminal 经 exit port 映射回外层出边。
+
+### 5.3 会话运行（一次 execute 的图游走）
 
 ```
-Session (会话级, 内核驱动)
- │ 1. Perceive: 建 AgentContext, 拉记忆/环境 (会话起点, 每目标前可选刷新)
- │ 2. 目标队列 = planner(SOP 多步 | Fast/Slow intent) 或 用户单目标
+Session: execute(SessionRequest)                         ← 内核驱动, 账本唯一真相
+ │
  ▼
-┌──────────────────────────────────────────────────────────────────┐
-│ Goal 推进环 (内核):                                                │
-│   for g in goalQueue (游标推进, 非重新规划):                        │
-│     ① 状态: ACTING(g)  (Phase 状态机 + goalIndex 持久于 ctx)        │
-│     ② 执行体: [战术双环] → 产物 Artifact + 证据(actions/obs)        │
-│     ③ 对照 g 验证: verifyPost(artifact, g) —— 带目标上下文           │
-│     ④ Reflect(g) 仲裁:                                            │
-│          PASS    → 标记 g 完成 → 下一目标 (成功的战略续圈 ← P1 修复) │
-│          FAIL    → REVISION(反馈) → 同目标重试(带次数上限)          │
-│          ABORT   → 跳过/终止本目标(策略决定: HITL/取消/预算)         │
-│   until 队列空 or shouldFinish(session级) or cancelled             │
-└──────────────────────────────────────────────────────────────────┘
- ▼ 会话结束: 结果沉淀(WAL FINISHED/ERROR) → 前端呈现
+会话图（战略 frame）
+ START ─► PERCEIVE?(可选) ─► STRATEGIZE(复合=审慎决策)    ← 起点必达
+                                   │  写账本: route / goal 图 / success 判据 / 预算
+                                   ▼
+        ┌── for goal g in goal 图 (账本游标逐一推进) ───────────────┐
+        │                                                          │
+        │   ACT(g) = 复合节点 → 展开为战术子图 (ReAct)               │
+        │   ┌────────────────────────────────────────────────────┐ │
+        │   │ entry(g) ─► DECIDE ─► effect(只读) ─► OBSERVE   │ │
+        │   │     ▲                                  │           │ │
+        │   │     └──────────────────────────────────┘           │ │
+        │   │   工具 = effect 之一(decompose/apply_sop/read…)     │ │
+        │   │   退出: 模型 finish(goal 判据) / 熔断 / 显式 abort   │ │
+        │   └──────────────────────┬─────────────────────────────┘ │
+        │                          │ exit port: goal-done|fail|abort
+        │                          ▼                                │
+        │   verifyPost(g, artifact)  ← gate 带目标上下文            │
+        │   ARBITRATE(g): done→游标+1 | fail→修订(预算-1, 回 ACT(g))│
+        │                 abort→跳过/终止(策略/HITL)                │
+        └──────────────────────────────────────────────────────────┘
+ ▼ 会话终止: 会话仲裁点(finish/error/cancel) → WAL 沉淀 → 呈现
 ```
 
-终止权规则：micro-Finish 只结束当前目标；会话是否终止由 Goal 环仲裁点决定。
+要点：
+
+1. 战略不是"必经阶段链"：STRATEGIZE 是**审慎决策复合节点**——起点必达，其后仅由**反思回路**重入（ARBITRATE 判路线偏差 / 修订超阈值 / 用户显式要求）。**不做前置复杂度评估**（D9）：规划不足由执行后的验证/反思迭代修正，不预测不预判。不再每轮无条件跑（消除现状每轮 planner 强制调用的成本与战略架空）。
+2. 战术子图只在 ACT(g) 展开时存在：它不是另一个"环"，而是 goal 节点的**内部图**（战术=战略的子图）。模型 finish = 提交该 goal 的判据，**不自动终结会话**（修 P1）。
+3. plan 不再是阶段：执行步骤规划 = 战术子图内可调用的**只读规划工具**，返回结构化 goal 建议；goal 图只在决策点（STRATEGIZE/ARBITRATE）绑定落账（D11）。多目标天然是账本里的图，游标逐一推进，消灭 `steps[0]` 丢弃（修 P2）。
+4. verifyPre/verifyPost 从"拦 Action 的阶段"变成**图边上的 gate 节点**：Pre 拦 STRATEGIZE/ACT 出口，Post 拦 goal 出口且带 g 上下文（修 P6/P7）。
+5. skipMicro 语义消失：没有"宏轮"概念，只有"直接执行 vs 展开战术子图"两种节点选择（修 P3）。
+6. PERCEIVE 只在需要刷新环境/记忆的门控处重入，随 STRATEGIZE 或修订回路携带，不再绑定固定阶段链（修 P5）。
+
+### 5.4 终止权与预算
+
+| 层 | 谁可结束 | 判据来源 | 预算 |
+|---|---|---|---|
+| goal | 战术子图内 finish/熔断/显式 abort | verifyPost(artifact, g) + ARBITRATE（策略提供判据，内核执行） | goal 内效果数/深度（熔断） |
+| 会话 | 仅会话仲裁点 | STRATEGIZE 写入的成功判据/终止边界 + shouldFinish | **多级预算（D12）**：会话 token 预算 / goal 内效果数与深度 / 嵌套子图深度上限（取代 maxIterations / maxMicroDepth 单计数） |
+| 修订 | 修订次数上限 | goal 槽位计数 | 每 goal 修订预算 |
+
+### 5.5 相对旧模型的删改对照
+
+- **删除**：`PLANNING` 阶段"每轮必达"；`planToIntent`/`steps[0]` 消费；Phase 序列链作为编排载体；verifyPre 拦 Action 的宏层位置；skipMicro。
+- **保留并重定位**：verifyPre/Post 语义→gate 节点；SOP/StaticPlanner→只读规划服务（供决策点调用）；FastPath/SlowPath→System-1 路由工具 与 STRATEGIZE 审慎子图素材。
+- 现有 `AgentStateGraph`（Phase 有向图 + ACTING 自环）作为"扁平的会话图"先行实现：自环即"战术子图退化为一个循环节点"的特例；新模型是其严格超集（节点可带内部图）。
 
 ## 6. 文本 LLM Pipeline 草案
 
 ### 6.1 定位
 
-pipeline 不是内核，是内核的一个"效果源"。内核只见语义契约：
+pipeline 不是内核，也不是"效果源"：它是内核**决策循环中 LLM 触点的一段边界实现**——负责"怎么问模型、怎么解析回答"；"何时问、问完的语义结果如何推进状态"归内核。内核只见语义契约：
 
 ```java
-// 内核语义层：一次 Infer = 一个 effect
+// 内核语义层：一次 Infer = 一次决策请求（Loop 内的 LLM 触点）；效果由工具/IO 通道执行
 record InferRequest(Key role, GoalScope scope, CtxSnapshot ctx, ModelHints hints) {}
 record ModelObservation(String content, String reasoning,
                        List<Decision> decisions /* 工具调用/意图, 语义化 */, Status status) {}
@@ -223,15 +291,20 @@ Provider    (roles/上下文   (system/user/   retry/timeout/ (extract:      (�
 
 | kind | ① Resolve | ② Assemble | ④ Transport | ⑤/⑥ 语义 | 现状代码 |
 |---|---|---|---|---|---|
-| `classification` | planner.ftl+rules | 单 user 文本 | instruction model | 意图词→Intent 链 | `FastPathStrategy` |
-| `reasoning`(MCTS) | planner 种子 | 文本 | reasoning model | — | `SlowPathStrategy`/ThinkingTree |
-| `actor`(Micro 主环) | micro_loop 模板 | XML 上下文注入 | defaultModel | tool_calls→Decision, finish→Status | `dispatchLlmInference` |
+| `classification` | planner.ftl+rules | 单 user 文本 | instruction model | 意图词→路由决策（§5.1 System-1，可并入 actor） | `FastPathStrategy` |
+| `reasoning`(MCTS) | planner 种子 | 文本 | reasoning model | 供 STRATEGIZE 内部审慎子图使用 | `SlowPathStrategy`/ThinkingTree |
+| `actor`(决策循环的 LLM 触点) | micro_loop 模板 | XML 上下文注入 | defaultModel | 协议词→内核 Status/Decision | `dispatchLlmInference` |
 | `summarize` | 无模板硬拼 | 对话→摘要 | defaultModel | 摘要文本 | `compactContext()` |
 | `guardrail-llm`(未来) | guardrail 模板 | 目标+产物 | 任选 | PASS/FAIL | 暂无(规则式) |
 | `sub-agent prompt`(003) | 子任务模板 | 父上下文 | 子 agent | 回传结果 | `AcpClientWrapper` |
 
 **描述方式**：pipeline 由 spec 声明（kind → stages 顺序 + 各段实现选择 + 参数）；运行时按 spec 构建；
 实例只依赖 `Inferencer` 接口。新增一种用法 = 注册新 stage + 新 spec，不动内核、不影响其它 kind。
+
+**边界**：循环本体（何时续推、tool_calls 如何派发给效果通道、判停/回退/仲裁）**不在 pipeline**，归内核
+（§3.1 决策循环语义）；pipeline 只完成"这一次 infer 的往返 + 协议词→语义翻译"。kind 名中的"Micro/主环"
+仅指该 LLM 触点服务于哪个内核循环，不代表循环逻辑在此实现。kinds 与 §5.1 三职能对应：`actor`=战术子图
+DECIDE 触点；`classification`=System-1 路由（可折叠进 actor）；`reasoning`=STRATEGIZE 审慎子图的 pipeline。
 
 ### 6.4 归属
 
@@ -255,19 +328,29 @@ Adapter（更外面）      : vendor codec/transport（OpenAI/Gemma/未来多模
 | `MicroReActEngine`/Phase/DispatchStrategy 死代码 | 删除或作新内核实现素材 | **先收敛（P0 决策）** |
 | `PromptManager`（全 static）+ `FilePromptLoader` | PromptProvider 接口 | 实例化 + registerSource + 多级覆盖 |
 | `GuardrailToolProxy` 未接线 | Guardrail 钩子实现 | 由 Agent 装配注入（修 P6） |
-| `planToIntent` 只取第一步 | Goal 队列/游标 | 内核数据类型 + Goal 环（修 P2） |
+| `planToIntent` 只取第一步 / `Plan.Step` | 账本 goal 图 + 游标 | 删除单步丢弃：goal 图为账本槽位，游标逐一推进（修 P2） |
+| `plan()` 每轮强制 planner LLM 调用 + 双模型/双 WAL | 删除 | 路由折叠进 actor；战略审慎进 STRATEGIZE 复合节点（消每轮成本与战略架空，修 P1/P3） |
+| `FastPathStrategy` 词分类 | System-1 路由工具实现（可并入 actor tool schema） | 不再充当"战略"（判据见 §5.1） |
+| `SlowPathStrategy`/`ThinkingTree`(MCTS) | STRATEGIZE 内部审慎子图素材 | 由 STRATEGIZE 节点按预算装配（§5.2 / §6.3 `reasoning` kind） |
+| `StaticPlanner`/`SopRegistry` | 只读规划服务后端（`apply_sop` 类，返回 SOP 步骤建议） | 供 STRATEGIZE/ARBITRATE 决策点绑定 goal 图，而非宏层独占阶段 |
+| 效果仅回流文本（`__action_log` ad-hoc 写 ctx） | 只读效果 + 决策/仲裁落账 | 效果无写权限（D11）：只返回结构化 observation；槽位变更统一在 decision/仲裁点经内核落账（WAL 审计/回放无歧义） |
+| 草案 GoalQueue / `goalIndex` | 账本 goal 槽位 | goal 图数据形态 + 游标（§5.3） |
 | 手写 `extractReasoningFromRaw` 等 | ResponseDecoder | 按 vendor 拆 parser |
 
 ## 8. 开放决策点（评审时逐条捋）
 
-- [ ] D1 三层中"策略"范围：Planner/Guardrail/PromptProvider 先进钩子，还是把 Effect/Gateway 一起立
-- [ ] D2 执行契约粒度：`execute` 每目标一次 or 每会话一次（决定是否带 GoalQueue）
+- [ ] D1 策略挂点：Planner 拆为**三职能挂点**（STRATEGIZE 审慎节点实现 / SOP 匹配 / System-1 路由工具，见 §5.1）；Guardrail/PromptProvider 为钩子；Effect/Gateway 属内核循环边界而非策略
+- [ ] D2 执行契约粒度：`execute` **每会话一次**；goal 图游标与战术子图展开都是内核执行语义（§5），"每目标一次"的并发契约变体由子图/子 agent 递归表达（会话级契约最简）
 - [ ] D3 AgentExecutor 去留：原样收编为 legacy 实现 vs 直接重写新实现
-- [ ] D4 内核哲学：运行时/VM 式（agent-agnostic） vs Agent 微架构式（认识目标推进/仲裁）；倾向"VM 纪律 + 执行语义"
+- [ ] D4 内核哲学：~~运行时/VM 式（agent-agnostic）~~ vs Agent 微架构式（认识 LLM-Agent 决策循环 + 目标推进/仲裁）→ **评审反馈：倾向 Agent 微架构式**，VM 纪律仅作实现纪律不作哲学边界（见 §3 评审注与 §3.1 "决策循环语义"）
 - [ ] D5 文本 LLM pipeline：六段是否够/每段是否独立接口；④ 超时重试归属确认
 - [ ] D6 Prompt 动态加载的具体形态（registerSource 优先级、watch 热更、session 级隔离）
 - [ ] D7 内核接口名与包结构（`org.cland.alice.core.agent.kernel`?）
 - [ ] D8 verifyPost(artifact, goal) 的目标比对语义（谁提供"目标达成判据"）
+- [ ] D9 ~~前置复杂度/新颖性门评估~~ → **已定：不做评估**。STRATEGIZE 触发 = 会话起点必达 + 反思回路重入（ARBITRATE 判路线偏差 / 修订超阈值 / 用户显式要求）；规划不足由执行后的验证/反思迭代修正（§5.1、§5.3 要点 1）
+- [ ] D10 `alice-core-planner` 新形态：PlannerService 拆为何物——STRATEGIZE 审慎子图实现 + SOP 匹配只读规划服务 + 路由工具；模块包结构/导出面如何变
+- [ ] D11 槽位写权限 → **已定：效果无写权限**。账本/图/游标只在 decision 与仲裁点（STRATEGIZE/ARBITRATE/gate 落账规则）由内核变更；效果只返回 observation（可结构化建议）。槽位清单（goal 图/route/artifact/预算/修订计数）与落账规则细节待定
+- [ ] D12 会话预算语义 → **已定：多级预算**。会话 token 预算 / goal 内效果数与深度 / 嵌套子图深度上限；取代 maxIterations / maxMicroDepth 单计数（§5.4）。各级默认值与超限行为待定
 
 ## 9. 参考
 
