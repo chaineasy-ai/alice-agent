@@ -183,22 +183,92 @@ interface MemoryAccess  { /* ... */ }                             // 现 AgentSe
 
 **现状代码判据**：FastPath 词分类是"路由"而非"战略"（只产出 intent 词+FINISH，不触碰任务本质与路线）；SlowPath/MCTS 是战略审慎的雏形；SOP static 是执行步骤规划的雏形；`planToIntent()` 只取 `steps[0]` = 三职能被压平后又被丢弃。
 
-### 5.2 图基元
+### 5.2 图元模型：执行逻辑由图设计决定（meta-model）
 
-**节点类型（内核唯一定义）**：
+> **定论（2026-09-09 评审）**：内核的执行逻辑不是"编排代码"，而是**图元模型的机械推导**。图定义什么，执行就走什么；修行为 = 改图/改注解，不改解释器。`Loop` 只是这个模型的**解释器**，业务智能全部落在"图怎么搭、节点上挂谁"。
 
-| 节点 | 语义 |
+#### 5.2.1 结构元模型
+
+会话图 G = (V, E)。**类型决定节点在执行层的唯一语义（下表）**，属性决定策略挂点；解释器只识别类型，不识别任何业务。
+
+| 类型 | 进入时执行（由模型固定） | 后继 |
+|---|---|---|
+| `decision` | 调一次 Decision 源（LLM/人/规则）→ 得语义决策 d；d 映射出边；若 d 携带结构写（goal 绑定/仲裁结论/预算重分配）→ 在**写点**原子落账 | d.route 指向的边 |
+| `effect` | 经 `GuardrailToolProxy` 权限门（P6）→ 执行效果 → observation 入账 trace | 后继边（通常指向 observe） |
+| `gate` | 询问一次策略（verifyPre/verifyPost/HITL/预算/工具权限）→ pass 或 block(理由) | pass→原边；block→guard 边（→ abort/修订/等待） |
+| `observe` | 汇总 trace/记忆 → 重建该决策点的上下文（修 P8） | 后继边 |
+| `terminal` | 按层级退出：**goal 级**→ 经 exit port 回外层；**会话级**→ 终止 Loop | — |
+| `composite` | **展开帧入栈**：取内部图 (entry)；sub-terminal 经 exit port 绑定回外层出口；expansion 深度注解生效 | 内部图 entry 节点 |
+
+**不变式（防止"越层"）**：内部 terminal 不能直接到达外层——唯一通道是 exit port 绑定表；"会话结束"只能是**会话级 terminal 从最外层到达**，任何中间节点/工具/模型响应都制造不了（修 P1 的结构保证）。
+
+**边与注解**：有向边可带 guard（挂 gate）与路由（decision 输出 d → 目标边）。**预算/限额/强制都是图元素注解**：edge 限额（token/效果数）、expansion 深度（嵌套上限）、修订次数（goal 槽位）、start 边 `force`（如 STRATEGIZE 起点必达，D9）——解释器只读注解，不做特判。
+
+#### 5.2.2 账本与唯一写点
+
+Ledger 槽位：goal 图 / 游标 / route / artifact / 预算 / 修订计数 / trace。**写点只有两处（R4）**：
+1. decision 结果落账（STRATEGIZE 绑定 goal 图、ARBITRATE 结论、route/判据/预算写入）；
+2. gate/仲裁落账（修订扣减、预算判定、abort 记录）。
+
+效果**无写权**（D11）：任何效果想改变槽位只能产出"待决建议"observation，经决策/仲裁写点才成为账本事实。恢复 = 从 WAL trace 回放 + 重路由，游标回退到任意 checkpoint——账本单写点使回放无歧义。
+
+#### 5.2.3 执行语义推导（规则 R0–R4）
+
+**R0 唯一遍历器**（内核全部代码 = 这个解释器）：
+
+```
+pos = graph.start (start 边可标 force, 强制先过 STRATEGIZE 等复合节点)
+frames = []                 // composite 展开帧栈 (内层图 + exit port 绑定表)
+while true:
+    n = current node
+    checkBudgets()          // R3: 读图注解, 超限 → 推位置到最近 abort/修订 guard 边
+    switch n.type:
+      decision:   d = askDecisionSource(n)          // LLM/人/规则 一次
+                  if d.hasStateWrite: writeLedger(d) // 写点①: goal 绑定/仲裁/预算
+                  pos = route(n, d)                  // 沿 d 映射的出边走
+      effect:     if !guardrailToolProxy.passes(n): pos = guardEdge(n); break
+                  obs = runEffect(n); trace.append(obs); pos = out(n)
+      gate:       r = askStrategy(n)                 // 内容由 Agent 注入
+                  pos = r.pass ? out(n) : r.guardEdge(n)
+      observe:    rebuildContext(n); pos = out(n)
+      composite:  frames.push(expand(n)); pos = n.entry
+      terminal:   if n.isGoalLevel:
+                      exit = frames.top.bindings[n]; pos = exit   // 回外层边
+                      if frames.top exhausted: frames.pop()
+                  else:
+                      return finish(n)               // 会话级 → 唯一终止出口
+```
+
+**R1 决策输出空间**（词表先定，边数才有意义；STRATEGIZE 与战术 DECIDE 共用）：
+语义决策 d ∈ { `answer(content)` / `act(tool_call…)` / `finish-goal(判据)` / `revise(反馈)` / `abort(原因)` }，并可携带**结构 payload**（goal 图/判据/预算，见写点①）。厂商原词（finish_reason/tool_calls…）由 pipeline 在 Inferencer 内翻译，不进图。
+
+**R2 终止推导**：模型/规则的 `finish-goal` 只是 **goal 级判据提交**；"会话是否结束"由图事实决定——goal 出口链上 verifyPost(g) 与 ARBITRATE 的结果、以及"是否还有下一个 goal"（账本游标）。会话级终止只来自：全部 goal 通过 / cancel / error / 预算注解耗尽到达会话 terminal。
+
+**R3 预算推导**：预算是**图注解**而非代码计数：edge 限额（token/效果数）、expansion 深度、修订次数。注解耗尽 → 解释器把位置推到该元素声明的 abort/修订 guard 边。多级预算（D12）对应三种注解的嵌套作用域（会话/子图/边）。
+
+**R4 写点推导**：见 §5.2.2；仅两处写点，回放/审计无歧义。
+
+#### 5.2.4 由模型导出即修复：P1–P8 图级修法
+
+| 缺陷 | 图级修法（改图/改注解，不改解释器） |
 |---|---|
-| `decision` | 必须产生一次决策（Decision 源：LLM/人/规则），决策结果映射到出边，推进图与账本 |
-| `effect` | 执行副作用；对世界/内容槽位的写在 effect 边界经 **GuardrailToolProxy** 校验（默认无）；结构/仲裁槽位仅 decision/仲裁点可改（D11） |
-| `gate` | 图边上的固定钩子位（verifyPre/verifyPost、HITL、预算、工具权限=**GuardrailToolProxy**：P6 装配点，pre/post Validator 链含 `PermissionSandboxValidator`/`ToolExistenceValidator` 等）；内核强制询问 |
-| `observe` | 汇总效果结果/记忆刷新，回流为下一决策上下文 |
-| `terminal` | goal 级：`goal-done` / `goal-fail` / `abort`；会话级：`finish` / `error` / `cancel` |
-| `composite` | 可展开为子图的节点（STRATEGIZE、goal、ACT），含 entry port / exit port |
+| P1 micro stop 直终会话 | `finish` 降为 goal 级 terminal（R1 词表）；会话出口由 exit 链/仲裁决定（不变式保证） |
+| P2 只吃 steps[0] | goal 图 = 账本槽位 + 游标；"下一个 goal" 是图事实（R2） |
+| P3 skipMicro 一轮即终 | 无"宏轮"；ACT 展开与否是节点/边选择 |
+| P4 迭代双计数 | 步数 = 图遍历步数（单一来源），不再 loopBody 手工自增 |
+| P5 REVISION 不重新感知 | 修订 guard 边回到 PERCEIVE/STRATEGIZE 复合（回路是图结构） |
+| P6 工具守卫未接线 | `GuardrailToolProxy` 作为 effect 入口/权限 gate（P6 = 接线，不是新语义） |
+| P7 verifyPost 无目标上下文 | gate 属性携带 goal 引用 → verifyPost(artifact, g)（D8） |
+| P8 上下文重建/稀释 | observe 重建 + ledger trace 回放；actionLog 截尾 = 注解限额而非代码截断 |
 
-**边语义**：有向边带 guard（gate 位）与 payload 路由（decision 结果 → 具体出边）；子图 terminal 经 exit port 映射回外层出边。
+#### 5.2.5 Loop 的形状（解释器 vs 策略责任）
 
-### 5.3 会话运行（一次 execute 的图游走）
+- **内核（`Loop`）实现**：R0 遍历器、节点类型分派、展开帧、预算检查、两个写点、WAL checkpoint。**全部代码就是解释器本身**，不含任何业务判断。
+- **策略（Agent 注入）**：decision 源实现（LLM 触点）、gate 策略内容、effect 实现、goal 图素材（plan/SOP 工具）、**会话图的装配**（Agent 按能力声明装载图与注解）。
+
+执行逻辑由图设计决定在此闭合：**图怎么搭 → 解释器就怎么走**；换行为=换图/换注解/换节点上挂的策略，内核一行不改。
+
+### 5.3 实例化：一次 execute 的图游走（示例会话图，语义由 §5.2 模型导出）
 
 ```
 Session: execute(SessionRequest)                         ← 内核驱动, 账本唯一真相
@@ -236,7 +306,7 @@ Session: execute(SessionRequest)                         ← 内核驱动, 账�
 5. skipMicro 语义消失：没有"宏轮"概念，只有"直接执行 vs 展开战术子图"两种节点选择（修 P3）。
 6. PERCEIVE 只在需要刷新环境/记忆的门控处重入，随 STRATEGIZE 或修订回路携带，不再绑定固定阶段链（修 P5）。
 
-### 5.4 终止权与预算
+### 5.4 终止权与预算（§5.2 R2/R3 的实例化汇总）
 
 | 层 | 谁可结束 | 判据来源 | 预算 |
 |---|---|---|---|
