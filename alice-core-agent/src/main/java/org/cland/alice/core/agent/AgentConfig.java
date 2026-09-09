@@ -30,6 +30,9 @@ public final class AgentConfig {
   /** 默认跳过 Micro-ReAct（仅执行 Macro 循环） */
   public static final boolean DEFAULT_SKIP_MICRO = false;
 
+  /** 图内核开关默认值：false（换轨过渡期，legacy AgentExecutor 仍为默认运行时）。 */
+  public static final boolean DEFAULT_GRAPH_KERNEL_ENABLED = false;
+
   private final String defaultModelId;
   private final int maxIterations;
   private final int maxMicroDepth;
@@ -38,6 +41,7 @@ public final class AgentConfig {
   private final boolean preVerifyEnabled;
   private final boolean postVerifyEnabled;
   private final boolean debug;
+  private final boolean graphKernelEnabled;
 
   private AgentConfig(Builder builder) {
     this.defaultModelId = builder.defaultModelId != null ? builder.defaultModelId : DEFAULT_MODEL;
@@ -50,6 +54,7 @@ public final class AgentConfig {
     this.preVerifyEnabled = builder.preVerifyEnabled;
     this.postVerifyEnabled = builder.postVerifyEnabled;
     this.debug = builder.debug;
+    this.graphKernelEnabled = builder.graphKernelEnabled;
   }
 
   public static Builder builder() {
@@ -95,6 +100,11 @@ public final class AgentConfig {
     return debug;
   }
 
+  /** 图内核开关：true 时 kernel()/events() 指向图会话内核（迁移形态，默认 false）。 */
+  public boolean graphKernelEnabled() {
+    return graphKernelEnabled;
+  }
+
   // ========== Builder ==========
 
   public static final class Builder {
@@ -106,6 +116,7 @@ public final class AgentConfig {
     private boolean preVerifyEnabled = true;
     private boolean postVerifyEnabled = true;
     private boolean debug;
+    private boolean graphKernelEnabled;
 
     private Builder() {}
 
@@ -146,6 +157,12 @@ public final class AgentConfig {
 
     public Builder debug(boolean debug) {
       this.debug = debug;
+      return this;
+    }
+
+    /** 开启图内核运行时（kernel()/events() 指向 {@code GraphSessionKernel}）。 */
+    public Builder graphKernelEnabled(boolean graphKernelEnabled) {
+      this.graphKernelEnabled = graphKernelEnabled;
       return this;
     }
 

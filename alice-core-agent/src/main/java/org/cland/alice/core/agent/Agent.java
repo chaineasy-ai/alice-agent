@@ -11,9 +11,16 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import org.cland.alice.core.agent.executor.AgentExecutor;
+import org.cland.alice.core.agent.graph.GraphSessionKernel;
+import org.cland.alice.core.agent.kernel.EventStream;
+import org.cland.alice.core.agent.kernel.Inferencer;
+import org.cland.alice.core.agent.kernel.KernelDelegates;
+import org.cland.alice.core.agent.kernel.Loop;
 import org.cland.alice.core.agent.lifecycle.Action;
 import org.cland.alice.core.agent.memory.AgentSession;
+import org.cland.alice.core.agent.pipeline.TextLlmPipeline;
 import org.cland.alice.core.agent.result.StepResult;
+import org.cland.alice.core.agent.tool.PlanTool;
 import org.cland.alice.core.agent.wal.RawMessage;
 import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
 import org.cland.alice.core.agent.wal.WalSession;
@@ -57,7 +64,7 @@ import org.slf4j.LoggerFactory;
  *   System.out.println(result); // "Paris"
  * </pre>
  */
-public class Agent implements AgentFacade {
+public class Agent implements KernelDelegates {
 
   private static final Logger logger = LoggerFactory.getLogger(Agent.class);
 
@@ -66,6 +73,12 @@ public class Agent implements AgentFacade {
   private final AgentConfig config;
   private final Vertx vertx;
   private final AgentExecutor executor;
+
+  /** 图会话内核（换轨形态：config.graphKernelEnabled 时 kernel()/events() 指向它）。 */
+  private volatile GraphSessionKernel graphKernel;
+
+  /** 自定义 Inferencer（同时供图内核与 legacy executor 使用）。 */
+  private volatile Inferencer inferencerOverride;
 
   // ========== 子模块引用（原 AgentCore 字段） ==========
 
@@ -114,10 +127,6 @@ public class Agent implements AgentFacade {
   @Override
   public AgentConfig config() {
     return config;
-  }
-
-  public Vertx vertx() {
-    return vertx;
   }
 
   // ========== 依赖注入（原 AgentCore 的 with* 方法） ==========
@@ -171,6 +180,34 @@ public class Agent implements AgentFacade {
   /** 注入 {@link WalSession}，启用 WAL 双轨制持久化与上下文压缩能力。 */
   public Agent withWal(WalSession wal) {
     this.executor.withWal(wal);
+    return this;
+  }
+
+  /**
+   * 注入自定义 {@link Inferencer}（文本 LLM pipeline 契约，D5）。
+   *
+   * <p>未注入时执行器使用默认 actor pipeline（六段内部实现）。
+   *
+   * @param inferencer pipeline 实例
+   * @return this（链式调用）
+   */
+  public Agent withInferencer(Inferencer inferencer) {
+    this.executor.withInferencer(inferencer);
+    this.inferencerOverride = inferencer;
+    return this;
+  }
+
+  /**
+   * 注入自定义 {@link GuardrailToolProxy}，为每个 TOOL_CALL 启用工具级守卫。
+   *
+   * <p>未注入时执行器会在首个工具调用前自动装配默认代理（P6 装配点）； 注入自定义实例可替换默认校验器链。
+   *
+   * @param proxy 已配置的 GuardrailToolProxy 实例
+   * @return this（链式调用）
+   */
+  public Agent withGuardrailToolProxy(
+      org.cland.alice.core.agent.guardrail.GuardrailToolProxy proxy) {
+    this.executor.withGuardrailToolProxy(proxy);
     return this;
   }
 
@@ -337,13 +374,58 @@ public class Agent implements AgentFacade {
    *
    * @return 推理文本，若无则返回空字符串
    */
+  /** 惰性装配图会话内核（换轨目标态）：STRATEGIZE=PlannerService、TAO=Inferencer+ExecutionEngine。 */
+  private GraphSessionKernel graphKernel() {
+    GraphSessionKernel k = graphKernel;
+    if (k == null) {
+      synchronized (this) {
+        k = graphKernel;
+        if (k == null) {
+          if (plannerService == null || toolRegistry == null) {
+            throw new IllegalStateException(
+                "graph kernel requires plannerService and toolRegistry (use createDefault or with*)");
+          }
+          k =
+              new GraphSessionKernel(
+                  vertx,
+                  plannerService,
+                  toolRegistry,
+                  inferencerOverride != null ? inferencerOverride : new TextLlmPipeline(),
+                  config.defaultModelId(),
+                  null,
+                  null,
+                  null,
+                  AgentConfig.DEFAULT_MAX_ITERATIONS,
+                  config.maxMicroDepth());
+          graphKernel = k;
+          logger.info("[Agent] Graph session kernel enabled (kernel()/events() switched)");
+        }
+      }
+    }
+    return k;
+  }
+
   /**
-   * 获取 Agent 执行器，用于注册事件监听等。
+   * 获取内核执行契约（只读接口）。
    *
-   * @return AgentExecutor 实例
+   * <p>取代 legacy 的 {@code getExecutor()} concrete 暴露：调用方（含 TUI/CLI/子 agent）只依赖 {@link Loop}
+   * 最小面（execute/cancel/state/events），不感知具体实现。config.graphKernelEnabled=true 时指向图会话内核。
+   *
+   * @return 内核执行契约（默认实现为 {@link AgentExecutor} legacy 实现）
    */
-  public AgentExecutor getExecutor() {
-    return executor;
+  public Loop kernel() {
+    return config.graphKernelEnabled() ? graphKernel() : executor;
+  }
+
+  /**
+   * 获取内核执行事件流（thought → action → observe 订阅）。
+   *
+   * <p>L2 层事件翻译入口：UI 监听器在此订阅内核事件，再翻译为各自 UI 事件。
+   *
+   * @return 内核事件流
+   */
+  public EventStream events() {
+    return config.graphKernelEnabled() ? graphKernel().events() : executor;
   }
 
   public String getLastReasoning() {
@@ -615,9 +697,13 @@ public class Agent implements AgentFacade {
     vertx.close();
   }
 
-  /** 取消当前 PPAO 执行。可用于 TUI ESC / CLI Ctrl+C 中断。 */
+  /** 取消当前执行（图内核形态取消图会话；legacy 形态取消 PPAO）。可用于 TUI ESC / CLI Ctrl+C 中断。 */
   public void cancel() {
-    executor.cancel();
+    if (config.graphKernelEnabled()) {
+      graphKernel().cancel();
+    } else {
+      executor.cancel();
+    }
     logger.info("[Agent] Execution cancelled");
   }
 
@@ -766,6 +852,18 @@ public class Agent implements AgentFacade {
     // 可创建 StaticPlanner + SopRegistry 并通过 PlannerService.builder().staticPlannerFn() 注入。
     var planner = PlannerService.builder().strategySelector(selector).build();
     agent.withPlannerService(planner);
+
+    // 4. 注册 tool 层 plan 工具（D10）：与 STRATEGIZE/ARBITRATE 共用同一规划后端；
+    //    产出结构化 goal/step 建议，供决策循环内按需调用。ToolRegistry.register 幂等，重复装配安全。
+    if (agent.toolRegistry() != null) {
+      try {
+        int planToolCount =
+            new ToolDiscovery(agent.toolRegistry()).scanAndRegister(List.of(new PlanTool(planner)));
+        logger.info("[Agent] Registered {} plan tool(s) against planner backend", planToolCount);
+      } catch (Exception e) {
+        logger.warn("[Agent] Failed to register plan tool: {}", e.getMessage());
+      }
+    }
 
     logger.info(
         "[Agent] Default Agent created: reasoningModel={}, instructionModel={}",

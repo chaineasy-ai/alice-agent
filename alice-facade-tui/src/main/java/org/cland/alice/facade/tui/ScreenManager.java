@@ -232,6 +232,11 @@ public class ScreenManager implements AutoCloseable {
   }
 
   private static Terminal createTerminal() throws IOException {
+    // headless 测试模式（alice.tui.headless=true）强制 dumb 终端：纯 Java 实现，
+    // 不触碰原生 tty（FFM/JNI），避免无终端/管道/CI 环境下 native 崩溃导致测试 worker 退出。
+    if (Boolean.getBoolean("alice.tui.headless")) {
+      return TerminalBuilder.builder().dumb(true).encoding(StandardCharsets.UTF_8).build();
+    }
     try {
       return TerminalBuilder.builder().system(true).encoding(StandardCharsets.UTF_8).build();
     } catch (Exception e) {

@@ -1,5 +1,7 @@
-package org.cland.alice.core.agent;
+package org.cland.alice.core.agent.kernel;
 
+import org.cland.alice.core.agent.AgentConfig;
+import org.cland.alice.core.agent.AgentContext;
 import org.cland.alice.core.agent.lifecycle.Action;
 import org.cland.alice.core.agent.memory.AgentSession;
 import org.cland.alice.core.agent.result.StepResult;
@@ -7,22 +9,16 @@ import org.cland.alice.core.planner.PlannerService;
 import org.cland.alice.tool.gateway.ToolRegistry;
 
 /**
- * Agent 门面接口 — 向 PPAO 编排层暴露的最小职责集合。
+ * 内核回调 SPI（KernelDelegates）— 由 legacy {@code AgentFacade} 收敛改名而来。
  *
- * <p>遵循接口隔离原则（ISP）：PPAO 循环各阶段仅依赖此门面，而非完整的 {@link Agent} 类。 遵循依赖倒置原则（DIP）：{@link AgentExecutor} 和
- * {@code MicroReActEngine} 依赖此抽象， 而非 {@link Agent} 具体实现。
+ * <p>执行实现（L3）对宿主 Agent（L2）的最小回调契约：身份、配置、策略模块访问与三个语义钩子（Pre/Post 验证与终止判断）。 本接口由 L2 Agent
+ * 实现并注入执行实现，保证依赖单向（Facade → Agent → Kernel）与依赖倒置。
  *
- * <p>职责范围：
- *
- * <ul>
- *   <li><b>身份</b> — {@link #agentId()}
- *   <li><b>配置</b> — {@link #config()}
- *   <li><b>模块访问</b> — {@link #plannerService()}, {@link #toolRegistry()}, {@link #memory()}
- *   <li><b>验证</b> — {@link #verifyPre(Action)}, {@link #verifyPost(StepResult)}
- *   <li><b>生命周期</b> — {@link #shouldFinish(AgentContext, StepResult)}
- * </ul>
+ * <p><b>过渡说明</b>：签名中的 legacy 类型（{@link AgentContext}/{@link StepResult}/{@link Action}）是先行实现的载体 ——
+ * 随 §4 策略钩子（GoalPlanner/ToolGateway/Guardrail/PromptProvider/Inferencer…）逐个落地， 本接口将收敛为纯内核词汇 （策略钩子由
+ * Agent 按装配注入，回调 SPI 只保留身份/状态查询）。
  */
-public interface AgentFacade {
+public interface KernelDelegates {
 
   /** 返回 Agent 的唯一标识符。 */
   String agentId();
@@ -56,7 +52,7 @@ public interface AgentFacade {
   boolean verifyPost(StepResult stepResult);
 
   /**
-   * 判断 PPAO 循环是否需要终止。
+   * 判断执行循环是否需要终止。
    *
    * @param context 当前 Agent 上下文
    * @param result 当前步骤结果（可能为 null）

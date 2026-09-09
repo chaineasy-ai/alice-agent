@@ -35,6 +35,13 @@ updated: "2026-06-26"
 
 ### □ 1.1 alice-core-agent — 核心Agent引擎
 - [/] Agent 运行循环 (Run Loop) 重构 [priority:: high] [owner:: core]
+    - [x] 内核执行契约第一刀（kernel.Loop / KernelDelegates / Agent.kernel()） [date:: 2026-09-10] [verify:: docs/alice-core-agent/kernel-architecture.md]
+    - [x] R0 图内核 + 标准骨架 + 生产适配器 + GraphSessionKernel + 事件桥/Agent 开关 [date:: 2026-09-10] [verify:: kernel.graph specs 30 例全绿]
+    - [ ] R0 图内核换轨收口（默认置真/facade 迁移/WAL/guardrail/HITL/预算） [priority:: high] [owner:: core] [verify:: todos/TODO-kernel-r0.md §1–§2]
+    - [x] P0 死代码收敛（MicroReActEngine/Phase/DispatchStrategy 删除） [date:: 2026-09-10]
+    - [x] P6 GuardrailToolProxy 默认装配 [date:: 2026-09-10]
+    - [x] D10 tool 层 plan 工具（PlanTool） [date:: 2026-09-10]
+    - [x] D5 Inferencer 契约 + TextLlmPipeline 六段 [date:: 2026-09-10]
     - [x] 基础 Tool Calling 循环实现
     - [x] 流式 (Streaming) 响应支持
     - [x] 中断恢复机制 (WAL + Checkpoint) [priority:: high] [verify:: AgentExecutor 5 个生命周期点注入 WAL，编译通过]

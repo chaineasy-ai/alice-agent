@@ -11,7 +11,6 @@ import java.lang.reflect.Method
  * since Groovy cannot directly call Java private methods.
  *
  * Coverage:
- * - countToolCallMarkers(): text marker detection
  * - parseToolArgsJson(): structured Function Calling argument parsing
  * - __action_log accumulation/truncation via AgentContext
  */
@@ -23,8 +22,8 @@ class AgentExecutorUnitSpec extends Specification {
     // ========================================================================
 
     private static Method findMethod(String name, Class<?>... paramTypes) {
-        // 静态辅助方法已从 AgentExecutor 移至 MicroReActEngine (SRP 拆分)
-        def m = MicroReActEngine.getDeclaredMethod(name, paramTypes)
+        // 静态辅助方法由 AgentExecutor 持有（MicroReActEngine 等死代码已收敛删除）
+        def m = AgentExecutor.getDeclaredMethod(name, paramTypes)
         m.setAccessible(true)
         return m
     }

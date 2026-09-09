@@ -29,6 +29,7 @@ dependencies {
     runtimeOnly project(':alice-facade-tui')
 
     // Test-only dependencies
+    testImplementation project(':alice-model')
     testImplementation project(':alice-agent-command')
     testImplementation project(':alice-facade-cmd')
     testImplementation 'org.apache.groovy:groovy:4.0.30'

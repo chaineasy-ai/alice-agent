@@ -14,8 +14,19 @@ import org.cland.alice.core.agent.Agent;
 import org.cland.alice.core.agent.AgentConfig;
 import org.cland.alice.core.agent.AgentContext;
 import org.cland.alice.core.agent.guardrail.GuardrailToolProxy;
+import org.cland.alice.core.agent.kernel.EventStream;
+import org.cland.alice.core.agent.kernel.InferRequest;
+import org.cland.alice.core.agent.kernel.Inferencer;
+import org.cland.alice.core.agent.kernel.KernelState;
+import org.cland.alice.core.agent.kernel.Loop;
+import org.cland.alice.core.agent.kernel.ModelObservation;
+import org.cland.alice.core.agent.kernel.ModelStatus;
+import org.cland.alice.core.agent.kernel.SessionRequest;
+import org.cland.alice.core.agent.kernel.SessionResult;
+import org.cland.alice.core.agent.kernel.SessionStatus;
 import org.cland.alice.core.agent.lifecycle.Action;
 import org.cland.alice.core.agent.lifecycle.Observation;
+import org.cland.alice.core.agent.pipeline.TextLlmPipeline;
 import org.cland.alice.core.agent.prompt.PromptManager;
 import org.cland.alice.core.agent.result.StepResult;
 import org.cland.alice.core.agent.wal.Checkpoint;
@@ -23,7 +34,6 @@ import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
 import org.cland.alice.core.agent.wal.WalSession;
 import org.cland.alice.core.planner.Plan;
 import org.cland.alice.model.Call;
-import org.cland.alice.model.ModelProvider;
 import org.cland.alice.tool.gateway.engine.ExecutionEngine;
 import org.cland.alice.tool.gateway.engine.ToolResult;
 import org.slf4j.Logger;
@@ -48,8 +58,12 @@ import org.slf4j.LoggerFactory;
  *
  * <p>对应设计文档中的 AgentExecutor 类。 整个 PPAO Loop 被建模为一个 Future 链， 每个阶段接收并传递 {@link AgentContext} 作为状态载体。
  * 其中 Act 阶段内部包含一个 ReAct 微循环（战术执行态闭环）。
+ *
+ * <p><b>内核定位（D3/D7）</b>：本类是内核执行契约 {@link Loop} 的 legacy 先行实现 —— 对外暴露 {@link
+ * #execute(SessionRequest)}/{@link #cancel()}/{@link #state()}/{@link #events()} 内核面； PPAO 编排、WAL
+ * 记录点与事件分发保持原样，待图元模型解释器（R0–R4）落地后整体替换。
  */
-public class AgentExecutor {
+public class AgentExecutor implements Loop, EventStream {
 
   private static final Logger logger = LoggerFactory.getLogger(AgentExecutor.class);
 
@@ -64,8 +78,14 @@ public class AgentExecutor {
   /** 可选的工具调用守卫代理，注入后每个 TOOL_CALL 会经过 Guardrail 预检/后检 */
   private GuardrailToolProxy guardrailToolProxy;
 
-  /** Agent 执行流事件监听器列表（Observer 模式） */
-  private final List<AgentEventListener> listeners = new CopyOnWriteArrayList<>();
+  /** 文本 LLM pipeline（Inferencer，D5）：LLM 触点边界实现；未注入时使用默认 actor pipeline */
+  private volatile Inferencer inferencer;
+
+  /** Agent 执行流事件监听器列表（Observer 模式，内核事件订阅） */
+  private final List<EventStream.Listener> listeners = new CopyOnWriteArrayList<>();
+
+  /** 最近一次执行的上下文，供 {@link #state()} 输出只读快照 */
+  private volatile AgentContext lastContext;
 
   /** 取消标志 — 设置后 PPAO 循环在下一个安全点终止 */
   private volatile boolean cancelled;
@@ -99,9 +119,53 @@ public class AgentExecutor {
     return this;
   }
 
+  /**
+   * 注入自定义 {@link Inferencer}（文本 LLM pipeline 契约，D5）。
+   *
+   * <p>未注入时使用默认 actor pipeline（{@link TextLlmPipeline}，六段内部实现）。 注入点供 Agent 组合根按 kind 装配。
+   *
+   * @param inferencer pipeline 实例（不可为 null）
+   * @return this（链式调用）
+   */
+  public AgentExecutor withInferencer(Inferencer inferencer) {
+    this.inferencer = Objects.requireNonNull(inferencer, "inferencer must not be null");
+    logger.info(
+        "[Inferencer] Custom text LLM pipeline injected: {}",
+        inferencer.getClass().getSimpleName());
+    return this;
+  }
+
+  /** 获取当前 Inferencer（惰性装配默认 actor pipeline）。 */
+  private Inferencer inferencer() {
+    Inferencer current = inferencer;
+    if (current == null) {
+      synchronized (this) {
+        current = inferencer;
+        if (current == null) {
+          current = new TextLlmPipeline();
+          inferencer = current;
+          logger.info("[Inferencer] Default TextLlmPipeline (actor kind) enabled");
+        }
+      }
+    }
+    return current;
+  }
+
   /** 检查 GuardrailToolProxy 是否已注入。 */
   public boolean isGuardrailToolProxyEnabled() {
     return guardrailToolProxy != null;
+  }
+
+  /**
+   * P6 装配点：执行引擎就绪后自动启用默认工具级守卫（工具存在性/微循环/结果一致性校验）。
+   *
+   * <p>显式注入的自定义 {@link GuardrailToolProxy} 优先，默认代理仅在未注入时自动装配。
+   */
+  private synchronized void enableDefaultToolGuardrails() {
+    if (guardrailToolProxy == null && agent.toolRegistry() != null) {
+      guardrailToolProxy = GuardrailToolProxy.createDefault(agent.toolRegistry(), executionEngine);
+      logger.info("[GuardrailToolProxy] Default tool-level guardrails enabled (P6 wiring)");
+    }
   }
 
   // ========================================================================
@@ -131,18 +195,29 @@ public class AgentExecutor {
   }
 
   /**
-   * 注册 Agent 执行流事件监听器（Observer 模式）。
+   * 注册内核执行事件监听器（Observer 模式）。
    *
-   * <p>监听 Micro-ReAct 循环中的 PPAO 事件序列：thought → action → observe。 支持多个监听器并发注册。
+   * <p>监听执行循环中的事件序列：thought → action → observe。 支持多个监听器并发注册。
    *
    * @param listener 事件监听器
-   * @return this（链式调用）
    */
-  public AgentExecutor addListener(AgentEventListener listener) {
+  @Override
+  public void subscribe(EventStream.Listener listener) {
     if (listener != null) {
       this.listeners.add(listener);
     }
-    return this;
+  }
+
+  /**
+   * 注销内核执行事件监听器。
+   *
+   * @param listener 事件监听器
+   */
+  @Override
+  public void unsubscribe(EventStream.Listener listener) {
+    if (listener != null) {
+      this.listeners.remove(listener);
+    }
   }
 
   /** 检查 WAL 是否已注入。 */
@@ -160,9 +235,109 @@ public class AgentExecutor {
   // ========================================================================
 
   /** 取消当前 PPAO 执行。可在任意线程安全调用。 */
+  @Override
   public void cancel() {
     this.cancelled = true;
     logger.info("[Cancel] PPAO execution cancelled");
+  }
+
+  // ========================================================================
+  // 内核执行契约（Loop）— legacy 先行实现
+  // ========================================================================
+
+  /**
+   * 以内核契约进入一次会话闭环。
+   *
+   * <p>将 {@link SessionRequest} 翻译为 legacy {@link AgentContext} 后复用既有 PPAO 执行路径； 完成后把上下文收敛为语义化
+   * {@link SessionResult}。
+   *
+   * @param request 会话请求
+   * @return 会话结果
+   */
+  @Override
+  public Future<SessionResult> execute(SessionRequest request) {
+    Objects.requireNonNull(request, "request must not be null");
+    String input = request.input() != null ? request.input() : "";
+    String sid =
+        (request.sessionId() != null && !request.sessionId().isBlank())
+            ? request.sessionId()
+            : SnowflakeIdGenerator.generateSessionId();
+
+    // 会话级迭代预算：请求 options 中的 maxIterations 优先，否则使用配置默认（D12 多级预算落地前的单计数）
+    int maxIterations = config.maxIterations();
+    Object budget = request.options().get("maxIterations");
+    if (budget instanceof Number n && n.intValue() > 0) {
+      maxIterations = n.intValue();
+    }
+
+    AgentContext context = new AgentContext(sid, maxIterations);
+    request
+        .options()
+        .forEach(
+            (k, v) -> {
+              if (!"maxIterations".equals(k) && v != null) {
+                context.put(k, v);
+              }
+            });
+    context.put("prompt", input);
+    context.put("model", request.modelId() != null ? request.modelId() : config.defaultModelId());
+
+    return executeLoop(input, context)
+        .map(this::toSessionResult)
+        .otherwise(
+            err -> {
+              logger.error("[Kernel] Session {} failed", sid, err);
+              Map<String, Object> meta = new java.util.LinkedHashMap<>();
+              meta.put(
+                  "error",
+                  err.getMessage() != null
+                      ? err.getMessage()
+                      : err.getClass().getSimpleName() + " (no message)");
+              meta.put("phase", context.currentPhase().name());
+              return new SessionResult(SessionStatus.FAILED, sid, "", context.iteration(), meta);
+            });
+  }
+
+  /** 内核状态只读快照：阶段/迭代/会话（未执行过则为空闲态）。 */
+  @Override
+  public KernelState state() {
+    AgentContext ctx = lastContext;
+    if (ctx == null) {
+      return KernelState.idle();
+    }
+    return new KernelState(
+        ctx.sessionId(),
+        ctx.currentPhase().name(),
+        ctx.iteration(),
+        ctx.maxIterations(),
+        cancelled);
+  }
+
+  /** 内核事件流（本实现即事件源）。 */
+  @Override
+  public EventStream events() {
+    return this;
+  }
+
+  /** 把执行终态上下文收敛为语义化会话结果（元数据含 phase/status/error/plannerIntent）。 */
+  private SessionResult toSessionResult(AgentContext ctx) {
+    boolean fatal = ctx.containsKey("error") || "FATAL_ERROR".equals(ctx.get("status"));
+    SessionStatus status =
+        cancelled ? SessionStatus.CANCELLED : fatal ? SessionStatus.FAILED : SessionStatus.FINISHED;
+    String answer = ctx.containsKey("result") ? ctx.get("result").toString() : "";
+
+    Map<String, Object> meta = new java.util.LinkedHashMap<>();
+    meta.put("phase", ctx.currentPhase().name());
+    if (ctx.containsKey("status")) {
+      meta.put("status", ctx.get("status"));
+    }
+    if (ctx.containsKey("error")) {
+      meta.put("error", ctx.get("error"));
+    }
+    if (ctx.containsKey("plannerIntent")) {
+      meta.put("plannerIntent", ctx.get("plannerIntent"));
+    }
+    return new SessionResult(status, ctx.sessionId(), answer, ctx.iteration(), meta);
   }
 
   /**
@@ -214,6 +389,7 @@ public class AgentExecutor {
    */
   private Future<AgentContext> executeLoop(String input, AgentContext context) {
     logger.info("[PPAO] START Agent {} maxIterations={}", agent.agentId(), config.maxIterations());
+    this.lastContext = context;
 
     return perceive(input, context)
         .compose(this::loopBody)
@@ -728,6 +904,9 @@ public class AgentExecutor {
                   logger.info("[Micro-ReAct/Tool] ExecutionEngine lazily initialized (parallel)");
                 }
               }
+              if (executionEngine != null) {
+                enableDefaultToolGuardrails();
+              }
             }
             if (executionEngine == null) {
               logger.warn("[Micro-ReAct/Tool] no ExecutionEngine for parallel dispatch");
@@ -998,7 +1177,12 @@ public class AgentExecutor {
   // Dispatch (Micro-ReAct 中的执行阶段)
   // ========================================================================
 
-  /** Dispatch LLM_INFERENCE */
+  /**
+   * Dispatch LLM_INFERENCE — 经 Inferencer 语义契约（D5：六段 pipeline 边界实现）。
+   *
+   * <p>LLM 触点外移：协议编解码/传输/工具 schema 序列化在 pipeline 内部完成，本方法只消费 {@link ModelObservation} 语义结果并保持
+   * legacy 上下文/事件/WAL 记录语义不变。
+   */
   private Future<StepWithContext> dispatchLlmInference(AgentContext ctx, Action action) {
     Promise<StepWithContext> promise = Promise.promise();
 
@@ -1009,7 +1193,6 @@ public class AgentExecutor {
         .<StepResult>executeBlocking(
             () -> {
               try {
-                ModelProvider provider = ModelProvider.getInstance();
                 logger.info(
                     "[Micro-ReAct/LLM] Calling model={} promptLength={}", modelId, prompt.length());
 
@@ -1028,32 +1211,22 @@ public class AgentExecutor {
                   }
                 }
 
-                // 如果 ToolRegistry 可用，附加 tools 参数以实现 Function Calling
+                // 收集工具 schema 素材（编协议由 pipeline ③ Serialize 完成）
+                java.util.List<InferRequest.ToolSpec> tools = new java.util.ArrayList<>();
                 if (agent.toolRegistry() != null) {
                   try {
-                    var allTools = agent.toolRegistry().allTools();
-                    if (!allTools.isEmpty()) {
-                      var tools =
-                          allTools.stream()
-                              .<java.util.Map<String, Object>>map(
-                                  meta -> {
-                                    var function = new java.util.LinkedHashMap<String, Object>();
-                                    function.put("name", meta.name());
-                                    function.put("description", meta.description());
-                                    function.put("parameters", meta.inputSchema());
-                                    var tool = new java.util.LinkedHashMap<String, Object>();
-                                    tool.put("type", "function");
-                                    tool.put("function", function);
-                                    return tool;
-                                  })
-                              .collect(java.util.stream.Collectors.toList());
-                      callParams.put("tools", tools);
-                      logger.info("[Micro-ReAct/LLM] Attached {} tools to LLM call", tools.size());
-                      logger.debug("[Micro-ReAct/LLM] Tools schema: {}", tools);
+                    for (var meta : agent.toolRegistry().allTools()) {
+                      tools.add(
+                          new InferRequest.ToolSpec(
+                              meta.name(), meta.description(), meta.inputSchema()));
+                    }
+                    if (!tools.isEmpty()) {
+                      logger.info(
+                          "[Micro-ReAct/LLM] Collected {} tools for LLM call", tools.size());
                     }
                   } catch (Exception e) {
                     logger.warn(
-                        "[Micro-ReAct/LLM] Failed to generate tools schema, falling back to text-only",
+                        "[Micro-ReAct/LLM] Failed to collect tools schema, falling back to text-only",
                         e);
                   }
                 }
@@ -1069,113 +1242,27 @@ public class AgentExecutor {
                       microSystemPrompt.length(),
                       prompt.length());
                 }
-                Call call =
-                    microSystemPrompt != null
-                        ? provider.dispatch(modelId, microSystemPrompt, prompt, callParams)
-                        : provider.dispatch(modelId, prompt, callParams);
 
-                if (call.status() == org.cland.alice.model.CallStatus.FINISHED
-                    && call.result() != null) {
-                  Call.Response response = call.result();
-                  String content = response.content() != null ? response.content() : "";
-                  java.util.List<Call.ToolCall> toolCalls = response.toolCalls();
+                // Inferencer 往返（pipeline 同步完成，阻塞线程内安全等待）
+                Inferencer inferencer = inferencer();
+                ModelObservation obs =
+                    inferencer
+                        .infer(
+                            new InferRequest(modelId, microSystemPrompt, prompt, callParams, tools))
+                        .toCompletionStage()
+                        .toCompletableFuture()
+                        .get(config.actionTimeoutMs(), java.util.concurrent.TimeUnit.MILLISECONDS);
 
-                  logger.info(
-                      "[Micro-ReAct/LLM] Response model={} responseLength={} toolCalls={} rawMetadata={}",
-                      modelId,
-                      content.length(),
-                      toolCalls.size(),
-                      response.metadata().containsKey("raw")
-                          ? response
-                              .metadata()
-                              .get("raw")
-                              .toString()
-                              .substring(
-                                  0,
-                                  Math.min(
-                                      3000, response.metadata().get("raw").toString().length()))
-                          : "no-raw");
-                  // Only set result if content is non-empty, so that reflect() can
-                  // set a fallback message when the LLM returns empty content.
-                  if (content != null && !content.isBlank()) {
-                    ctx.put("result", content);
-                  }
-                  ctx.put("__llm_response", content != null ? content : "");
-                  ctx.put("__llm_reasoning", extractReasoningFromRaw(response));
-                  // PPAO: fire thought event for TUI ThinkBlock
-                  Object reasoning = ctx.get("__llm_reasoning");
-                  fireOnThought(reasoning != null ? reasoning.toString() : "");
-                  String finishReason = extractFinishReasonFromRaw(response);
-                  ctx.put("__finish_reason", finishReason);
-                  ctx.put("__turn_end", "stop".equals(finishReason));
-                  ctx.put(
-                      "__true_start",
-                      "stop".equals(finishReason)
-                          || finishReason == null
-                          || finishReason.isBlank());
-                  ctx.remove("__tool_call_index");
-
-                  // 如果 LLM 返回了结构化 tool_calls，存入上下文
-                  if (toolCalls != null && !toolCalls.isEmpty()) {
-                    ctx.put("__tool_calls", toolCalls);
-                    logger.info(
-                        "[Micro-ReAct/LLM] Received {} structured tool call(s) via Function Calling",
-                        toolCalls.size());
-                  }
-
-                  // WAL: 记录 assistant 回复（含 reasoning/原始输出，跳过空消息）
-                  if (wal != null) {
-                    String walContent = content;
-                    boolean hasToolCalls = toolCalls != null && !toolCalls.isEmpty();
-                    // 当 content 为空且有 tool_calls 时，从原始元数据中提取 reasoning_content
-                    if ((walContent == null || walContent.isEmpty()) && hasToolCalls) {
-                      Object raw = response.metadata().get("raw");
-                      if (raw != null) {
-                        String rawStr = raw.toString();
-                        int idx = rawStr.indexOf("\"reasoning_content\":\"");
-                        if (idx >= 0) {
-                          idx += 21;
-                          StringBuilder sb = new StringBuilder();
-                          while (idx < rawStr.length()) {
-                            char c = rawStr.charAt(idx);
-                            if (c == '\\' && idx + 1 < rawStr.length()) {
-                              sb.append(rawStr.charAt(idx + 1));
-                              idx += 2;
-                            } else if (c == '"') {
-                              break;
-                            } else {
-                              sb.append(c);
-                              idx++;
-                            }
-                          }
-                          walContent = "<thought>" + sb.toString() + "</thought>";
-                        }
-                      }
-                    }
-                    // 跳过完全空的 assistant 消息
-                    if (walContent != null && !walContent.isEmpty()) {
-                      if (hasToolCalls) {
-                        // 有 tool calls 时，此内容为推理思考
-                        wal.think(ctx.sessionId(), walContent);
-                      } else {
-                        // 无 tool calls 时，此内容为最终回复
-                        wal.finalAnswer(ctx.sessionId(), walContent);
-                      }
-                    }
-                  }
-
-                  // 将 LLM 输出包装为 Observation，让 Reason 阶段处理 tool_calls 或文本标记
-                  return new StepResult.Continue(null, Observation.success(content));
-                } else {
-                  // WAL: 记录失败的 LLM 回复
-                  if (wal != null) {
-                    wal.finalAnswer(ctx.sessionId(), "[LLM Error: " + call.status() + "]");
-                  }
-
-                  return new StepResult.Failure("LLM call failed: " + call.status());
-                }
+                return consumeObservation(ctx, modelId, obs);
               } catch (Exception e) {
                 logger.error("[Micro-ReAct/LLM] error", e);
+                if (e instanceof java.util.concurrent.TimeoutException) {
+                  return new StepResult.Failure(
+                      "LLM call timed out after " + config.actionTimeoutMs() + "ms");
+                }
+                if (e instanceof java.util.concurrent.ExecutionException && e.getCause() != null) {
+                  return new StepResult.Failure("LLM call error: " + e.getCause().getMessage());
+                }
                 return new StepResult.Failure("LLM call error: " + e.getMessage());
               }
             })
@@ -1189,6 +1276,98 @@ public class AgentExecutor {
             });
 
     return promise.future();
+  }
+
+  /**
+   * 消费语义化观测结果：还原 legacy 上下文契约（result、__llm_* 与 __tool_calls 等字段）并保持事件与 WAL 记录语义。
+   *
+   * <p>旧实现直接解析 Call.Response + raw 元数据；现在协议词已在 pipeline ⑥ 翻译为 {@link ModelStatus}。
+   */
+  private StepResult consumeObservation(AgentContext ctx, String modelId, ModelObservation obs) {
+    if (obs.status() == ModelStatus.FAILED) {
+      // 传输/执行层失败（detail 携带厂商状态名，消息语义与 legacy 一致）
+      String detail = obs.detail() != null ? obs.detail() : "FAILED";
+      logger.warn("[Micro-ReAct/LLM] LLM call failed: {}", detail);
+      if (wal != null) {
+        wal.finalAnswer(ctx.sessionId(), "[LLM Error: " + detail + "]");
+      }
+      return new StepResult.Failure("LLM call failed: " + detail);
+    }
+
+    if (obs.status() == ModelStatus.TRUNCATED) {
+      // 非自然终止（length/content_filter 等）—— legacy 语义：以失败结束并留 WAL 标签
+      String fr = obs.detail() != null ? obs.detail() : "truncated";
+      logger.warn("[Micro-ReAct/Reason] Non-success finish_reason={}, finishing with error", fr);
+      String llmOutput = obs.content() != null ? obs.content() : "";
+      if (wal != null) {
+        wal.checkpointOnError(ctx.sessionId(), "FINISH_REASON_" + fr.toUpperCase(), llmOutput);
+      }
+      return new StepResult.Failure("LLM finished with reason: " + fr);
+    }
+
+    // 自然完成（CONTENT / TOOL_CALLS）
+    String content = obs.content() != null ? obs.content() : "";
+    String finishReason = obs.status() == ModelStatus.TOOL_CALLS ? "tool_calls" : "stop";
+    java.util.List<Call.ToolCall> toolCalls =
+        obs.toolCalls().stream().map(d -> new Call.ToolCall(d.name(), d.argumentsJson())).toList();
+
+    logger.info(
+        "[Micro-ReAct/LLM] Response model={} responseLength={} toolCalls={} status={}",
+        modelId,
+        content.length(),
+        toolCalls.size(),
+        obs.status());
+
+    // Only set result if content is non-empty, so that reflect() can
+    // set a fallback message when the LLM returns empty content.
+    if (content != null && !content.isBlank()) {
+      ctx.put("result", content);
+    }
+    ctx.put("__llm_response", content != null ? content : "");
+    ctx.put("__llm_reasoning", obs.reasoning() != null ? obs.reasoning() : "");
+    // PPAO: fire thought event for TUI ThinkBlock
+    Object reasoning = ctx.get("__llm_reasoning");
+    fireOnThought(reasoning != null ? reasoning.toString() : "");
+    ctx.put("__finish_reason", finishReason);
+    ctx.put("__turn_end", "stop".equals(finishReason));
+    ctx.put(
+        "__true_start",
+        "stop".equals(finishReason) || finishReason == null || finishReason.isBlank());
+    ctx.remove("__tool_call_index");
+
+    // 如果模型请求了结构化工具调用，存入上下文（Reason 阶段按序/并行分发）
+    if (!toolCalls.isEmpty()) {
+      ctx.put("__tool_calls", toolCalls);
+      logger.info(
+          "[Micro-ReAct/LLM] Received {} structured tool call(s) via Function Calling",
+          toolCalls.size());
+    }
+
+    // WAL: 记录 assistant 回复（含 reasoning/原始输出，跳过空消息）
+    if (wal != null) {
+      String walContent = content;
+      boolean hasToolCalls = !toolCalls.isEmpty();
+      // 当 content 为空且有 tool_calls 时，用 pipeline 解码出的 reasoning 补位（与 legacy raw 提取等价）
+      if ((walContent == null || walContent.isEmpty()) && hasToolCalls) {
+        String reasoningText = obs.reasoning() != null ? obs.reasoning() : "";
+        if (!reasoningText.isEmpty()) {
+          walContent = "<thought>" + reasoningText + "</thought>";
+        }
+      }
+      // 跳过完全空的 assistant 消息
+      if (walContent != null && !walContent.isEmpty()) {
+        if (hasToolCalls) {
+          // 有 tool calls 时，此内容为推理思考
+          wal.think(ctx.sessionId(), walContent);
+        } else {
+          // 无 tool calls 时，此内容为最终回复
+          wal.finalAnswer(ctx.sessionId(), walContent);
+        }
+      }
+    }
+
+    // 将 LLM 输出包装为 Observation，让 Reason 阶段处理 tool_calls 或文本标记
+    return new StepResult.Continue(null, Observation.success(content));
   }
 
   // ========================================================================
@@ -1267,6 +1446,9 @@ public class AgentExecutor {
                             Observation.failure("ExecutionEngine not configured"));
                       }
                     }
+                  }
+                  if (executionEngine != null) {
+                    enableDefaultToolGuardrails();
                   }
                 }
 
@@ -1784,7 +1966,7 @@ public class AgentExecutor {
       try {
         listener.onThought(reasoning);
       } catch (Exception e) {
-        logger.warn("AgentEventListener.onThought threw exception", e);
+        logger.warn("EventStream.Listener.onThought threw exception", e);
       }
     }
   }
@@ -1794,7 +1976,7 @@ public class AgentExecutor {
       try {
         listener.onAction(target, params);
       } catch (Exception e) {
-        logger.warn("AgentEventListener.onAction threw exception", e);
+        logger.warn("EventStream.Listener.onAction threw exception", e);
       }
     }
   }
@@ -1804,7 +1986,7 @@ public class AgentExecutor {
       try {
         listener.onObserve(rawData, summary, elapsedMs);
       } catch (Exception e) {
-        logger.warn("AgentEventListener.onObserve threw exception", e);
+        logger.warn("EventStream.Listener.onObserve threw exception", e);
       }
     }
   }
@@ -1819,51 +2001,6 @@ public class AgentExecutor {
       java.util.Map<String, Object> params,
       ToolResult result,
       boolean cached) {}
-
-  /** 从 Call.Response 的 raw metadata 中提取 reasoning_content。 */
-  private static String extractReasoningFromRaw(Call.Response response) {
-    if (response == null || response.metadata() == null) return "";
-    Object raw = response.metadata().get("raw");
-    if (raw == null) return "";
-    String rawStr = raw.toString();
-    int idx = rawStr.indexOf("\"reasoning_content\":\"");
-    if (idx < 0) return "";
-    idx += 21;
-    StringBuilder sb = new StringBuilder();
-    while (idx < rawStr.length()) {
-      char c = rawStr.charAt(idx);
-      if (c == '\\' && idx + 1 < rawStr.length()) {
-        sb.append(rawStr.charAt(idx + 1));
-        idx += 2;
-      } else if (c == '"') {
-        break;
-      } else {
-        sb.append(c);
-        idx++;
-      }
-    }
-    return sb.toString();
-  }
-
-  /** 从 Call.Response 的 raw metadata 中提取 finish_reason。 */
-  private static String extractFinishReasonFromRaw(Call.Response response) {
-    if (response == null || response.metadata() == null) return "stop";
-    Object raw = response.metadata().get("raw");
-    if (raw == null) return "stop";
-    String rawStr = raw.toString();
-    // Match "finish_reason":"value" from choices[0]
-    int idx = rawStr.indexOf("\"finish_reason\":\"");
-    if (idx < 0) return "stop";
-    idx += 17;
-    StringBuilder sb = new StringBuilder();
-    while (idx < rawStr.length()) {
-      char c = rawStr.charAt(idx);
-      if (c == '"') break;
-      sb.append(c);
-      idx++;
-    }
-    return sb.toString();
-  }
 
   /** 使用 Jackson 解析 LLM Function Calling 返回的 JSON arguments。 支持嵌套对象、字符串转义（\n, \t, \" 等）。 */
   private static java.util.Map<String, Object> parseToolArgsJson(String json) {

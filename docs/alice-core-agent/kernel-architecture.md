@@ -265,6 +265,14 @@ while true:
 
 #### 5.2.5 Loop 的形状（解释器 vs 策略责任）
 
+> **实现注记（2026-09-10）**：元模型已落地为可测试内核核心 —— `org.cland.alice.core.agent.kernel.graph`：
+> 图元模型（`GraphNode`/`GraphEdge`/`SessionGraph`/`CompositeSpec`）、账本（`Ledger`，无通用写入口 = R4 结构保证）、
+> R1 语义决策（`Decision`/`DecisionKind`）、策略钩子（`DecisionSource`/`EffectGateway`/`GatePolicy`）与
+> **R0 唯一遍历器**（`R0Interpreter`：类型分派/展开帧与 exit port 越层不变式/效果预算与步数注解/两个写点）。
+> `R0InterpreterSpec`（10 例）逐条验证 R0–R4，并以图级修法复现 P1（finish-goal 不终结会话）、
+> P2（goal 图游标驱动多目标迭代）、P3/P4（无宏轮、步数单一来源）。
+> 标准会话骨架装配（STRATEGIZE/TAO/反思、§5.3）与生产接线（替换 legacy AgentExecutor）留待下一刀。
+
 - **内核（`Loop`）实现**：R0 遍历器、节点类型分派、展开帧、预算检查、两个写点、WAL checkpoint。**全部代码就是解释器本身**，不含任何业务判断。
 - **策略（Agent 注入）**：decision 源实现（LLM 触点）、gate 策略内容、effect 实现、goal 图素材（plan/SOP 工具）、**会话图的装配**（Agent 按能力声明装载图与注解）。
 
@@ -272,6 +280,30 @@ while true:
 
 ### 5.3 实例化：标准会话骨架 = 规划 → TAO → 反思
 
+> **装配层注记（2026-09-10）**：生产 brain 适配器已就位（`org.cland.alice.core.agent.graph`）——
+> `PlannerGoalBrain`（STRATEGIZE 审慎接 PlannerService：多步骤全量入 goal 队列=修 P2、FINISH 步骤过滤=修 R2、
+> 修订反馈经账本 route 槽位回填 lastFeedback=修 P5）、`LlmActorBrain`（TAO Thought 接 Inferencer 语义契约：
+> TOOL_CALLS→act（同批排队）、CONTENT→finish-goal、FAILED/TRUNCATED 上抛）、`ToolRegistryEffectGateway`
+>（TAO Action 接 ExecutionEngine，rawData/summary 回流）。`AgentGraphAssemblySpec` 6 例含**全离线端到端**：
+> PlannerService→goal 图→TAO(TextLlmPipeline+hermetic 模型)→真实工具执行→仲裁→多 goal 会话闭环。
+> **换轨主体已落地（2026-09-10）**：`GraphSessionKernel implements Loop` —— 每会话装配标准骨架 +
+> 真实适配器（PlannerGoalBrain/LlmActorBrain/ToolRegistryEffectGateway），SessionRequest/Result 收敛
+> （answer 产物经写点 ① 落账 = 等效 legacy ctx.result；异常收敛 FAILED；cancel 安全点；KernelState/事件面齐备），
+> `GraphSessionKernelSpec` 6 例离线契约验证。剩余：Agent 组合根换轨接线（kernel()/ask 指向图内核、
+> **接线再进一步（2026-09-10）**：R0 埋点事件桥（`KernelTraceListener` → GraphSessionKernel 真实 EventStream：
+> thought/action/observe 语义）、AgentConfig.graphKernelEnabled 组合根开关（kernel()/events()/cancel() 指向
+> GraphSessionKernel，legacy ask/askAsync 业务门面共存）。`AgentGraphSwitchSpec` 验证经 Agent 公共面的图会话
+> 闭环 + 事件桥接。剩余收口（specs/004）：开关默认置真（ask/askAsync/facade 契约迁移至 SessionRequest/Result）、
+> executor 语义测试基线迁移、WAL/Checkpoint 接入图内核、verifyPost 接 guardrail 规则适配。
+>
+> **实现注记（2026-09-10）**：标准骨架已装配为可执行会话图 —— `kernel.graph.StandardSkeleton`：
+> S(STRATEGIZE 复合, 起点必达) → goal-avail 门(账本事实) → TAO 复合(Thought→Action→Observe, 效果熔断注解) →
+> goal-done(goal 级 terminal, exit port) → vp gate(verifyPost(g), P7) → ARBITRATE 决策(PASS/FAIL/ROUTE/ABORT) →
+> next-goal 门(游标+1)/rev-budget 门(修订注解, 超限→回 S)。三回路全为图结构；brain/门策略可插拔
+> （STRATEGIZE 审慎后端、TAO Thought、verifyPost 判据由 Agent 注入）。`StandardSkeletonSpec` 8 例端到端验证：
+> 多 goal 游标推进(P2)、finish-goal 不终结会话(P1)、verifyPost 拦截→同 goal 修订、修订超限/路线偏差→回规划(D9)、
+> abort、空计划、效果熔断(R3)。
+>
 > 元模型只有 6 种原语；**规划 / TAO / 反思是三个"命名装配模式"**（由原语组成的标准骨架），
 > 且**递归同构**：goal 的子 goal、子 agent（003）都是同一骨架。映射：
 
@@ -429,9 +461,9 @@ Adapter（更外面）      : vendor codec/transport（OpenAI/Gemma/未来多模
 |---|---|---|
 | `AgentFacade`（executor 依赖的最小契约） | 内核内部回调 SPI | 收敛/改名 `KernelDelegates`，由 Agent 实现 |
 | `Agent.getExecutor()`/`Agent.vertx()` 暴露 concrete | 删除 | 改为 `Agent.kernel()` 只读接口 + `events()` |
-| `AgentExecutor`（1903 行单体） | 内核的 legacy 实现 | 拆分：语义→骨架，协议/prompt/WAL→外移 |
-| `MicroReActEngine`/Phase/DispatchStrategy 死代码 | 删除或作新内核实现素材 | **先收敛（P0 决策）** |
-| `PromptManager`（全 static）+ `FilePromptLoader` | PromptProvider 接口 | 实例化 + registerSource + 多级覆盖 |
+| `AgentExecutor`（1903 行单体） | 内核的 legacy 实现 | 拆分：语义→骨架，协议/prompt/WAL→外移（2026-09-10：infer 触点已外移至 `TextLlmPipeline`；决策循环骨架的图语义版本 = `kernel.graph.R0Interpreter`） |
+| `MicroReActEngine`/Phase/DispatchStrategy 死代码 | 删除或作新内核实现素材 | **P0 收敛已完成（2026-09-09）：全部删除**（AgentExecutorUnitSpec 反射目标改指 AgentExecutor） |
+| `PromptManager`（全 static）+ `FilePromptLoader` | PromptProvider 接口 | 实例化 + registerSource + 多级覆盖（D6 待落地） |
 | `GuardrailToolProxy` 未接线 | Guardrail 钩子实现 | 由 Agent 装配注入（修 P6） |
 | `planToIntent` 只取第一步 / `Plan.Step` | 账本 goal 图 + 游标 | 删除单步丢弃：goal 图为账本槽位，游标逐一推进（修 P2） |
 | `plan()` 每轮强制 planner LLM 调用 + 双模型/双 WAL | 删除 | 路由折叠进 actor；战略审慎进 STRATEGIZE 复合节点（消每轮成本与战略架空，修 P1/P3） |
@@ -447,9 +479,9 @@ Adapter（更外面）      : vendor codec/transport（OpenAI/Gemma/未来多模
 
 - [ ] D1 策略挂点：Planner 以**模块内聚**提供 STRATEGIZE 审慎后端与 `plan` 工具（模块不拆，D10），内核只见统一规划钩子；Guardrail/PromptProvider 为钩子；Effect/Gateway 属内核循环边界而非策略
 - [ ] D2 执行契约粒度：`execute` **每会话一次**；goal 图游标与战术子图展开都是内核执行语义（§5），"每目标一次"的并发契约变体由子图/子 agent 递归表达（会话级契约最简）
-- [ ] D3 AgentExecutor 去留 → **已定：手术式抽取**。从 `AgentExecutor` 拆出"LLM 内核"部分（决策循环骨架、infer 触点、语义决策/终止/仲裁语义）入新内核 `Loop`；**其余不动**（WAL 记录点、事件分发、现有编排保持原样）。MicroReActEngine 等死代码收敛（P0）仍待决
+- [x] D3 AgentExecutor 去留 → **已定：手术式抽取**。从 `AgentExecutor` 拆出"LLM 内核"部分（决策循环骨架、infer 触点、语义决策/终止/仲裁语义）入新内核 `Loop`；**其余不动**（WAL 记录点、事件分发、现有编排保持原样）。P0 死代码收敛 **已完成（2026-09-09）**：`MicroReActEngine`/Phase/DispatchStrategy/AgentEventBus 删除
 - [ ] D4 内核哲学：~~运行时/VM 式（agent-agnostic）~~ vs Agent 微架构式（认识 LLM-Agent 决策循环 + 目标推进/仲裁）→ **评审反馈：倾向 Agent 微架构式**，VM 纪律仅作实现纪律不作哲学边界（见 §3 评审注与 §3.1 "决策循环语义"）
-- [ ] D5 文本 LLM pipeline → **已澄清边界**：六段是**执行/策略层实现**，**内核不需要**——内核只依赖 `Inferencer.infer()` 语义契约 + `Status/Decision`/流式预留。六段拆不拆独立接口属 pipeline 策略层内部可维护性决策（与内核解耦，可先内部实现、后按 kind spec 装配）；④ 超时/重试归 pipeline 策略（内核只管"一次 Infer 有超时上限"）
+- [x] D5 文本 LLM pipeline → **已澄清边界并落地第一步（2026-09-10）**：内核新增语义契约 `Inferencer`/`InferRequest`/`ModelObservation`/`ModelStatus`（厂商词不进内核）；`TextLlmPipeline` 提供 actor kind 六段内部实现（Resolve/Assemble/Serialize/Transport/Decode/Observe→Record），executor `dispatchLlmInference` 改经该契约，legacy 上下文/事件/WAL 语义不变（225 例回归绿）。六段独立接口与 kind spec 装配（classification/reasoning/summarize…）留待后续；④ 超时/重试归 pipeline 策略（内核只管"一次 Infer 有超时上限"）
 - [ ] D6 Prompt 动态加载的具体形态 → **已定**：优先级 内置 < `~/.alice/prompts` < 会话级；**不 watch 热更**（新增 `/reload` 命令手动刷新）；PromptKey 简化按 kind + 文件名路由，不做 role/phase/model/session 全组合
 - [ ] D7 内核接口名与包结构 → **已定**：主接口名 **`Loop`**；**不建新模块**，放 alice-core-agent 内子包（`org.cland.alice.core.agent.kernel`? 仍待确认最终包名）
 - [ ] D8 verifyPost(artifact, goal) 的目标比对语义（谁提供"目标达成判据"）→ **暂维持现状（2026-09-09）**：不引入结构化 goal 判据机制；判定沿用原实现——模型 `finish_reason`（goal 级判据提交）+ 规则后检（HallucinationDetector 等）+ 迭代预算兜底。goal 级 vs 会话级分层架构保留（P1 修复），但"判据内容由谁提供/如何比对"留待实现期连同 verifyPost(g)/ARBITRATE 落地时再定

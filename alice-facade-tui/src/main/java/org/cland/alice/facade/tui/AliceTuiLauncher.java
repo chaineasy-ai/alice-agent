@@ -160,13 +160,13 @@ public class AliceTuiLauncher implements AutoCloseable {
   }
 
   /**
-   * 钩子：注册 {@link TuiAgentListener} 将 AgentExecutor 的 PPAO 事件流实时转发到 EventBridge。
+   * 钩子：注册 {@link TuiAgentListener} 将内核（AgentExecutor legacy 实现）的 PPAO 事件流实时转发到 EventBridge。
    *
-   * <p>使用 Observer 模式，AgentExecutor 内部维持监听器列表，事件按 PPAO 序列（thought → action → observe） 同步投递，保证 TUI
-   * 渲染顺序与执行顺序一致。
+   * <p>使用 Observer 模式，内核事件流内部维持监听器列表，事件按序列（thought → action → observe） 同步投递，保证 TUI 渲染顺序与执行顺序一致。订阅走
+   * {@code Agent.events()}（内核事件订阅入口），不再依赖 concrete executor。
    */
   private void hookAgentEvents() {
-    agent.getExecutor().addListener(tuiListener);
+    agent.events().subscribe(tuiListener);
   }
 
   // ========== 启动 ==========
@@ -758,6 +758,15 @@ public class AliceTuiLauncher implements AutoCloseable {
           AgentConfig.builder().defaultModelId(defaultModel).maxIterations(10).build();
 
       AliceTuiLauncher launcher = new AliceTuiLauncher(config);
+
+      // 非交互（headless）测试模式：装配验证后即返回成功，不渲染、不进交互输入循环。
+      // 供 bootstrap 分发链路测试使用 — 避免 TUI 在无终端/管道环境中挂起或劫持真实终端。
+      if (Boolean.getBoolean("alice.tui.headless")) {
+        logger.info("[TUI] Headless test mode: skipping render and input loop");
+        launcher.close();
+        return 0;
+      }
+
       launcher.start();
       launcher.run();
       return 0;

@@ -10,9 +10,21 @@
  */
 package org.cland.alice.agent
 
+import org.cland.alice.model.Call
+import org.cland.alice.model.ModelProvider
 import spock.lang.Specification
 
 class AliceAgentSpec extends Specification {
+
+    def setupSpec() {
+        // TUI-launching 测试使用 headless 模式：装配验证后即返回，不进入交互输入循环
+        System.setProperty("alice.tui.headless", "true")
+    }
+
+    def cleanupSpec() {
+        System.clearProperty("alice.tui.headless")
+    }
+
 
     // ================================================================
     // AliceApp exit codes
@@ -51,7 +63,18 @@ class AliceAgentSpec extends Specification {
     }
 
     def "FacadeSelector.launch with 'run' subcommand delegates to AliceCliLauncher"() {
+        given: "离线 hermetic 模型 stub（阻断真实 LLM 网络调用）"
+        def provider = ModelProvider.getInstance()
+        provider.setRouter({ String modelId -> "hermetic-stub" })
+        provider.registerSupplier({
+            Call call ->
+                Call.Response.textOnly("[FINISH]", new Call.TokenUsage(0, 0, 0), [:]) as Call.Response
+        } as org.cland.alice.model.ModelSupplier)
+
         expect:
         FacadeSelector.launch(["run", "测试任务"] as String[]) == AliceApp.EXIT_SUCCESS
+
+        cleanup:
+        ModelProvider.reset()
     }
 }

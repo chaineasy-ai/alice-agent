@@ -261,21 +261,23 @@ sequenceDiagram
 | P6 | V 层双重拦截含工具级预检/后检 | 宏层规则校验活着；工具级 `GuardrailToolProxy` 全仓库无实例化点，运行时为 null，工具走裸 ExecutionEngine | 工具级守卫（含微循环检测）未生效 |
 | P8 | 上下文延续式 | Micro 每轮用 `buildMicroUserContent(rawPrompt+actionLog)` 重建，actionLog>2000 字符截尾；WAL+PromptMelter 未接入微循环 | 长工具链上下文稀释 |
 
-另注：仓库中 Micro-ReAct 逻辑存在**双份拷贝**（`AgentExecutor` 内嵌版为运行版；`MicroReActEngine` + Phase/DispatchStrategy 版为未接线死代码），本文档仅描述运行版。详见 `alice-core-agent/executor/` 目录对比。
+另注：仓库中 Micro-ReAct 逻辑曾存在双份拷贝（`AgentExecutor` 内嵌版为运行版；`MicroReActEngine` + Phase/DispatchStrategy 版为未接线死代码），本文档仅描述运行版。**P0 收敛（2026-09-09）**：死代码已删除，运行版唯一。
 
 ## 8. 相关源码索引
 
 | 文件 | 角色 |
 |------|------|
-| `alice-core-agent/.../executor/AgentExecutor.java` | Macro PPAO 编排 + 内嵌 Micro-ReAct（运行版）；`plan()`、`microReActStep()`、`dispatchLlmInference()`、`dispatchToolCall()`、并行工具批 |
-| `alice-core-agent/.../Agent.java` | `createDefault()` 装配 PlannerService（双模型）、Guardrail、Executor；`verifyPre/verifyPost` 委托 |
-| `alice-core-agent/.../AgentFacade.java` | 编排层对 Agent 的最小依赖契约 |
+| `alice-core-agent/.../executor/AgentExecutor.java` | Macro PPAO 编排 + 内嵌 Micro-ReAct（运行版，唯一实现）；`plan()`、`microReActStep()`、`dispatchLlmInference()`（经 `kernel.Inferencer` 语义契约）、`dispatchToolCall()`、并行工具批；实现内核契约 `kernel.Loop`（legacy 先行实现） |
+| `alice-core-agent/.../pipeline/TextLlmPipeline.java` | 六段 actor pipeline（Resolve/Assemble/Serialize/Transport/Decode/Map，D5 内部实现）；`dispatchLlmInference` 的 LLM 触点外移至此 |
+| `alice-core-agent/.../Agent.java` | `createDefault()` 装配 PlannerService（双模型）、Guardrail、Executor；`verifyPre/verifyPost` 委托；暴露 `kernel()`/`events()` 只读契约面 |
+| `alice-core-agent/.../kernel/KernelDelegates.java` | 内核回调 SPI（由 legacy `AgentFacade` 收敛改名，由 Agent 实现） |
 | `alice-core-agent/.../prompt/PromptManager.java` | `buildPlannerPrompt` / `buildMicroLoopSystemPrompt` / `buildMicroUserContent` |
 | `alice-core-agent/.../guardrail/GuardrailVerificatorAdapter.java` | 规则式 Verificator（LogicSanity / PermissionSandbox / HallucinationDetector），不调 LLM |
 | `alice-core-planner/.../PlannerService.java` | 入口：result 短路 → StaticPlanner(SOP) → StrategySelector |
 | `alice-core-planner/.../strategy/FastPathStrategy.java` | FastPath：instruction model 单次调用 |
-| `alice-core-planner/.../strategy/SlowPathStrategy.java` | SlowPath：reasoning model + ThinkingTree MCTS |
-| `alice-core-agent/.../executor/MicroReActEngine.java` | ⚠️ 未接线的第二份 Micro-ReAct 实现（与上表 P-注对应） |
+| `alice-core-planner/.../strategy/SlowPathStrategy.java` | SlowPath：reasoning model + ThinkingTree/MctsEngine MCTS |
+
+> 注：曾存在的第二份 Micro-ReAct 实现（`MicroReActEngine`/Phase/DispatchStrategy/AgentEventBus）已于 P0 收敛删除（2026-09-09）。
 
 ## 9. 补充阅读
 

@@ -1,5 +1,6 @@
 module alice.agent.alice.core.agent.main {
   exports org.cland.alice.core.agent;
+  exports org.cland.alice.core.agent.kernel;
   exports org.cland.alice.core.agent.lifecycle;
   exports org.cland.alice.core.agent.result;
   exports org.cland.alice.core.agent.executor;

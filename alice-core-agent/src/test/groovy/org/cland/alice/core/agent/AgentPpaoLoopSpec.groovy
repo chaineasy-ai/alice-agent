@@ -1,7 +1,6 @@
 package org.cland.alice.core.agent
 
-import io.vertx.core.Vertx
-import org.cland.alice.core.agent.executor.AgentExecutor
+import org.cland.alice.core.agent.kernel.Loop
 import org.cland.alice.core.agent.lifecycle.Action
 import org.cland.alice.core.agent.result.StepResult
 import org.cland.alice.core.planner.Plan
@@ -286,9 +285,13 @@ class AgentPpaoLoopSpec extends Specification {
         agent.config().actionTimeoutMs() == 15000
     }
 
-    def "should provide vertx instance"() {
-        when: def agent = new Agent("test-vertx")
-        then: agent.vertx() != null
+    def "should expose kernel Loop contract instead of concrete executor"() {
+        when: def agent = new Agent("test-kernel")
+        then: agent.kernel() != null
+        and: agent.kernel() instanceof Loop
+        and: agent.events() != null
+        and: agent.kernel().state() != null
+        and: agent.kernel().state().phase() == "IDLE"
     }
 
     def "should close without error"() {

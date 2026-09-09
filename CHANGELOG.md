@@ -25,7 +25,38 @@ updated: "2026-07-03"
 
 ## Unreleased
 
-### Features
+### Refactoring
+
+- **内核事件桥接 + Agent 图内核开关（`alice-core-agent`，换轨接线）**: R0 解释器新增 `KernelTraceListener` 埋点（decision/effect/observe/gate），`GraphSessionKernel` 提供真实 `EventStream`（thought/action/observe 语义翻译）与仲裁默认放行；`AgentConfig.graphKernelEnabled`（默认 false）组合根开关 —— 开启后 `kernel()`/`events()`/`cancel()` 指向 GraphSessionKernel（STRATEGIZE=PlannerService、TAO=Inferencer+ExecutionEngine），legacy `ask`/`askAsync` 业务门面共存。`AgentGraphSwitchSpec` 验证 Agent 公共面图会话闭环（answer 收敛 + 事件桥接 + legacy 共存 + cancel 路由）。
+
+
+- **图会话内核 GraphSessionKernel（`alice-core-agent`，换轨目标态 Loop）**: `Loop` 生产实现 —— 每会话装配标准骨架（规划-TAO-反思）+ 真实适配器（PlannerGoalBrain/LlmActorBrain/ToolRegistryEffectGateway），SessionRequest→SessionResult 收敛：answer 产物经写点①落账（等效 legacy ctx.result）、brain/结构异常收敛 FAILED 不向调用方抛错、cancel 安全点、KernelState 快照。配套：账本产物槽位 `recordArtifact`（决策写点①，D11 过渡）、`ActorStep.Act/Done`（Thought 携带候选产物）、`SessionOutcome.artifacts`。`GraphSessionKernelSpec` 6 例离线契约验证（回答收敛/会话覆盖/取消/异常收敛/步数预算/事件面）。
+
+
+- **图内核生产装配适配器（`alice-core-agent`）**: `org.cland.alice.core.agent.graph` 提供 STRATEGIZE/TAO/Action 的真实 brain —— `PlannerGoalBrain`（PlannerService→goal 队列：多步骤全量入队 P2、FINISH 过滤、修订反馈回填 lastFeedback P5）、`LlmActorBrain`（Inferencer 语义契约→act/finish-goal，同批 tool_calls 排队）、`ToolRegistryEffectGateway`（ExecutionEngine 效果执行）。`AgentGraphAssemblySpec` 6 例：plan 映射/反馈回填/工具执行/未知工具失败/**全离线端到端**（PlannerService→goal 图→TAO 经 TextLlmPipeline+hermetic 模型→真实工具→仲裁→多 goal 闭环）。
+
+
+- **标准会话骨架装配（`alice-core-agent`，kernel-architecture §5.3）**: `kernel.graph.StandardSkeleton` 把 规划→TAO→反思 装配为 R0 可执行会话图：S(STRATEGIZE 复合，起点必达) → goal-avail 门（账本事实）→ TAO 复合（Thought→Action→Observe + 效果熔断注解）→ goal 级 terminal（exit port）→ vp gate（verifyPost(g)，P7）→ ARBITRATE 决策（PASS/FAIL/ROUTE/ABORT）→ next-goal/rev-budget 门（游标 +1 / 修订注解超限回规划）。三条回路全为图结构；STRATEGIZE/Thought/仲裁 brain 与 verifyPost 门策略可插拔（生产装配由 Agent 注入 PlannerService/Inferencer/guardrail）。`StandardSkeletonSpec` 8 例端到端验证多 goal 游标推进（P2）、finish-goal 不终结会话（P1）、verifyPost 拦截修订回路、修订超限/路线偏差回规划（D9 重入）、abort、空计划与效果熔断（R3）。
+
+
+- **R0 图元模型解释器内核（`alice-core-agent`，kernel-architecture §5.2）**: 新增 `kernel.graph` 包 —— 六原语图元模型（`GraphNode`/`SessionGraph`/`CompositeSpec`，decision/effect/gate/observe/terminal/composite）、账本 `Ledger`（goal 槽位+游标+修订计数+trace，无通用写入口 = R4 写点纪律的结构保证）、R1 语义决策 `Decision`/`DecisionKind`、策略钩子 `DecisionSource`/`EffectGateway`/`GatePolicy`、以及 **`R0Interpreter` 唯一遍历器**（展开帧 + exit port 越层不变式、效果预算与遍历步数注解、两处写点落账）。`R0InterpreterSpec` 10 例逐条验证 R0–R4，并以图级修法复现文档 P1（finish-goal 不终结会话）/P2（goal 图游标）/P4（步数单一来源）。标准会话骨架（STRATEGIZE/TAO/反思）装配与生产接线（替换 legacy AgentExecutor）留待后续切片。
+
+
+- **Inferencer 语义契约 + 六段 actor pipeline（D5, `alice-core-agent`）**: 内核新增 `kernel.Inferencer`/`InferRequest`/`ModelObservation`/`ModelStatus`（§6.1 语义词汇，厂商 finish_reason/tools schema/reasoning_content 不进内核）；`pipeline.TextLlmPipeline` 提供六段内部实现（Resolve/Assemble/Serialize/Transport/Decode/Observe→Record），`AgentExecutor.dispatchLlmInference` 的 LLM 触点外移至此（legacy 上下文/事件/WAL 语义零漂移，225 例回归绿）；新增 `TextLlmPipelineSpec`（8 例：状态翻译/推理解码/工具序列化/异常语义）。注入点：`Agent.withInferencer`/`AgentExecutor.withInferencer`。
+
+
+- **内核执行契约第一刀（D3/D7, `alice-core-agent`）**: 按 `docs/alice-core-agent/kernel-architecture.md` 引入 `org.cland.alice.core.agent.kernel` 契约包：`Loop`（execute/cancel/state/events）、`SessionRequest`/`SessionResult`/`SessionStatus`、`KernelState`、`EventStream`、`KernelDelegates`（由 legacy `AgentFacade` 收敛改名，Agent 实现）。`AgentExecutor` 成为 `Loop`/`EventStream` 的 legacy 先行实现；`Agent` 删除 `getExecutor()`/`vertx()` concrete 暴露，改暴露 `kernel()` + `events()`；TUI 事件订阅改走内核事件流。
+
+- **P0 死代码收敛 (`alice-core-agent`)**: 删除未接线的第二份 Micro-ReAct 实现（`MicroReActEngine`/Phase/DispatchStrategy/`AgentEventBus`/`lifecycle.StepWithContext`）；`AgentExecutorUnitSpec` 反射目标改指 `AgentExecutor`。运行版唯一。
+
+- **P6 工具级守卫生效 (`alice-core-agent`)**: 执行器在首个工具调用前自动装配默认 `GuardrailToolProxy`（工具存在性/微循环/结果一致性），`Agent` 新增 `withGuardrailToolProxy()` 注入点；`ToolGuardrailWiringSpec` 验证工具流程经代理执行无误伤。
+
+- **tool 层 plan 工具（D10, `alice-core-agent`）**: 新增 `PlanTool`（`@AgentTool("plan")`），与 STRATEGIZE/ARBITRATE 共用 `PlannerService` 后端，输出步骤建议 JSON；`Agent.createDefault` 自动注册（ToolRegistry 幂等）。`PlanToolSpec` 覆盖注册/输出/坏 context 容错。
+
+- **planner 测试套件修复 (`alice-core-planner`, `alice-guardrail`)**: 两模块测试自 07-13 Intent 抽象重构后与主代码脱节（44/93 与 37/67 失败）：测试迁移到 `Plan.Intent` API 与结构树 API；`MctsEngine.MctsResult` 补 `iterationsRun`/`rootChildren`（对齐 mcts.md 元数据规范）、`SlowPathStrategy` 元数据补全与 builder 校验、`ModelCapabilities.fromCapability` 删除结构性死代码；新增 `StrategyBranchSpec` 分支补充。两模块 `check`（含 80%/70% 覆盖率门禁）恢复全绿。
+
+- **bootstrap 分发链路测试离线化 (`alice-bootstrap`)**: `FacadeSelector.launch(["run",…])` 用例不再依赖真实 LLM 网络调用（此前每次 check 触发真实 DeepSeek API、高负载下 flaky）：注册 hermetic 模型 stub + 自定义 router；测试 classpath 补 `alice-model`。
+
 
 - **PromptCmd 指令密封分支 (`alice-agent-command`)**: `CapabilityCmd` 新增 `LoadPromptCmd` 和 `ListPromptsCmd` 两个记录类型，作为 `/prompt` 命令的 AgentCommand 表示。`AgentCommand.parse()` 将 `/prompt:<name>` 映射为 `LoadPromptCmd`，将无参数 `/prompt` 映射为 `ListPromptsCmd`。冒号语法 (`/prompt:<name>`) 在 `AgentCommand.parse()` 和 `SlashCommand.parse()` 中统一实现。
 

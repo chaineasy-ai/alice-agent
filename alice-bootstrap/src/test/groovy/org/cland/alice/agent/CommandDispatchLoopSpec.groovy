@@ -13,11 +13,23 @@
 package org.cland.alice.agent
 
 import org.cland.alice.agent.command.*
+import org.cland.alice.model.Call
+import org.cland.alice.model.ModelProvider
 import spock.lang.Specification
 import spock.lang.Title
 
 @Title("bootstrap → facade → cmd 完整分发链路")
 class CommandDispatchLoopSpec extends Specification {
+
+    def setup() {
+        // TUI-launching 测试使用 headless 模式：装配验证后即返回，不进入交互输入循环
+        System.setProperty("alice.tui.headless", "true")
+    }
+
+    def cleanup() {
+        System.clearProperty("alice.tui.headless")
+    }
+
 
     static final String SESSION = "test-session"
     static final String TRACE   = "test-trace"
@@ -31,9 +43,24 @@ class CommandDispatchLoopSpec extends Specification {
         FacadeSelector.launch([] as String[]) == AliceApp.EXIT_PARAM_ERROR
     }
 
+    /**
+     * 该用例会经 FacadeSelector → CLI facade → ExecutionCoordinator 触发真实 Agent 执行。
+     * 为避免依赖真实 LLM 网络调用（外部 API 延迟/故障导致 flaky），执行前注册 hermetic 模型 stub 并路由全部模型 ID 到它。
+     */
     def "FacadeSelector.launch 使用 run 子命令传入 CLI 层"() {
+        given: "离线 hermetic 模型 stub（阻断真实 LLM 网络调用）"
+        def provider = ModelProvider.getInstance()
+        provider.setRouter({ String modelId -> "hermetic-stub" })
+        provider.registerSupplier({
+            Call call ->
+                Call.Response.textOnly("[FINISH]", new Call.TokenUsage(0, 0, 0), [:]) as Call.Response
+        } as org.cland.alice.model.ModelSupplier)
+
         expect:
         FacadeSelector.launch(["run", "测试任务"] as String[]) == AliceApp.EXIT_SUCCESS
+
+        cleanup:
+        ModelProvider.reset()
     }
 
     def "FacadeSelector.launch 使用 --tui 触发 TUI facade 发现"() {

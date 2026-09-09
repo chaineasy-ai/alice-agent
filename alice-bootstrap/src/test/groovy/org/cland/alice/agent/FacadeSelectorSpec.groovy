@@ -11,6 +11,16 @@ import spock.lang.Title
 @Title("FacadeSelector coverage supplement")
 class FacadeSelectorSpec extends Specification {
 
+    def setupSpec() {
+        // TUI-launching 测试使用 headless 模式：装配验证后即返回，不进入交互输入循环
+        System.setProperty("alice.tui.headless", "true")
+    }
+
+    def cleanupSpec() {
+        System.clearProperty("alice.tui.headless")
+    }
+
+
     // ================================================================
     // FacadeSelector.launch() — SPI 路由补充
     // ================================================================

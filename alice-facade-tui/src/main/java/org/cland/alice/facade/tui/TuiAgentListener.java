@@ -2,7 +2,7 @@ package org.cland.alice.facade.tui;
 
 import java.util.Map;
 import java.util.Objects;
-import org.cland.alice.core.agent.executor.AgentEventListener;
+import org.cland.alice.core.agent.kernel.EventStream;
 import org.cland.alice.core.agent.lifecycle.Action;
 import org.cland.alice.facade.tui.bridge.EventBridge;
 import org.slf4j.Logger;
@@ -20,7 +20,7 @@ import org.slf4j.LoggerFactory;
  *   <li>{@code onObserve} → ObserveBlock（含 action 命令前缀 + 耗时）
  * </ul>
  */
-public class TuiAgentListener implements AgentEventListener {
+public class TuiAgentListener implements EventStream.Listener {
 
   private static final Logger logger = LoggerFactory.getLogger(TuiAgentListener.class);
 
