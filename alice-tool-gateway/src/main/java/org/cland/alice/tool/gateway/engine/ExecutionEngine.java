@@ -9,6 +9,8 @@ import org.cland.alice.tool.gateway.metadata.ToolMetadata;
 import org.cland.alice.tool.gateway.sandbox.DirectSandboxProvider;
 import org.cland.alice.tool.gateway.sandbox.PolicySandboxProvider;
 import org.cland.alice.tool.gateway.sandbox.SandboxProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 工具执行引擎 — 核心调度器。
@@ -30,6 +32,8 @@ import org.cland.alice.tool.gateway.sandbox.SandboxProvider;
  * 以保持工具网关的纯净性。上层（AgentCore）负责将 {@link ToolResult} 桥接为 {@code Observation}。
  */
 public class ExecutionEngine {
+
+  private static final Logger logger = LoggerFactory.getLogger(ExecutionEngine.class);
 
   private final ToolRegistry registry;
   private final ObjectMapper mapper;
@@ -99,6 +103,13 @@ public class ExecutionEngine {
                         }
                       });
                 } catch (Exception e) {
+                  // 沙箱/工具抛出的异常会被上层统一包装成 "Sandbox execution failed"，
+                  // 这里保留原始堆栈，否则排障时只能看到一个无信息量的消息。
+                  logger.warn(
+                      "[ExecutionEngine] Sandbox execution failed for tool {}: {}",
+                      toolName,
+                      e.toString(),
+                      e);
                   throw new ExecutionException("Sandbox execution failed", e);
                 }
               });

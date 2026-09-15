@@ -90,6 +90,37 @@ class BuiltinToolsSpec extends Specification {
         e.message.contains("pattern is required")
     }
 
+    def "grep should skip undecodable binary files instead of failing the whole search"() {
+        given: "一个目录同时包含文本文件和二进制文件（如 .pyc / .class）"
+        def dir = tempDir.resolve("mixed")
+        Files.createDirectories(dir)
+        Files.writeString(dir.resolve("config.py"), "TIMEOUT_MS = 5000\n")
+        Files.write(dir.resolve("cached.pyc"), [(byte) 0x80, (byte) 0xFF, (byte) 0xFE, (byte) 0x00] as byte[])
+
+        when:
+        def result = builtin.grep("TIMEOUT_MS", dir.toString())
+
+        then: "二进制文件被跳过，文本文件仍正常返回命中"
+        noExceptionThrown()
+        result.contains("config.py:1: TIMEOUT_MS = 5000")
+        result.contains("skipped 1 non-text file")
+    }
+
+    def "grep should search directories containing binary files without throwing"() {
+        given:
+        def dir = tempDir.resolve("binaries")
+        Files.createDirectories(dir)
+        Files.write(dir.resolve("a.pyc"), [(byte) 0xC3, (byte) 0x28] as byte[])
+        Files.writeString(dir.resolve("b.txt"), "needle here\n")
+
+        when:
+        def result = builtin.grep("needle", dir.toString())
+
+        then:
+        noExceptionThrown()
+        result.contains("b.txt:1: needle here")
+    }
+
     // ==================================================================
     // run — shell command execution
     // ==================================================================

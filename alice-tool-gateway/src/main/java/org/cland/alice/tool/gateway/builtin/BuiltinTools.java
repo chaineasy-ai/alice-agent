@@ -1,6 +1,7 @@
 package org.cland.alice.tool.gateway.builtin;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -155,10 +156,17 @@ public final class BuiltinTools {
     int totalMatches = 0;
     boolean multiFile = files.size() > 1;
 
+    int skippedFiles = 0;
     for (Path file : files) {
       List<String> lines;
       try (Stream<String> lineStream = Files.lines(file, StandardCharsets.UTF_8)) {
         lines = lineStream.toList();
+      } catch (IOException | UncheckedIOException e) {
+        // 二进制或不可读的文件（.pyc、.class、图片等）无法按 UTF-8 解码。
+        // 跳过该文件即可，不能让一个文件废掉整次搜索。
+        logger.debug("[BuiltinTool] grep skipped undecodable file {}: {}", file, e.toString());
+        skippedFiles++;
+        continue;
       }
 
       for (int i = 0; i < lines.size(); i++) {
@@ -179,9 +187,17 @@ public final class BuiltinTools {
         path,
         totalMatches,
         files.size());
+    String skippedNote = skippedFiles > 0 ? " (skipped " + skippedFiles + " non-text file(s))" : "";
     return totalMatches == 0
-        ? "No matches found for pattern '" + pattern + "' in " + path
-        : "Found " + totalMatches + " match(es) across " + files.size() + " file(s):\n" + result;
+        ? "No matches found for pattern '" + pattern + "' in " + path + skippedNote
+        : "Found "
+            + totalMatches
+            + " match(es) across "
+            + files.size()
+            + " file(s)"
+            + skippedNote
+            + ":\n"
+            + result;
   }
 
   // ==================================================================
