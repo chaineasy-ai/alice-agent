@@ -5,7 +5,7 @@ PMTEV Smoke Test — Case 2: 多工具协同与跨文件依赖修复测试
 校验 Agent 任务规划（Plan）能力，可跨文件全局检索变量、同步修改多处关联代码。
 
 真实验证：Agent 执行后，检查 config.py 是否将 TIMEOUT_MS 替换为 TIMEOUT_SEC，
-且 client.py 中的所有引用也同步更新，单位换算正确。
+且 client.py 中的所有引用也同步更新，单位换算正确（5000ms → 5s）。
 
 PMTEV: Plan (cross-file refactoring) + Tool (edit multiple)
 
@@ -15,82 +15,45 @@ Usage:
     python -m e2e.smoke.test_smoke_case_2
 """
 
-import os
-import subprocess
+import re
 import sys
 import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from e2e.smoke.agent_run import restore_files, run_agent, snapshot_files
 from e2e.smoke.cases import CASE_2
-from e2e.smoke.config import PROJECT_MODEL, DEEPSEEK_API_KEY, WORKSPACE_DIR
-from e2e.helpers import GRADLEW, PROJECT_ROOT
 
 
 class TestSmokeCase2(unittest.TestCase):
-    """Case 2: TIMEOUT_MS → TIMEOUT_SEC 跨文件重命名 + 单位换算"""
+    """Case 2: TIMEOUT_MS → TIMEOUT_SEC 跨文件重命名 + 单位换算。"""
 
     maxDiff = None
 
-    WORKSPACE = WORKSPACE_DIR / "smoke__case-2"
     FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "cross_file_config"
+    CONFIG = FIXTURE_DIR / "config.py"
+    CLIENT = FIXTURE_DIR / "client.py"
 
     @classmethod
     def setUpClass(cls):
-        if cls.WORKSPACE.exists():
-            import shutil
-            shutil.rmtree(cls.WORKSPACE)
-        dst = cls.WORKSPACE
-        dst.mkdir(parents=True, exist_ok=True)
-        import shutil
-        for f in cls.FIXTURE_DIR.iterdir():
-            if f.is_dir():
-                continue
-            shutil.copy2(f, dst / f.name)
-
-    def _run_agent(self):
-        """Run Alice Agent with the case prompt."""
-        prompt_flat = self.case.problem_description.replace("\n", " ").strip()
-        cmd = [
-            str(GRADLEW),
-            ":alice-bootstrap:run",
-            "--rerun-tasks",
-            "--args",
-            f'run "{prompt_flat}" --model {PROJECT_MODEL} --verbose',
-        ]
-        env = os.environ.copy()
-        if DEEPSEEK_API_KEY:
-            env["DEEPSEEK_API_KEY"] = DEEPSEEK_API_KEY
-        result = subprocess.run(
-            cmd, cwd=PROJECT_ROOT, capture_output=True, text=True,
-            timeout=self.case.timeout_seconds, env=env,
+        cls._fixture_backup = snapshot_files([cls.CONFIG, cls.CLIENT])
+        cls.exit_code, cls.output, cls.agent_log = run_agent(
+            CASE_2.problem_description, timeout=CASE_2.timeout_seconds
         )
-        return result.returncode, result.stdout + result.stderr
-
-    def setUp(self):
-        self.case = CASE_2
-        # Agent 的工作目录是项目根目录，path 解析相对于项目根
-        # 所以 Agent 会修改原始 fixture 文件（而非 temp 副本）
-        self.config_file = Path(__file__).resolve().parent / "fixtures" / "cross_file_config" / "config.py"
-        self.client_file = Path(__file__).resolve().parent / "fixtures" / "cross_file_config" / "client.py"
 
     @classmethod
     def tearDownClass(cls):
-        # 恢复原始 fixture
-        import subprocess
-        for f in ["config.py", "client.py"]:
-            fixture = cls.FIXTURE_DIR / f
-            subprocess.run(
-                ["git", "checkout", "--", str(fixture)],
-                cwd=PROJECT_ROOT, capture_output=True)
+        restore_files(cls._fixture_backup)
+
+    def test_agent_exits_cleanly(self):
+        """Agent 必须正常退出。"""
+        self.assertEqual(
+            self.exit_code, 0, f"Agent 退出码非 0\n---\n{self.output[-800:]}"
+        )
 
     def test_timeout_renamed_across_files(self):
-        """config.py 和 client.py 都必须将 TIMEOUT_MS 替换为 TIMEOUT_SEC"""
-        code, output = self._run_agent()
-        self.assertEqual(code, 0, f"Agent 退出码非0\n---\n{output[-500:]}")
-
-        # 验证 config.py
-        config_content = self.config_file.read_text(encoding="utf-8")
+        """config.py 和 client.py 都必须将 TIMEOUT_MS 替换为 TIMEOUT_SEC。"""
+        config_content = self.CONFIG.read_text(encoding="utf-8")
         self.assertIn(
             "TIMEOUT_SEC",
             config_content,
@@ -102,8 +65,7 @@ class TestSmokeCase2(unittest.TestCase):
             f"config.py 仍包含旧字段 TIMEOUT_MS\n当前内容:\n{config_content}",
         )
 
-        # 验证 client.py
-        client_content = self.client_file.read_text(encoding="utf-8")
+        client_content = self.CLIENT.read_text(encoding="utf-8")
         self.assertIn(
             "TIMEOUT_SEC",
             client_content,
@@ -116,16 +78,20 @@ class TestSmokeCase2(unittest.TestCase):
         )
 
     def test_unit_conversion_correct(self):
-        """单位换算正确：5秒 = 5000毫秒"""
-        code, output = self._run_agent()
-        self.assertEqual(code, 0, f"Agent 退出码非0\n---\n{output[-500:]}")
+        """单位换算正确：TIMEOUT_MS = 5000 毫秒 应换算为 TIMEOUT_SEC = 5 秒。"""
+        config_content = self.CONFIG.read_text(encoding="utf-8")
+        # 必须精确匹配 5，不能只是"内容里出现过 5"（5000 本身也含 5）。
+        self.assertTrue(
+            re.search(r"^\s*TIMEOUT_SEC\s*[:=]\s*5(?:\.0+)?\s*$", config_content, re.M),
+            f"config.py 中 TIMEOUT_SEC 应等于 5（5000 毫秒换算为 5 秒）\n当前内容:\n{config_content}",
+        )
 
-        config_content = self.config_file.read_text(encoding="utf-8")
-
-        # 原 TIMEOUT_MS = 5000 → 换算后 TIMEOUT_SEC = 5
-        self.assertIn(
-            "5", config_content,
-            f"未找到正确的单位换算: TIMEOUT_SEC 应=5\n当前内容:\n{config_content}",
+    def test_agent_searched_for_old_field(self):
+        """调用日志应体现全局检索行为（grep / search_file）。"""
+        self.assertRegex(
+            self.agent_log,
+            r"(?i)grep|search_file",
+            f"Agent 文件日志中未见全局检索工具的执行记录\n---\n{self.agent_log[-800:]}",
         )
 
 
