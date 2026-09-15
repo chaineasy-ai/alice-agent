@@ -179,6 +179,22 @@ updated: "2026-07-03"
 
 ### Fixes
 
+- **alice-core-agent/micro_loop 系统提示词补全 (`micro_loop.ftl`)**: 内置模板此前只有 `<read_files>`/`<edit_files>`/`<delete_files>` 三段占位骨架（字面量 `path1`/`path2`/`…`），没有任何角色设定或可执行规则。模型会把占位符当成用户消息，回复"你只给了模板没有任务"并要求澄清，任务实际不执行。现补上角色设定、工具使用规则（先读后改、改完即停、改完验证、只携带最近一次 `<tool_result>` 的说明）和 user 消息格式说明。
+
+- **alice-tool-gateway/BuiltinTools/grep 遇到二进制文件整次搜索失败**: `grep -r` 会对目录下每个文件按 UTF-8 解码，遇到 `.pyc`/`.class`/图片等二进制文件时 `MalformedInputException` 向上冒泡，被包装成 `Sandbox execution failed`，整次搜索失败。模型看到工具报错后会反复重试同一个 grep，直到 micro-loop 深度打满、任务超时。现改为逐文件容错跳过，并在结果中报告跳过数量。
+
+- **alice-tool-gateway/ExecutionEngine 沙箱异常丢失根因**: 工具/沙箱异常被包装为 `Sandbox execution failed` 时只保留了包装消息，原始堆栈未记录。现通过 `logger.warn(..., e)` 保留根因堆栈，便于排障。
+
+- **e2e/smoke 冒烟用例执行链路 (`e2e/smoke/*`)**: 冒烟用例本身存在多处问题导致"Agent 没反应"：
+  - `:alice-bootstrap:run --rerun-tasks` 会重跑整条任务图（实测 90 个 task，覆盖 12 个模块的编译），且 Gradle 会在参数相同的第二次调用时把 `run` 判定为 `UP-TO-DATE` 直接跳过 —— Agent 根本没被启动，去掉 `--rerun-tasks` 并交由增量构建
+  - 每个 test 方法各调用一次 Agent（case 2/3 各 2 次），改为每个用例只跑一次（`setUpClass`）
+  - 用例依赖 `git checkout` 恢复 fixture，被中断时残留 Agent 的修改（`parser.py` 的缺陷就是这样被提交掉的），改为内存快照 + 无条件恢复
+  - 子进程继承 stdin，CLI 一旦回退交互模式会永久阻塞，改为 `stdin=DEVNULL`
+  - CLI 任务超时固定 180s，多步任务被腰斩，改为按用例超时的 80% 下发 `--timeout`
+  - 工具调用证据改为从 Agent 文件日志增量中校验（stdout 不含工具调用记录）
+
+- **e2e/smoke fixture 前置状态 (`fixtures/pytest_tdd/parser.py`)**: Case 3 的前置缺陷在提交 `8b13997` 中被"顺手修好"，`pytest` 一开始就是 2 passed，用例成了空转。现恢复缺陷态（`parse_payload` 直接 `json.loads`），使该用例真正校验 Agent 的测试驱动自省闭环。
+
 - **alice-facade-tui/渲染循环输入活跃期误写终端 — 导致二次交互时光标下移**: 渲染线程在 `inputActive=true` 时仍调用 `redrawScrollArea()` 写入终端，与 JLine `readLine()` 竞争光标控制权。第二次 `readLine()` 调用时光标已偏离 inputRow。
   - `renderLoop()`: inputActive 时不再调用 `redrawScrollArea()`，仅标记 `pendingRedraw`，由主线程在 `readLine()` 返回后处理
   - `runInputLoop()`: `inputActive.set(true)` 移至光标定位之前，提前屏蔽渲染线程的终端写入
