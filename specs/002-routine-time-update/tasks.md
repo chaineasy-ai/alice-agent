@@ -16,8 +16,8 @@
 
 ## Path Conventions
 
-- **alice-agent-command**: `alice-agent-command/src/main/java/org/cland/alice/agent/command/`
-- **alice-facade-cmd**: `alice-facade-cmd/src/main/java/org/cland/alice/facade/cmd/config/`
+- **alice-agent-proto**: `alice-agent-proto/src/main/java/org/cland/alice/agent/command/`
+- **alice-facade-cli**: `alice-facade-cli/src/main/java/org/cland/alice/facade/cmd/config/`
 - **alice-facade-tui**: `alice-facade-tui/src/main/java/org/cland/alice/facade/tui/command/`
 - **Tests**: Corresponding `src/test/groovy/` directories in each module
 
@@ -27,8 +27,8 @@
 
 **Purpose**: Project initialization — no setup tasks needed beyond reading existing source code. All three modules exist and build. No new directories, no new modules.
 
-- [x] T001 Read and understand existing sealed command hierarchy in `alice-agent-command/src/main/java/org/cland/alice/agent/command/` — inspect `AgentCommand.java`, `ExecutionCmd.java`, `CapabilityCmd.java`, `AlignmentCmd.java`, `ControlCmd.java` for patterns
-- [x] T002 Read and understand existing `alice-facade-cmd/src/main/java/org/cland/alice/facade/cmd/config/CommandParser.java` — inspect picocli subcommand registration pattern (`RunCommand`, `ChatCommand`, `ToolsCommand`, `ConfigCommand`)
+- [x] T001 Read and understand existing sealed command hierarchy in `alice-agent-proto/src/main/java/org/cland/alice/agent/command/` — inspect `AgentCommand.java`, `ExecutionCmd.java`, `CapabilityCmd.java`, `AlignmentCmd.java`, `ControlCmd.java` for patterns
+- [x] T002 Read and understand existing `alice-facade-cli/src/main/java/org/cland/alice/facade/cmd/config/CommandParser.java` — inspect picocli subcommand registration pattern (`RunCommand`, `ChatCommand`, `ToolsCommand`, `ConfigCommand`)
 - [x] T003 Read and understand existing `alice-facade-tui/src/main/java/org/cland/alice/facade/tui/command/SlashCommand.java` and `CommandHandler.java` — inspect slash command parsing and handler dispatch patterns
 
 ---
@@ -43,15 +43,15 @@
 
 > **NOTE**: Write these tests FIRST (TDD), ensure they FAIL before implementation, then make them pass.
 
-- [x] T004 [P] [US1] Create `RoutineTimeCmdSpec.groovy` in `alice-agent-command/src/test/groovy/org/cland/alice/agent/command/RoutineTimeCmdSpec.groovy` — test `RegisterRoutineCmd` and `TimeTriggeredCmd` instantiation, field access, null-safety, and `task()` accessor
-- [x] T005 [P] [US1] Create `RoutineTimeCmdParseSpec.groovy` in `alice-agent-command/src/test/groovy/org/cland/alice/agent/command/RoutineTimeCmdParseSpec.groovy` — test `AgentCommand.parse("/routine ...")` returns `RegisterRoutineCmd` with correct fields, `/routine` no-args returns blank cron, non-slash input still returns `AcquireGoalCmd` (no regression)
-- [x] T006 [P] [US1] Update `AgentCommandSealedHierarchySpec.groovy` in `alice-agent-command/src/test/groovy/org/cland/alice/agent/command/AgentCommandSealedHierarchySpec.groovy` — add test cases verifying exhaustiveness of pattern matching switch over all 5 sealed branches including `RoutineTimeCmd`
+- [x] T004 [P] [US1] Create `RoutineTimeCmdSpec.groovy` in `alice-agent-proto/src/test/groovy/org/cland/alice/agent/command/RoutineTimeCmdSpec.groovy` — test `RegisterRoutineCmd` and `TimeTriggeredCmd` instantiation, field access, null-safety, and `task()` accessor
+- [x] T005 [P] [US1] Create `RoutineTimeCmdParseSpec.groovy` in `alice-agent-proto/src/test/groovy/org/cland/alice/agent/command/RoutineTimeCmdParseSpec.groovy` — test `AgentCommand.parse("/routine ...")` returns `RegisterRoutineCmd` with correct fields, `/routine` no-args returns blank cron, non-slash input still returns `AcquireGoalCmd` (no regression)
+- [x] T006 [P] [US1] Update `AgentCommandSealedHierarchySpec.groovy` in `alice-agent-proto/src/test/groovy/org/cland/alice/agent/command/AgentCommandSealedHierarchySpec.groovy` — add test cases verifying exhaustiveness of pattern matching switch over all 5 sealed branches including `RoutineTimeCmd`
 
 ### Implementation for User Story 1
 
-- [x] T007 [P] [US1] Create `RoutineTimeCmd.java` in `alice-agent-command/src/main/java/org/cland/alice/agent/command/RoutineTimeCmd.java` — sealed interface extending `AgentCommand` with `String task()` accessor, containing `RegisterRoutineCmd(String cronExpression, String sessionId, String traceId, Instant timestamp)` and `TimeTriggeredCmd(String routineGoal, String sessionId, String traceId, Instant timestamp)` records with compact constructor null-safety validation
-- [x] T008 [US1] Update `AgentCommand.java` in `alice-agent-command/src/main/java/org/cland/alice/agent/command/AgentCommand.java` — add `RoutineTimeCmd` to the `permits` clause (line 25), update Javadoc to mention 5th category (Routine-Time), add `/routine` case to the `parse()` switch expression returning `new RoutineTimeCmd.RegisterRoutineCmd(args, sessionId, traceId)`
-- [x] T009 [US1] Run `./gradlew :alice-agent-command:build` — verify compilation succeeds and all existing + new tests pass
+- [x] T007 [P] [US1] Create `RoutineTimeCmd.java` in `alice-agent-proto/src/main/java/org/cland/alice/agent/command/RoutineTimeCmd.java` — sealed interface extending `AgentCommand` with `String task()` accessor, containing `RegisterRoutineCmd(String cronExpression, String sessionId, String traceId, Instant timestamp)` and `TimeTriggeredCmd(String routineGoal, String sessionId, String traceId, Instant timestamp)` records with compact constructor null-safety validation
+- [x] T008 [US1] Update `AgentCommand.java` in `alice-agent-proto/src/main/java/org/cland/alice/agent/command/AgentCommand.java` — add `RoutineTimeCmd` to the `permits` clause (line 25), update Javadoc to mention 5th category (Routine-Time), add `/routine` case to the `parse()` switch expression returning `new RoutineTimeCmd.RegisterRoutineCmd(args, sessionId, traceId)`
+- [x] T009 [US1] Run `./gradlew :alice-agent-proto:build` — verify compilation succeeds and all existing + new tests pass
 
 **Checkpoint**: At this point, User Story 1 should be fully functional. Developers can instantiate both command types, `AgentCommand.parse("/routine ...")` works correctly, and pattern-matching switch is exhaustive across all 5 branches.
 
@@ -67,14 +67,14 @@
 
 > **NOTE**: Write these tests FIRST (TDD), ensure they FAIL before implementation, then make them pass.
 
-- [x] T010 [P] [US2] Update `CommandParserSpec.groovy` in `alice-facade-cmd/src/test/groovy/org/cland/alice/facade/cmd/config/CommandParserSpec.groovy` — add test cases for `alice routine <cron>` subcommand parsing, `--list` flag, `--remove` flag, and `/routine` via `parseToAgentCommand()`
-- [x] T011 [P] [US2] Update `RunConfigSpec.groovy` in `alice-facade-cmd/src/test/groovy/org/cland/alice/facade/cmd/config/RunConfigSpec.groovy` — add test cases for `routineCron` and `listRoutines` fields in the Builder
+- [x] T010 [P] [US2] Update `CommandParserSpec.groovy` in `alice-facade-cli/src/test/groovy/org/cland/alice/facade/cmd/config/CommandParserSpec.groovy` — add test cases for `alice routine <cron>` subcommand parsing, `--list` flag, `--remove` flag, and `/routine` via `parseToAgentCommand()`
+- [x] T011 [P] [US2] Update `RunConfigSpec.groovy` in `alice-facade-cli/src/test/groovy/org/cland/alice/facade/cmd/config/RunConfigSpec.groovy` — add test cases for `routineCron` and `listRoutines` fields in the Builder
 
 ### Implementation for User Story 2
 
-- [x] T012 [P] [US2] Update `RunConfig.java` in `alice-facade-cmd/src/main/java/org/cland/alice/facade/cmd/config/RunConfig.java` — add `String routineCron` and `boolean listRoutines` fields with getters; add `routineCron(String)` and `listRoutines(boolean)` builder methods; update `toString()` to include new fields
-- [x] T013 [US2] Update `CommandParser.java` in `alice-facade-cmd/src/main/java/org/cland/alice/facade/cmd/config/CommandParser.java` — add inner `RoutineCommand` picocli subclass with `@Parameters` cron expression, `@Option --list`/`-l`, `@Option --remove`/`-r`; register via `cmdLine.addSubcommand("routine", new RoutineCommand())`; implement `toRunConfig()` and `toAgentCommand()` methods
-- [x] T014 [US2] Run `./gradlew :alice-facade-cmd:build` — verify compilation succeeds and all existing + new tests pass
+- [x] T012 [P] [US2] Update `RunConfig.java` in `alice-facade-cli/src/main/java/org/cland/alice/facade/cmd/config/RunConfig.java` — add `String routineCron` and `boolean listRoutines` fields with getters; add `routineCron(String)` and `listRoutines(boolean)` builder methods; update `toString()` to include new fields
+- [x] T013 [US2] Update `CommandParser.java` in `alice-facade-cli/src/main/java/org/cland/alice/facade/cmd/config/CommandParser.java` — add inner `RoutineCommand` picocli subclass with `@Parameters` cron expression, `@Option --list`/`-l`, `@Option --remove`/`-r`; register via `cmdLine.addSubcommand("routine", new RoutineCommand())`; implement `toRunConfig()` and `toAgentCommand()` methods
+- [x] T014 [US2] Run `./gradlew :alice-facade-cli:build` — verify compilation succeeds and all existing + new tests pass
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently. CLI users can use `alice routine` subcommand.
 
@@ -108,8 +108,8 @@
 
 - [x] T019 [P] Run `./gradlew build` (full project) — ensure all 11+ modules compile without warnings and all existing tests pass
 - [x] T020 [P] Run `./gradlew spotlessCheck` — ensure Google Java Format compliance across all modified files
-- [x] T021 Update `CHANGELOG.md` — add entry under `20260614` for Routine-Time Command Model Update (alice-agent-command, alice-facade-cmd, alice-facade-tui)
-- [x] T022 Update `todos/TODO-alice-agent-command.md` — mark RoutineTimeCmd tasks as completed
+- [x] T021 Update `CHANGELOG.md` — add entry under `20260614` for Routine-Time Command Model Update (alice-agent-proto, alice-facade-cli, alice-facade-tui)
+- [x] T022 Update `todos/TODO-alice-agent-proto.md` — mark RoutineTimeCmd tasks as completed
 - [x] T023 Run quickstart.md validation — verify Scenarios 1-5 produce expected outcomes
 
 ---
@@ -168,7 +168,7 @@ Task: "Update AgentCommand.java (permits + parse)"
 
 1. Complete Phase 1: Setup (read existing code)
 2. Complete Phase 2: User Story 1 (RoutineTimeCmd sealed hierarchy)
-3. **STOP and VALIDATE**: Run `./gradlew :alice-agent-command:test`
+3. **STOP and VALIDATE**: Run `./gradlew :alice-agent-proto:test`
 4. MVP is ready — the sealed interface supports `/routine` parsing
 
 ### Incremental Delivery

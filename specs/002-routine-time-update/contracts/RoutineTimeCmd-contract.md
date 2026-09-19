@@ -1,8 +1,8 @@
 # Contract: RoutineTimeCmd Sealed Interface
 
-> **Module**: `alice-agent-command`
+> **Module**: `alice-agent-proto`
 > **File**: `RoutineTimeCmd.java`
-> **Package**: `org.cland.alice.agent.command`
+> **Package**: `org.cland.alice.agent.proto`
 
 ## Interface Contract
 

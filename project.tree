@@ -1,5 +1,5 @@
 ├── AGENTS.md
-├── alice-agent-command
+├── alice-agent-proto
 │  ├── build.gradle
 │  └── src
 │    └── main
@@ -130,7 +130,7 @@
 │                    ├── McpTransport.java
 │                    ├── SseMcpTransport.java
 │                    └── StdioMcpTransport.java
-├── alice-facade-cmd
+├── alice-facade-cli
 │  ├── build.gradle
 │  └── src
 │    └── main

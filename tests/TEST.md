@@ -28,24 +28,24 @@
 
 ## 二、模块层 (Module) — 20%
 
-每个模块的**端点测试**（Endpoint Test），验证**模块边界**的输入输出。所有测试 case 来源于 `docs/alice-agent-command/DESIGN.md` 中定义的密封指令层次结构 + 各模块 DESIGN.md 中的核心接口定义。**一个 case 对应一个 doc 文件**，保持简洁。
+每个模块的**端点测试**（Endpoint Test），验证**模块边界**的输入输出。所有测试 case 来源于 `docs/alice-agent-proto/DESIGN.md` 中定义的密封指令层次结构 + 各模块 DESIGN.md 中的核心接口定义。**一个 case 对应一个 doc 文件**，保持简洁。
 
 ### 2.1 前端 Facade 端点（已有）
 
-#### alice-facade-cmd — CLI 端点
+#### alice-facade-cli — CLI 端点
 
 | 文件 | 对应 Case Doc | 覆盖范围 |
 |------|-------------|---------|
-| `docs/alice-facade-cmd/e2e/scene-cli-subcommands.md` | `docs/alice-agent-command/e2e/case-run.md` | 6 个 CLI 子命令 (run/chat/tools/config/routine/sub-agent) 的 picocli 参数解析 |
-| `docs/alice-facade-cmd/e2e/scene-dispatch-full-coverage.md` | `docs/alice-agent-command/e2e/case-dispatch-full-coverage.md` | dispatchCommand() 对全部 21 种密封子类型的分发 |
+| `docs/alice-facade-cli/e2e/scene-cli-subcommands.md` | `docs/alice-agent-proto/e2e/case-run.md` | 6 个 CLI 子命令 (run/chat/tools/config/routine/sub-agent) 的 picocli 参数解析 |
+| `docs/alice-facade-cli/e2e/scene-dispatch-full-coverage.md` | `docs/alice-agent-proto/e2e/case-dispatch-full-coverage.md` | dispatchCommand() 对全部 21 种密封子类型的分发 |
 
-**实现文件**: `docs/alice-facade-cmd/e2e/test_cli_categories.py`
+**实现文件**: `docs/alice-facade-cli/e2e/test_cli_categories.py`
 
 #### alice-facade-tui — TUI 端点
 
 | 文件 | 对应 Case Doc | 覆盖范围 |
 |------|-------------|---------|
-| `docs/alice-facade-tui/e2e/scene-tui-slash-commands.md` | `docs/alice-agent-command/e2e/case-tui-slash-commands.md` | AgentCommand.parse() 对 20 种斜杠命令 + 自然语言的映射 |
+| `docs/alice-facade-tui/e2e/scene-tui-slash-commands.md` | `docs/alice-agent-proto/e2e/case-tui-slash-commands.md` | AgentCommand.parse() 对 20 种斜杠命令 + 自然语言的映射 |
 
 **实现文件**: `docs/alice-facade-tui/e2e/test_slash_commands.py`
 
@@ -67,7 +67,7 @@
 | AGT-P05 | `SubAgentManager` 注册/查找 | `SubAgentManagerSpec` | 🟩 GREEN |
 
 **文件**：
-- Case doc: `docs/alice-agent-command/e2e/case-core-agent.md`
+- Case doc: `docs/alice-agent-proto/e2e/case-core-agent.md`
 - Scene doc: `docs/alice-core-agent/e2e/scene-executor-endpoints.md`
 - 实现: `docs/alice-core-agent/e2e/hole_test_core_agent.py`
 
@@ -83,7 +83,7 @@
 | PLN-P04 | `WorldModel.predict()` 世界模型预测 | `PlannerServiceSpec` | 🟩 GREEN |
 
 **文件**：
-- Case doc: `docs/alice-agent-command/e2e/case-core-planner.md`
+- Case doc: `docs/alice-agent-proto/e2e/case-core-planner.md`
 - Scene doc: `docs/alice-core-planner/e2e/scene-planner-endpoints.md`
 - 实现: `docs/alice-core-planner/e2e/hole_test_planner.py`
 
@@ -99,7 +99,7 @@
 | ENV-P04 | `SnapshotManager.save()` + `rollback()` | `SnapshotManagerSpec` | 🟩 GREEN |
 
 **文件**：
-- Case doc: `docs/alice-agent-command/e2e/case-env-adapter.md`
+- Case doc: `docs/alice-agent-proto/e2e/case-env-adapter.md`
 - Scene doc: `docs/alice-env-adapter/e2e/scene-env-endpoints.md`
 - 实现: `docs/alice-env-adapter/e2e/hole_test_env.py`
 
@@ -115,7 +115,7 @@
 | TGW-P04 | `SandboxProvider.executeInIsolation()` | `SandboxProviderSpec` | 🟩 GREEN |
 
 **文件**：
-- Case doc: `docs/alice-agent-command/e2e/case-tool-gateway.md`
+- Case doc: `docs/alice-agent-proto/e2e/case-tool-gateway.md`
 - Scene doc: `docs/alice-tool-gateway/e2e/scene-tool-gateway-endpoints.md`
 - 实现: `docs/alice-tool-gateway/e2e/hole_test_tool_gateway.py`
 
@@ -132,7 +132,7 @@
 | MEM-P05 | `WalStore` 持久化 + 崩溃恢复 | `CrashRecoveryE2ESpec` | 🟩 GREEN |
 
 **文件**：
-- Case doc: `docs/alice-agent-command/e2e/case-memory-vault.md`
+- Case doc: `docs/alice-agent-proto/e2e/case-memory-vault.md`
 - Scene doc: `docs/alice-memory-vault/e2e/scene-memory-endpoints.md`
 - 实现: `docs/alice-memory-vault/e2e/hole_test_memory.py`
 
@@ -149,7 +149,7 @@
 | MDL-P05 | 多供应商切换路由 | `ModelProviderSpec` | 🟩 GREEN |
 
 **文件**：
-- Case doc: `docs/alice-agent-command/e2e/case-model.md`
+- Case doc: `docs/alice-agent-proto/e2e/case-model.md`
 - Scene doc: `docs/alice-model/e2e/scene-model-endpoints.md`
 - 实现: `docs/alice-model/e2e/hole_test_model.py`
 
@@ -166,7 +166,7 @@
 | GRD-P05 | `PermissionSandboxValidator` 权限沙箱 | `PermissionSandboxValidatorSpec` | 🟩 GREEN |
 
 **文件**：
-- Case doc: `docs/alice-agent-command/e2e/case-guardrail.md`
+- Case doc: `docs/alice-agent-proto/e2e/case-guardrail.md`
 - Scene doc: `docs/alice-guardrail/e2e/scene-guardrail-endpoints.md`
 - 实现: `docs/alice-guardrail/e2e/hole_test_guardrail.py`
 
@@ -181,7 +181,7 @@
 | WEB-P03 | CORS 头 | Web 服务器运行 | ⏭️ SKIP |
 
 **文件**：
-- Case doc: `docs/alice-agent-command/e2e/case-web.md`
+- Case doc: `docs/alice-agent-proto/e2e/case-web.md`
 - Scene doc: `docs/alice-facade-web/e2e/scene-web-endpoints.md`
 - 实现: `docs/alice-facade-web/e2e/hole_test_web.py`
 
@@ -196,7 +196,7 @@
 | BTS-P03 | `IFacadeLauncher.launch()` 接口一致 | — | 🟩 GREEN |
 
 **文件**：
-- Case doc: `docs/alice-agent-command/e2e/case-bootstrap.md`
+- Case doc: `docs/alice-agent-proto/e2e/case-bootstrap.md`
 - Scene doc: `docs/alice-bootstrap/e2e/scene-bootstrap-endpoints.md`
 - 实现: `docs/alice-bootstrap/e2e/hole_test_bootstrap.py`
 
@@ -206,13 +206,13 @@
 
 | Case Doc | 源 | 模块 Scene Doc | 模块 | 实现方式 | 状态 |
 |---------|------|---------------|------|---------|------|
-| `case-run.md` | DESIGN.md §2 ExecutionCmd | `scene-cli-subcommands.md` | alice-facade-cmd | Python E2E | ✅ |
-| `case-chat.md` | DESIGN.md §2 ControlCmd | `scene-cli-subcommands.md` | alice-facade-cmd | Python E2E | ⏭️ JLine |
-| `case-config.md` | DESIGN.md §2 系统配置 | `scene-cli-subcommands.md` | alice-facade-cmd | Python E2E | ✅ |
-| `case-tools.md` | DESIGN.md §2 CapabilityCmd | `scene-cli-subcommands.md` | alice-facade-cmd | Python E2E | ✅ |
-| `case-routine.md` | DESIGN.md §2 RoutineTimeCmd | `scene-cli-subcommands.md` | alice-facade-cmd | Python E2E | ✅ |
-| `case-sub-agent.md` | DESIGN.md §2 SubAgentCmd | `scene-cli-subcommands.md` | alice-facade-cmd | Python E2E | ✅ |
-| `case-dispatch-full-coverage.md` | DESIGN.md §2 全部 21 种 | `scene-dispatch-full-coverage.md` | alice-facade-cmd | Python E2E | ✅ / ⏭️ |
+| `case-run.md` | DESIGN.md §2 ExecutionCmd | `scene-cli-subcommands.md` | alice-facade-cli | Python E2E | ✅ |
+| `case-chat.md` | DESIGN.md §2 ControlCmd | `scene-cli-subcommands.md` | alice-facade-cli | Python E2E | ⏭️ JLine |
+| `case-config.md` | DESIGN.md §2 系统配置 | `scene-cli-subcommands.md` | alice-facade-cli | Python E2E | ✅ |
+| `case-tools.md` | DESIGN.md §2 CapabilityCmd | `scene-cli-subcommands.md` | alice-facade-cli | Python E2E | ✅ |
+| `case-routine.md` | DESIGN.md §2 RoutineTimeCmd | `scene-cli-subcommands.md` | alice-facade-cli | Python E2E | ✅ |
+| `case-sub-agent.md` | DESIGN.md §2 SubAgentCmd | `scene-cli-subcommands.md` | alice-facade-cli | Python E2E | ✅ |
+| `case-dispatch-full-coverage.md` | DESIGN.md §2 全部 21 种 | `scene-dispatch-full-coverage.md` | alice-facade-cli | Python E2E | ✅ / ⏭️ |
 | `case-tui-slash-commands.md` | DESIGN.md §2 20 种 TUI 映射 | `scene-tui-slash-commands.md` | alice-facade-tui | Python E2E | ⏭️ JLine |
 | `case-core-agent.md` | DESIGN.md + alice-core-agent DESIGN | `scene-executor-endpoints.md` | alice-core-agent | hole_test + Spock | 🟩 GREEN |
 | `case-core-planner.md` | DESIGN.md + alice-core-planner DESIGN | `scene-planner-endpoints.md` | alice-core-planner | hole_test + Spock | 🟩 GREEN |
@@ -230,7 +230,7 @@
 
 每个模块内的 Spock (Groovy) 单元测试，覆盖密封指令的构造、解析、验证、序列化等。
 
-### 3.1 alice-agent-command (11 个)
+### 3.1 alice-agent-proto (11 个)
 
 | 测试文件 | 覆盖范围 |
 |---------|---------|
@@ -286,7 +286,7 @@
 | `EnvStateSpec.groovy` | 环境状态机 |
 | `FakeTransportSpec.groovy` | Fake transport 测试 |
 
-### 3.6 alice-facade-cmd (7 个)
+### 3.6 alice-facade-cli (7 个)
 
 | 测试文件 | 覆盖范围 |
 |---------|---------|
@@ -390,12 +390,12 @@
 | 🟩 模块 | alice-guardrail 洞 | 5 🟩 | — | 5 |
 | 🟩 模块 | alice-facade-web 洞 | — | 3 ⏭️ SKIP | 3 |
 | 🟩 模块 | alice-bootstrap 洞 | 3 🟩 | — | 3 |
-| ⬜ 单元 | alice-agent-command | 11 | — | 11 |
+| ⬜ 单元 | alice-agent-proto | 11 | — | 11 |
 | ⬜ 单元 | alice-bootstrap | 2 | — | 2 |
 | ⬜ 单元 | alice-core-agent | 9 | — | 9 |
 | ⬜ 单元 | alice-core-planner | 1 | — | 1 |
 | ⬜ 单元 | alice-env-adapter | 8 | — | 8 |
-| ⬜ 单元 | alice-facade-cmd | 7 | — | 7 |
+| ⬜ 单元 | alice-facade-cli | 7 | — | 7 |
 | ⬜ 单元 | alice-facade-tui | 1 | — | 1 |
 | ⬜ 单元 | alice-facade-web | 0 | — | 0 |
 | ⬜ 单元 | alice-memory-vault | 23 | — | 23 |

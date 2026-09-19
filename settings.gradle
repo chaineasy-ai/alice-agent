@@ -5,9 +5,11 @@
 
 rootProject.name = 'alice-agent'
 include('alice-bootstrap')
-include('alice-agent-command')
+include('alice-agent-proto')
+include('alice-agent-runtime')
 include('alice-facade-tui')
-include('alice-facade-cmd')
+include('alice-facade-rpc')
+include('alice-facade-cli')
 include('alice-core-agent')
 include('alice-core-planner')
 include('alice-env-adapter')

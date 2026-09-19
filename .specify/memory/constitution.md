@@ -110,7 +110,7 @@ guardrail/env-adapter/memory-vault triad provides defense in depth.
 | JUnit Platform Launcher | 1.11.x | Test runtime |
 | SLF4J + Logback | 2.0.16 / 1.5.16 | All production modules |
 | Spotless (Google Java Format) | 6.25.0 / 1.28.0 | Build plugin |
-| picocli | 4.7.6 | alice-facade-cmd |
+| picocli | 4.7.6 | alice-facade-cli |
 | JLine 3 | 3.27.1 | alice-facade-tui |
 | Vert.x | 5.0.8 | alice-facade-tui, alice-core-agent |
 | Gson | Latest stable | alice-env-adapter |

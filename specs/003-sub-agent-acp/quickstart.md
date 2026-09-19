@@ -99,7 +99,7 @@
 After successful validation:
 
 ```
-alice-agent-command/src/.../command/SubAgentCmd.java                    # New sealed class
+alice-agent-proto/src/.../command/SubAgentCmd.java                    # New sealed class
 alice-core-agent/src/.../agent/subagent/SubAgentRecord.java             # Java record
 alice-core-agent/src/.../agent/subagent/SubAgentRegistry.java           # Registry implementation
 alice-core-agent/src/.../agent/subagent/SubAgentManager.java            # Orchestrator
@@ -111,12 +111,12 @@ alice-core-agent/src/.../agent/internal/acp/AcpConnection.java          # Connec
 
 ```bash
 # Run all sub-agent unit tests
-./gradlew :alice-agent-command:test --tests "*SubAgentCmd*"
+./gradlew :alice-agent-proto:test --tests "*SubAgentCmd*"
 ./gradlew :alice-core-agent:test --tests "*SubAgent*"
 ./gradlew :alice-core-agent:test --tests "*AcpClient*"
 
 # Run facade dispatch tests
-./gradlew :alice-facade-cmd:test --tests "*AliceCliLauncherSpec*"
+./gradlew :alice-facade-cli:test --tests "*AliceCliLauncherSpec*"
 ./gradlew :alice-facade-tui:test --tests "*TuiSpec*"
 
 # Full build with quality gates

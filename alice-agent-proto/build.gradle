@@ -1,0 +1,83 @@
+/*
+ * alice-agent-proto: 协议契约层
+ *
+ * 入方向：AgentCommand 密封指令体系；出方向：StepEvent 事件帧（v1）；
+ * 端口：AgentCommandDispatcher（实现归 runtime）；codec：JSON v1（Jackson，仅内部使用）。
+ * 帧规范：docs/alice-agent-proto/PROTOCOL.md。
+ */
+
+plugins {
+    id 'groovy'
+    id 'java-library'
+}
+
+group = "org.cland.alice"
+version = "0.1.0"
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.slf4j:slf4j-api:2.0.16'
+
+    // codec（协议 v1）：Jackson 仅模块内部使用，不进入公开 API
+    implementation 'com.fasterxml.jackson.core:jackson-core:2.18.3'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.3'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.18.3'
+
+    // Groovy / Spock for testing
+    testImplementation 'org.apache.groovy:groovy:4.0.30'
+    testImplementation 'org.spockframework:spock-core:2.4-groovy-4.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'org.slf4j:slf4j-api:2.0.16'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+    modularity.inferModulePath = true
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 25
+    options.encoding = 'UTF-8'
+}
+
+tasks.withType(GroovyCompile).configureEach {
+    sourceCompatibility = '25'
+    targetCompatibility = '25'
+    options.encoding = 'UTF-8'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+// ── Hole test source set (dedicated module boundary probes) ──
+sourceSets {
+    hole {
+        java {
+            srcDirs = ['src/hole/java']
+        }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.runtimeClasspath
+    }
+}
+
+configurations {
+    holeImplementation.extendsFrom implementation
+    holeRuntimeOnly.extendsFrom runtimeOnly
+}
+
+tasks.register('runHoleTest', JavaExec) {
+    description = 'Run a hole test probe against the command module boundary'
+    group = 'verification'
+    classpath = files(
+        sourceSets.hole.output,
+        sourceSets.main.output
+    ) + configurations.holeRuntimeClasspath
+    mainClass = 'org.cland.alice.agent.proto.CommandHoleTest'
+    modularity.inferModulePath = false
+}

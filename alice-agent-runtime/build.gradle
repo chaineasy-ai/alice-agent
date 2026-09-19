@@ -1,0 +1,57 @@
+/*
+ * alice-agent-runtime: 会话宿主（会话语义收口）
+ *
+ * 一轮一锁 / 单写者 / 超时中止 / new-resume / 事件映射（StepEvent）/ 健康快照。
+ * 依赖：alice-agent-proto（契约）+ alice-core-agent（引擎实现，经 AgentEngine 端口适配）。
+ */
+
+plugins {
+    id 'groovy'
+    id 'java-library'
+}
+
+group = "org.cland.alice"
+version = "0.1.0"
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.slf4j:slf4j-api:2.0.16'
+
+    // 协议契约（唯一真源）
+    implementation project(':alice-agent-proto')
+    // 引擎实现（仅 CoreAgentEngine/组合根使用；门面不依赖 core）
+    implementation project(':alice-core-agent')
+    implementation project(':alice-guardrail')
+    implementation project(':alice-tool-gateway')
+
+    // Groovy / Spock for testing
+    testImplementation 'org.apache.groovy:groovy:4.0.30'
+    testImplementation 'org.spockframework:spock-core:2.4-groovy-4.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'org.slf4j:slf4j-api:2.0.16'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+    modularity.inferModulePath = true
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 25
+    options.encoding = 'UTF-8'
+}
+
+tasks.withType(GroovyCompile).configureEach {
+    sourceCompatibility = '25'
+    targetCompatibility = '25'
+    options.encoding = 'UTF-8'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}

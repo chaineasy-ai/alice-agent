@@ -7,7 +7,7 @@ all 21 AgentCommand sealed subtypes. Most require JLine terminal — we
 document each skip with a unit test cross-reference.
 
 The 4 types reachable via `alice run/routine/sub-agent` CLI are pass-through
-references to the CLI category tests (docs/alice-facade-cmd/e2e/test_cli_categories.py).
+references to the CLI category tests (docs/alice-facade-cli/e2e/test_cli_categories.py).
 
 Usage:
   python e2e/test_dispatch.py
@@ -38,7 +38,7 @@ class TestDispatchAllAgentCommands(unittest.TestCase):
 
     def test_dispatch_01_acquire_goal(self):
         """AcquireGoalCmd — ✅ CLI via `alice run <task>`."""
-        self.skipTest("Covered by docs/alice-facade-cmd/e2e/test_cli_categories.py B1-B3")
+        self.skipTest("Covered by docs/alice-facade-cli/e2e/test_cli_categories.py B1-B3")
 
     def test_dispatch_02_execute_raw(self):
         """ExecuteRawCmd (`/exec ls -la`) — ⏭ JLine terminal required."""
@@ -127,7 +127,7 @@ class TestDispatchAllAgentCommands(unittest.TestCase):
 
     def test_dispatch_13_register_routine(self):
         """RegisterRoutineCmd — ✅ CLI via `alice routine <cron>`."""
-        self.skipTest("Covered by docs/alice-facade-cmd/e2e/test_cli_categories.py B5-B6")
+        self.skipTest("Covered by docs/alice-facade-cli/e2e/test_cli_categories.py B5-B6")
 
     def test_dispatch_14_time_triggered(self):
         """TimeTriggeredCmd — ⏭ Kernel internal (CronScheduler)."""
@@ -140,31 +140,31 @@ class TestDispatchAllAgentCommands(unittest.TestCase):
 
     def test_dispatch_15_spawn_sub_agent(self):
         """SpawnSubAgentCmd — ✅ CLI via `alice sub-agent --spawn`."""
-        self.skipTest("Covered by docs/alice-facade-cmd/e2e/test_cli_categories.py B8")
+        self.skipTest("Covered by docs/alice-facade-cli/e2e/test_cli_categories.py B8")
 
     def test_dispatch_16_connect_sub_agent(self):
         """ConnectSubAgentCmd — ✅ CLI via `alice sub-agent --connect`."""
-        self.skipTest("Covered by docs/alice-facade-cmd/e2e/test_cli_categories.py B9")
+        self.skipTest("Covered by docs/alice-facade-cli/e2e/test_cli_categories.py B9")
 
     def test_dispatch_17_list_sub_agents(self):
         """ListSubAgentsCmd — ✅ CLI via `alice sub-agent --list`."""
-        self.skipTest("Covered by docs/alice-facade-cmd/e2e/test_cli_categories.py B10")
+        self.skipTest("Covered by docs/alice-facade-cli/e2e/test_cli_categories.py B10")
 
     def test_dispatch_18_cancel_sub_agent(self):
         """CancelSubAgentCmd — ✅ CLI via `alice sub-agent --cancel`."""
-        self.skipTest("Covered by docs/alice-facade-cmd/e2e/test_cli_categories.py B11")
+        self.skipTest("Covered by docs/alice-facade-cli/e2e/test_cli_categories.py B11")
 
     def test_dispatch_19_get_sub_agent_results(self):
         """GetSubAgentResultsCmd — ✅ CLI via `alice sub-agent --results`."""
-        self.skipTest("Covered by docs/alice-facade-cmd/e2e/test_cli_categories.py B12")
+        self.skipTest("Covered by docs/alice-facade-cli/e2e/test_cli_categories.py B12")
 
     def test_dispatch_20_send_to_sub_agent(self):
         """SendToSubAgentCmd — ✅ CLI via `alice sub-agent --send`."""
-        self.skipTest("Covered by docs/alice-facade-cmd/e2e/test_cli_categories.py B13")
+        self.skipTest("Covered by docs/alice-facade-cli/e2e/test_cli_categories.py B13")
 
     def test_dispatch_21_prompt_sub_agent(self):
         """PromptSubAgentCmd — ✅ CLI via `alice sub-agent --prompt`."""
-        self.skipTest("Covered by docs/alice-facade-cmd/e2e/test_cli_categories.py B14")
+        self.skipTest("Covered by docs/alice-facade-cli/e2e/test_cli_categories.py B14")
 
 
 if __name__ == "__main__":

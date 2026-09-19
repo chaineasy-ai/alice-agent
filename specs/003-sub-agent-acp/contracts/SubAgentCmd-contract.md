@@ -7,7 +7,7 @@
 ## Sealed Interface Hierarchy
 
 ```java
-// In alice-agent-command module
+// In alice-agent-proto module
 public sealed interface SubAgentCmd extends AgentCommand
     permits SpawnSubAgentCmd, ConnectSubAgentCmd, ListSubAgentsCmd,
             CancelSubAgentCmd, GetSubAgentResultsCmd, SendToSubAgentCmd,

@@ -14,8 +14,8 @@ scope:
   - "alice-tool-gateway"
   - "alice-guardrail"
   - "alice-memory-vault"
-  - "alice-agent-command"
-  - "alice-facade-cmd"
+  - "alice-agent-proto"
+  - "alice-facade-cli"
   - "alice-facade-tui"
 status: "active"
 updated: "2026-06-30"
@@ -72,10 +72,10 @@ Key integration: `SopGraph` wraps JGrapht's `DefaultDirectedGraph<SopNode, SopEd
 
 | Technology | Version | Module | Purpose |
 |------------|---------|--------|---------|
-| **JLine 3** | 4.2.1 | `alice-facade-cmd` | Interactive CLI: line editing, history, tab completion, chat session |
-| **Picocli** | 4.7.6 | `alice-facade-cmd` | CLI argument parsing, subcommands (`alice routine`, `alice chat`, etc.) |
+| **JLine 3** | 4.2.1 | `alice-facade-cli` | Interactive CLI: line editing, history, tab completion, chat session |
+| **Picocli** | 4.7.6 | `alice-facade-cli` | CLI argument parsing, subcommands (`alice routine`, `alice chat`, etc.) |
 | **Vert.x** | 5.0.8 | `alice-facade-tui` | Event bus, async I/O for TUI frontend |
-| **JANSI** | 2.4.1 | `alice-facade-cmd` | ANSI escape codes for colored terminal output |
+| **JANSI** | 2.4.1 | `alice-facade-cli` | ANSI escape codes for colored terminal output |
 | **JNA** | 5.14.0 | `alice-facade-tui` | Native terminal operations (terminal size, raw mode) |
 
 ## Logging & Observability
@@ -107,8 +107,8 @@ Key integration: `SopGraph` wraps JGrapht's `DefaultDirectedGraph<SopNode, SopEd
 | `alice-env-adapter` | Environment: MCP client (Stdio/SSE transport), shell execution |
 | `alice-guardrail` | Security: Pre/Post validators, policy engine, hallucination detection |
 | `alice-memory-vault` | Memory: Episodic/Procedural/Semantic vaults, JVector vector search, MemoryRouter, **SOP DAG (SopGraph/SopRegistry/StaticPlanner via JGrapht)** |
-| `alice-agent-command` | Command model: sealed `AgentCommand` hierarchy with 6 branches |
-| `alice-facade-cmd` | CLI frontend (Picocli + JLine 3) |
+| `alice-agent-proto` | Command model: sealed `AgentCommand` hierarchy with 6 branches |
+| `alice-facade-cli` | CLI frontend (Picocli + JLine 3) |
 | `alice-facade-tui` | TUI frontend (Vert.x) |
 
 ## File Storage Conventions

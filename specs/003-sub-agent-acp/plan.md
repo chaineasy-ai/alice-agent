@@ -34,7 +34,7 @@ Add a `/sub-agent` command to Alice Agent enabling two multi-agent scenarios: (1
 
 | Gate | Status | Rationale |
 |------|--------|-----------|
-| **I. Module-Separate Design** | ✅ PASS | SubAgentCmd extends existing AgentCommand sealed interface in `alice-agent-command`. SubAgentRegistry and SubAgentRecord are internal to `alice-core-agent`. ACP client code goes in a new `alice-acp-client` module or reused from existing ACP SDK docs. |
+| **I. Module-Separate Design** | ✅ PASS | SubAgentCmd extends existing AgentCommand sealed interface in `alice-agent-proto`. SubAgentRegistry and SubAgentRecord are internal to `alice-core-agent`. ACP client code goes in a new `alice-acp-client` module or reused from existing ACP SDK docs. |
 | **II. Java 25 + Spock Testing** | ✅ PASS | All new code uses Java 25 features (records for SubAgentRecord, sealed SubAgentCmd hierarchy, pattern matching for dispatch). Tests in Spock/Groovy. |
 | **III. CI-Code Quality Gates** | ✅ PASS | No exceptions needed. Existing spotlessCheck and check gates apply. |
 | **IV. Documentation Discipline** | ✅ PASS | spec.md, plan.md, research.md, data-model.md, contracts/, quickstart.md all generated under specs/003-sub-agent-acp/. CHANGELOG will be updated on completion. |
@@ -62,7 +62,7 @@ specs/003-sub-agent-acp/
 ### Source Code (repository root)
 
 ```text
-alice-agent-command/src/main/java/org/cland/alice/agent/command/
+alice-agent-proto/src/main/java/org/cland/alice/agent/command/
 ├── SubAgentCmd.java           # New sealed branch: SubAgentCmd
 ├── SpawnSubAgentCmd.java      #   /sub-agent spawn
 ├── ConnectSubAgentCmd.java    #   /sub-agent connect
@@ -82,7 +82,7 @@ alice-core-agent/src/main/java/org/cland/alice/agent/core/acp/
 ├── AcpClient.java             # ACP protocol client wrapper
 └── AcpConnection.java         # Connection state for an external ACP agent
 
-alice-facade-cmd/src/main/java/org/cland/alice/facade/cmd/
+alice-facade-cli/src/main/java/org/cland/alice/facade/cmd/
 ├── config/CommandParser.java  # (modified) add /sub-agent parse rules
 └── AliceCliLauncher.java      # (modified) add SubAgentCmd dispatch case
 
@@ -91,17 +91,17 @@ alice-facade-tui/src/main/java/org/cland/alice/facade/tui/
 └── AliceTuiLauncher.java         # (modified) add SubAgentCmd dispatch case
 
 tests/
-├── alice-agent-command/.../SubAgentCmdParseSpec.groovy
-├── alice-agent-command/.../SubAgentCmdSealedHierarchySpec.groovy
+├── alice-agent-proto/.../SubAgentCmdParseSpec.groovy
+├── alice-agent-proto/.../SubAgentCmdSealedHierarchySpec.groovy
 ├── alice-core-agent/.../SubAgentManagerSpec.groovy
 ├── alice-core-agent/.../SubAgentRegistrySpec.groovy
 ├── alice-core-agent/.../AcpClientSpec.groovy
-├── alice-facade-cmd/.../CommandParserSpec.groovy   # (modified) add sub-agent tests
-├── alice-facade-cmd/.../AliceCliLauncherSpec.groovy # (modified) add sub-agent dispatch tests
+├── alice-facade-cli/.../CommandParserSpec.groovy   # (modified) add sub-agent tests
+├── alice-facade-cli/.../AliceCliLauncherSpec.groovy # (modified) add sub-agent dispatch tests
 └── alice-facade-tui/.../TuiSpec.groovy              # (modified) add sub-agent dispatch tests
 ```
 
-**Structure Decision**: Multi-module Gradle project. New sealed command types go in `alice-agent-command`. Core sub-agent orchestration logic goes in `alice-core-agent` (reusing existing `AgentExecutor`/`Agent` infrastructure). ACP client code goes in `alice-core-agent` as internal package (no new module needed, matching existing envelope/adapter patterns). Facade modules get dispatch updates only.
+**Structure Decision**: Multi-module Gradle project. New sealed command types go in `alice-agent-proto`. Core sub-agent orchestration logic goes in `alice-core-agent` (reusing existing `AgentExecutor`/`Agent` infrastructure). ACP client code goes in `alice-core-agent` as internal package (no new module needed, matching existing envelope/adapter patterns). Facade modules get dispatch updates only.
 
 ## Complexity Tracking
 

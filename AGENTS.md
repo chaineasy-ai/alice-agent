@@ -14,8 +14,8 @@
 | `alice-tool-gateway` | Tool execution: `ToolRegistry`, `ExecutionEngine`, `SandboxProvider`, schema generation |
 | `alice-guardrail` | Guardrail/validation: `PreValidator`, `PostValidator`, `PolicyEngine`, hallucination detection |
 | `alice-memory-vault` | Memory management: episodic/procedural/semantic vaults, `MemoryRouter`, summarization |
-| `alice-agent-command` | Sealed command interface: `AgentCommand`, `ControlCmd`, `ExecutionCmd`, `AlignmentCmd` |
-| `alice-facade-cmd` | CLI frontend (picocli + JLine 3): `AliceCliLauncher`, `ExecutionCoordinator`, output renderers |
+| `alice-agent-proto` | Sealed command interface: `AgentCommand`, `ControlCmd`, `ExecutionCmd`, `AlignmentCmd` |
+| `alice-facade-cli` | CLI frontend (picocli + JLine 3): `AliceCliLauncher`, `ExecutionCoordinator`, output renderers |
 | `alice-facade-tui` | TUI frontend (JLine 3 + Vert.x): `AliceTuiLauncher`, `ChatComponent`, `InputComponent`, event bridge |
 
 ## General Guidance
@@ -57,7 +57,7 @@
 
 **CLI frontend:**
 ```bash
-./gradlew :alice-facade-cmd:run
+./gradlew :alice-facade-cli:run
 ```
 
 **TUI frontend (default):**

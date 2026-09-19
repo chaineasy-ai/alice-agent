@@ -17,7 +17,7 @@ This feature extends an existing sealed interface hierarchy and modifies two fac
 - `sealed interface XxxCmd extends AgentCommand` with `String` accessor method
 - Inner `record` types implementing the sealed interface
 - Records include `sessionId`, `traceId`, `timestamp` fields per `AgentCommand` contract
-- New file placed alongside existing commands in `org.cland.alice.agent.command`
+- New file placed alongside existing commands in `org.cland.alice.agent.proto`
 
 **Alternatives considered**: Adding `/routine` as a subclass of `ControlCmd` was considered but rejected — the routine-time drive category is semantically distinct from control, has different accessor needs (`cronExpression` vs `reason`), and treating it as a first-class branch enables pattern-matching exhaustiveness at the consumer level.
 
@@ -58,12 +58,12 @@ This feature extends an existing sealed interface hierarchy and modifies two fac
 **Decision**: No `module-info.java` changes needed.
 
 **Rationale**:
-- `alice-agent-command` already exports `org.cland.alice.agent.command` (line 9 of `module-info.java`)
-- `alice-facade-cmd` already `requires alice.agent.command.main` (line 6 of `module-info.java`)
-- `alice-facade-tui` already `requires alice.agent.command.main` (line 8 of `module-info.java`)
+- `alice-agent-proto` already exports `org.cland.alice.agent.proto` (line 9 of `module-info.java`)
+- `alice-facade-cli` already `requires alice.agent.proto.main` (line 6 of `module-info.java`)
+- `alice-facade-tui` already `requires alice.agent.proto.main` (line 8 of `module-info.java`)
 - The new `RoutineTimeCmd.java` lives in the same exported package — no new exports or requires needed
 
-**References**: `alice-agent-command/src/main/java/module-info.java`, `alice-facade-cmd/src/main/java/module-info.java`, `alice-facade-tui/src/main/java/module-info.java`
+**References**: `alice-agent-proto/src/main/java/module-info.java`, `alice-facade-cli/src/main/java/module-info.java`, `alice-facade-tui/src/main/java/module-info.java`
 
 ### Testing Framework
 

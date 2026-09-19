@@ -1,8 +1,8 @@
 # Contract: CommandParser (CLI)
 
-> **Module**: `alice-facade-cmd`
+> **Module**: `alice-facade-cli`
 > **File**: `CommandParser.java`
-> **Package**: `org.cland.alice.facade.cmd.config`
+> **Package**: `org.cland.alice.facade.cli.config`
 
 ## Subcommand Contract
 

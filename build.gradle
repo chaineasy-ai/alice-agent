@@ -4,6 +4,30 @@ plugins {
     id 'jacoco'
 }
 
+// ========== 并发构建规避（PIT：两个 Gradle 构建并发写 build/test-results ⇒ EOF/NoSuchFile 假失败 ✗）==========
+// 同一项目两个构建同时在跑时，会互删对方的中间结果文件，报出莫名的
+//   java.io.EOFException / NoSuchFileException: in-progress-results-generic.bin
+// 这里用跨进程文件锁：拿不到锁 ⇒ 明确报错 + 规避提示（而不是把目录写坏）。
+def _buildLockFile = new File(rootDir, ".gradle/concurrent-build.lock")
+_buildLockFile.parentFile.mkdirs()
+def _buildLockRaf = new RandomAccessFile(_buildLockFile, "rw")
+def _buildLock
+try {
+    _buildLock = _buildLockRaf.channel.tryLock()
+} catch (java.nio.channels.OverlappingFileLockException ignored) {
+    _buildLock = null // 同一 JVM 内重复加锁
+}
+if (_buildLock == null) {
+    _buildLockRaf.close()
+    throw new GradleException(
+        "检测到另一个 Gradle 构建正在运行：并发构建会互删 build/test-results，导致 EOF/NoSuchFile 假失败。\n" +
+        "  → 等它结束后重试；确认无构建在跑时，可删除 ${_buildLockFile} 后重试。")
+}
+gradle.buildFinished {
+    try { _buildLock.release() } catch (Exception ignored) { }
+    try { _buildLockRaf.close() } catch (Exception ignored) { }
+}
+
 // ========== 全局版本管理 ==========
 ext {
     mapstructVersion = '1.6.3'
@@ -15,6 +39,14 @@ subprojects {
     apply plugin: 'java'
     apply plugin: "com.diffplug.spotless"
     apply plugin: 'jacoco'
+
+    // 陈旧测试结果自愈：上次构建崩溃会留下半截 binary/*.bin，
+    // 下次 test 任务会莫名报 NoSuchFileException（实测踩过）⇒ 跑前清掉结果目录
+    tasks.withType(Test).configureEach {
+        doFirst {
+            delete(layout.buildDirectory.dir("test-results/test"))
+        }
+    }
 
     spotless {
         java {
@@ -34,7 +66,7 @@ subprojects {
     // 参考: http://192.168.1.7:4999/web/#/p/d0643724ba99f69485454627ae79f37e
 
     // CLI/TUI 前端模块（facade-cmd, facade-tui）跳过覆盖率检查（UI 层不适合纯单元测试）
-    boolean jacocoEnabled = project.name != 'alice-facade-cmd' && project.name != 'alice-facade-tui'
+    boolean jacocoEnabled = project.name != 'alice-facade-cli' && project.name != 'alice-facade-tui'
 
     if (jacocoEnabled) {
         jacoco {

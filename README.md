@@ -49,7 +49,7 @@ struct -i ".git" -i ".gradle" -i "build" -i ".idea" -i ".lazybones" \
 ### CLI Frontend
 
 ```bash
-./gradlew :alice-facade-cmd:run
+./gradlew :alice-facade-cli:run
 ```
 
 ### TUI Frontend (default)

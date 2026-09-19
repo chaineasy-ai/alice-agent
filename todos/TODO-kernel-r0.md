@@ -8,7 +8,7 @@ read_when:
   - "为图内核补 WAL/guardrail/HITL/预算能力"
 scope:
   - "alice-core-agent"
-  - "alice-facade-cmd"
+  - "alice-facade-cli"
   - "alice-facade-tui"
   - "alice-core-planner"
   - "alice-guardrail"
@@ -68,7 +68,7 @@ updated: "2026-09-10"
 - [ ] pipeline kinds spec 装配：TextLlmPipeline 六段抽独立 stage 接口 + kind spec 声明（classification/reasoning/summarize/guardrail-llm/sub-agent） [priority:: medium]
 - [ ] ④ Transport 超时/重试策略化（策略性时间归 pipeline） [priority:: medium]
 - [ ] ResponseDecoder 按 vendor 拆 parser（OpenAI raw indexOf → 结构化 decode） [priority:: low]
-- [ ] PromptProvider 实例化（D6）：PromptManager 收敛 registerSource + 多级覆盖（内置 < ~/.alice/prompts < 会话级）；新增 /reload 命令手动刷新（不 watch） [priority:: medium] [owner:: alice-facade-cmd]
+- [ ] PromptProvider 实例化（D6）：PromptManager 收敛 registerSource + 多级覆盖（内置 < ~/.alice/prompts < 会话级）；新增 /reload 命令手动刷新（不 watch） [priority:: medium] [owner:: alice-facade-cli]
 
 ## 4. 文档与门禁收口
 

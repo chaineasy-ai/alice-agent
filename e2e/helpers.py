@@ -71,7 +71,7 @@ def run_gradle(task: str, *extra_args, timeout: int = 300) -> subprocess.Complet
 # ── CLI Helpers ────────────────────────────────────────────────────────────
 
 
-def build_cli_command(args: list[str], module: str = ':alice-facade-cmd:run') -> list[str]:
+def build_cli_command(args: list[str], module: str = ':alice-facade-cli:run') -> list[str]:
     """Build a subprocess command to run the CLI via Gradle.
 
     Handles Windows argument quoting where Gradle's --args needs
@@ -81,7 +81,7 @@ def build_cli_command(args: list[str], module: str = ':alice-facade-cmd:run') ->
 
     Args:
         args: CLI arguments to pass to the application
-        module: Gradle task to run (default: :alice-facade-cmd:run)
+        module: Gradle task to run (default: :alice-facade-cli:run)
     """
     if not args:
         if sys.platform.startswith("win"):
@@ -108,13 +108,13 @@ def build_cli_command(args: list[str], module: str = ':alice-facade-cmd:run') ->
         return [GRADLEW, module, "--args", args_str]
 
 
-def run_cli(args: list[str], timeout: int = 60, module: str = ':alice-facade-cmd:run') -> subprocess.CompletedProcess:
+def run_cli(args: list[str], timeout: int = 60, module: str = ':alice-facade-cli:run') -> subprocess.CompletedProcess:
     """Run the Alice Agent CLI via Gradle and return the result.
 
     Args:
         args: CLI arguments to pass
         timeout: Timeout in seconds
-        module: Gradle task to run (default: :alice-facade-cmd:run for direct CLI;
+        module: Gradle task to run (default: :alice-facade-cli:run for direct CLI;
                 use ':alice-bootstrap:run' for SPI-based facade selection)
     """
     cmd = build_cli_command(args, module=module)

@@ -15,7 +15,7 @@ No setup required — this is an additive code change to existing modules. After
 
 ```bash
 cd /path/to/alice-agent
-./gradlew :alice-agent-command:build :alice-facade-cmd:build :alice-facade-tui:build
+./gradlew :alice-agent-proto:build :alice-facade-cli:build :alice-facade-tui:build
 ```
 
 ## Validation Scenarios
@@ -27,7 +27,7 @@ cd /path/to/alice-agent
 **Prerequisites**: `RoutineTimeCmd.java` created, `AgentCommand.java` updated.
 
 **Steps**:
-1. Write a Spock test (in `alice-agent-command/src/test/groovy/`) that:
+1. Write a Spock test (in `alice-agent-proto/src/test/groovy/`) that:
    - Creates a `RegisterRoutineCmd("0 */2 * * * ?", "s1", "t1", Instant.now())`
    - Creates a `TimeTriggeredCmd("health-check", "s2", "t2", Instant.now())`
    - Pattern-matches both via a switch on `RoutineTimeCmd`
@@ -66,7 +66,7 @@ cd /path/to/alice-agent
 **Prerequisites**: Scenario 2 complete.
 
 **Steps**:
-1. Run the full build: `./gradlew :alice-facade-cmd:build`
+1. Run the full build: `./gradlew :alice-facade-cli:build`
 2. The CommandParser contract tests verify:
    - `CommandParser.parse(new String[]{"routine", "0 */2 * * * ?"})` returns `RunConfig` with `routineCron` set
    - `CommandParser.parse(new String[]{"routine", "--list"})` returns `RunConfig` with `listRoutines=true`

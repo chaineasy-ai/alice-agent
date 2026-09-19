@@ -14,8 +14,8 @@ scope:
   - "alice-tool-gateway"
   - "alice-guardrail"
   - "alice-memory-vault"
-  - "alice-agent-command"
-  - "alice-facade-cmd"
+  - "alice-agent-proto"
+  - "alice-facade-cli"
   - "alice-facade-tui"
 status: "active"
 updated: "2026-06-26"
@@ -141,7 +141,7 @@ updated: "2026-06-26"
 
 ## 四、接口门面层 (Facade)
 
-### □ 4.1 alice-facade-cmd — 命令行门面
+### □ 4.1 alice-facade-cli — 命令行门面
 - [x] 基础 CLI 交互（picocli 单次任务模式）
 - [x] 参数解析 (Picocli)
 - [/] 彩色输出与进度显示 [priority:: medium]
@@ -170,7 +170,7 @@ updated: "2026-06-26"
 
 ## 五、指令驱动层 (Command Layer)
 
-### □ 5.1 alice-agent-command — 指令抽象层
+### □ 5.1 alice-agent-proto — 指令抽象层
 - [x] 密封接口指令层级定义 (Sealed Interface)
     - [x] AgentCommand 顶层接口 (Execution / Capability / Alignment / Control)
     - [x] ExecutionCmd 分支 (/run, /exec)

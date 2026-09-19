@@ -62,13 +62,13 @@ alice-bootstrap
   │                        │                      ├── alice-tool-gateway
   │                        │                      ├── alice-memory-vault
   │                        │                      └── alice-env-adapter
-  ├── alice-facade-cmd  ───┤
+  ├── alice-facade-cli  ───┤
   ├── alice-model          │
-  └── alice-agent-command  │
+  └── alice-agent-proto  │
                            └── alice-model
 ```
 
-- `alice-agent-command` is a lightweight library-only module (no transitive runtime deps on tool-gateway).
+- `alice-agent-proto` is a lightweight library-only module (no transitive runtime deps on tool-gateway).
 - All modules use JPMS (`module-info.java`) — adding cross-module dependencies requires updating exports/requires in module descriptors.
 - `alice-env-adapter` depends on `alice-tool-gateway` for tool abstraction and uses Gson for MCP JSON-RPC.
 
@@ -81,7 +81,7 @@ alice-bootstrap
 
 ### CLI frontend
 ```bash
-./gradlew :alice-facade-cmd:run
+./gradlew :alice-facade-cli:run
 ```
 
 ### Running the installed distribution
@@ -123,8 +123,8 @@ Related-to: TODO-memory-vault.md
 | `tool-gateway` | alice-tool-gateway |
 | `guardrail` | alice-guardrail |
 | `memory-vault` | alice-memory-vault |
-| `agent-command` | alice-agent-command |
-| `facade-cmd` | alice-facade-cmd |
+| `agent-command` | alice-agent-proto |
+| `facade-cmd` | alice-facade-cli |
 | `facade-tui` | alice-facade-tui |
 | `build` | Gradle/build config |
 | `docs` | Documentation only |

@@ -2,7 +2,7 @@
 
 > **Date**: 2026-06-14
 > **Status**: Final
-> **Scope**: `alice-agent-command`, `alice-facade-cmd`, `alice-facade-tui`
+> **Scope**: `alice-agent-proto`, `alice-facade-cli`, `alice-facade-tui`
 
 ## Entity Definitions
 

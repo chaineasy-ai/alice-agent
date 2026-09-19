@@ -81,7 +81,7 @@ class TestAliceCliHelp(unittest.TestCase):
 
     def test_version_info_in_help(self):
         """Help output should contain the version string."""
-        result = run_cli(["run", "--help"], timeout=30, module=':alice-facade-cmd:run')
+        result = run_cli(["run", "--help"], timeout=30, module=':alice-facade-cli:run')
         output = result.stdout + result.stderr
         self.assertEqual(result.returncode, 0, msg=output[:500])
         self.assertIn("Usage:", output, "Run help should show 'Usage:'")
@@ -292,8 +292,8 @@ class TestAliceAgentSystem(unittest.TestCase):
         jar_names = [j.name for j in jars]
         print(f"\n  ↳ Distribution contains {len(jars)} JARs")
         expected_modules = [
-            "alice-agent", "alice-agent-command", "alice-core-agent",
-            "alice-core-planner", "alice-env-adapter", "alice-facade-cmd",
+            "alice-agent", "alice-agent-proto", "alice-core-agent",
+            "alice-core-planner", "alice-env-adapter", "alice-facade-cli",
             "alice-facade-tui", "alice-memory-vault", "alice-tool-gateway",
         ]
         for module in expected_modules:

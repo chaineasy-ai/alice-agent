@@ -21,9 +21,9 @@ description: "Implementation tasks for /sub-agent — Multi-Agent via ACP Protoc
 
 ## Path Conventions
 
-- `alice-agent-command/src/main/java/...` — sealed command classes
+- `alice-agent-proto/src/main/java/...` — sealed command classes
 - `alice-core-agent/src/main/java/...` — core sub-agent infrastructure
-- `alice-facade-cmd/src/main/java/...` — CLI dispatch
+- `alice-facade-cli/src/main/java/...` — CLI dispatch
 - `alice-facade-tui/src/main/java/...` — TUI dispatch
 - `*/src/test/groovy/...` — Spock tests
 
@@ -34,19 +34,19 @@ description: "Implementation tasks for /sub-agent — Multi-Agent via ACP Protoc
 **Purpose**: Project initialization — add ACP SDK dependency, create new sealed command files
 
 - [x] T001 Add `com.agentclientprotocol:acp-core:0.9.0` dependency to `alice-core-agent/build.gradle`
-- [x] T002 [P] Create `SubAgentCmd.java` sealed interface in `alice-agent-command/src/main/java/org/cland/alice/agent/command/SubAgentCmd.java`
-- [x] T003 [P] Create `SpawnSubAgentCmd.java` record in `alice-agent-command/src/main/java/org/cland/alice/agent/command/SpawnSubAgentCmd.java`
-- [x] T004 [P] Create `ConnectSubAgentCmd.java` record in `alice-agent-command/src/main/java/org/cland/alice/agent/command/ConnectSubAgentCmd.java`
-- [x] T005 [P] Create `ListSubAgentsCmd.java` record in `alice-agent-command/src/main/java/org/cland/alice/agent/command/ListSubAgentsCmd.java`
-- [x] T006 [P] Create `CancelSubAgentCmd.java` record in `alice-agent-command/src/main/java/org/cland/alice/agent/command/CancelSubAgentCmd.java`
-- [x] T007 [P] Create `GetSubAgentResultsCmd.java` record in `alice-agent-command/src/main/java/org/cland/alice/agent/command/GetSubAgentResultsCmd.java`
-- [x] T008 [P] Create `SendToSubAgentCmd.java` record in `alice-agent-command/src/main/java/org/cland/alice/agent/command/SendToSubAgentCmd.java`
-- [x] T009 [P] Create `PromptSubAgentCmd.java` record in `alice-agent-command/src/main/java/org/cland/alice/agent/command/PromptSubAgentCmd.java`
+- [x] T002 [P] Create `SubAgentCmd.java` sealed interface in `alice-agent-proto/src/main/java/org/cland/alice/agent/command/SubAgentCmd.java`
+- [x] T003 [P] Create `SpawnSubAgentCmd.java` record in `alice-agent-proto/src/main/java/org/cland/alice/agent/command/SpawnSubAgentCmd.java`
+- [x] T004 [P] Create `ConnectSubAgentCmd.java` record in `alice-agent-proto/src/main/java/org/cland/alice/agent/command/ConnectSubAgentCmd.java`
+- [x] T005 [P] Create `ListSubAgentsCmd.java` record in `alice-agent-proto/src/main/java/org/cland/alice/agent/command/ListSubAgentsCmd.java`
+- [x] T006 [P] Create `CancelSubAgentCmd.java` record in `alice-agent-proto/src/main/java/org/cland/alice/agent/command/CancelSubAgentCmd.java`
+- [x] T007 [P] Create `GetSubAgentResultsCmd.java` record in `alice-agent-proto/src/main/java/org/cland/alice/agent/command/GetSubAgentResultsCmd.java`
+- [x] T008 [P] Create `SendToSubAgentCmd.java` record in `alice-agent-proto/src/main/java/org/cland/alice/agent/command/SendToSubAgentCmd.java`
+- [x] T009 [P] Create `PromptSubAgentCmd.java` record in `alice-agent-proto/src/main/java/org/cland/alice/agent/command/PromptSubAgentCmd.java`
 - [x] T010 Update `AgentCommand.java` sealed interface to permit `SubAgentCmd` as a new branch
-- [x] T011 Update `alice-agent-command/src/main/java/module-info.java` to export the new command types if needed — already covered by existing `exports org.cland.alice.agent.command;`
-- [x] T012 [P] Create `CommandParser` parse rule for `/sub-agent` in `alice-facade-cmd/src/main/java/org/cland/alice/facade/cmd/config/CommandParser.java`
-- [x] T013 [P] Create `SubAgentCmdParseSpec.groovy` in `alice-agent-command/src/test/groovy/org/cland/alice/agent/command/SubAgentCmdParseSpec.groovy` — test parse of all 7 sub-commands
-- [x] T014 [P] Create `SubAgentCmdSealedHierarchySpec.groovy` in `alice-agent-command/src/test/groovy/org/cland/alice/agent/command/SubAgentCmdSealedHierarchySpec.groovy` — verify sealed interface completeness
+- [x] T011 Update `alice-agent-proto/src/main/java/module-info.java` to export the new command types if needed — already covered by existing `exports org.cland.alice.agent.proto;`
+- [x] T012 [P] Create `CommandParser` parse rule for `/sub-agent` in `alice-facade-cli/src/main/java/org/cland/alice/facade/cmd/config/CommandParser.java`
+- [x] T013 [P] Create `SubAgentCmdParseSpec.groovy` in `alice-agent-proto/src/test/groovy/org/cland/alice/agent/command/SubAgentCmdParseSpec.groovy` — test parse of all 7 sub-commands
+- [x] T014 [P] Create `SubAgentCmdSealedHierarchySpec.groovy` in `alice-agent-proto/src/test/groovy/org/cland/alice/agent/command/SubAgentCmdSealedHierarchySpec.groovy` — verify sealed interface completeness
 
 ---
 
@@ -76,7 +76,7 @@ description: "Implementation tasks for /sub-agent — Multi-Agent via ACP Protoc
 
 ### Tests for User Story 1
 
-- [x] T022 [P] [US1] Contract test: `AliceCliLauncherSpec.groovy` add `/sub-agent spawn` dispatch test in `alice-facade-cmd/src/test/groovy/org/cland/alice/facade/cmd/AliceCliLauncherSpec.groovy`
+- [x] T022 [P] [US1] Contract test: `AliceCliLauncherSpec.groovy` add `/sub-agent spawn` dispatch test in `alice-facade-cli/src/test/groovy/org/cland/alice/facade/cmd/AliceCliLauncherSpec.groovy`
 - [x] T023 [P] [US1] Contract test: `TuiSpec.groovy` add `/sub-agent spawn` dispatch test in `alice-facade-tui/src/test/groovy/org/cland/alice/facade/tui/TuiSpec.groovy`
 - [x] T024 [US1] Integration test: `SubAgentSpawnE2ESpec.groovy` in `alice-core-agent/src/test/groovy/org/cland/alice/agent/subagent/SubAgentSpawnE2ESpec.groovy` — full spawn → execute → complete → read results
 
