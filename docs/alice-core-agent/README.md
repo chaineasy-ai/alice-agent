@@ -122,5 +122,5 @@ WAL 子系统从 `v20260626` 起位于本模块的 `wal/` 包（原为 `alice-me
 ## 相关模块
 
 - [alice-memory-vault](../alice-memory-vault/) — 记忆库（Episodic/Semantic/Procedural Vault, Dreaming Engine）
-- [alice-facade-cmd](../alice-facade-cmd/) — CLI 门面
+- [alice-facade-cli](../alice-facade-cli/) — CLI 门面
 - [alice-facade-tui](../alice-facade-tui/) — TUI 门面

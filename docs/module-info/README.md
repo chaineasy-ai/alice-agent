@@ -21,7 +21,7 @@
                     │                          │                          │
                     ▼                          ▼                          ▼
           ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
-          │ alice-facade-cmd│      │ alice-facade-tui│      │ alice-facade-web│ 🆕
+          │ alice-facade-cli│      │ alice-facade-tui│      │ alice-facade-rpc│ 🆕
           │   (CLI 门面)    │      │   (TUI 门面)    │      │   (Web 门面)    │
           │                 │      │                 │      │                 │
           │  • 命令行交互    │      │  • 字符界面渲染  │      │  • RESTful API  │
@@ -114,9 +114,9 @@
 
 | 模块 | 功能职责 | 交互方式 | 核心类 |
 |------|---------|---------|--------|
-| **alice-facade-cmd** | 命令行交互界面，支持非交互式脚本调用，输出文本或 JSON 格式结果 | 标准输入/输出、命令行参数 | `AliceCliLauncher`, `CommandParser`, `OutputRenderer` |
+| **alice-facade-cli** | 命令行交互界面，支持非交互式脚本调用，输出文本或 JSON 格式结果 | 标准输入/输出、命令行参数 | `AliceCliLauncher`, `CommandParser`, `OutputRenderer` |
 | **alice-facade-tui** | 终端字符界面，实时显示 Agent 思考过程，支持键盘快捷键操作 | 键盘事件、ANSI 终端渲染 | `AliceTuiLauncher`, `ScreenManager`, `EventBridge` |
-| **alice-facade-web** 🆕 | Web 服务门面，暴露 RESTful API、WebSocket、SSE，提供浏览器 Chat UI 和 Dashboard | HTTP/WebSocket/SSE | `AliceWebLauncher`, `ChatController`, `AgentWebSocketHandler` |
+| **alice-facade-rpc** 🆕 | Web 服务门面，暴露 RESTful API、WebSocket、SSE，提供浏览器 Chat UI 和 Dashboard | HTTP/WebSocket/SSE | `AliceWebLauncher`, `ChatController`, `AgentWebSocketHandler` |
 
 ---
 
@@ -179,9 +179,9 @@
 | 模块 | 依赖模块 | 被依赖模块 |
 |------|---------|-----------|
 | alice-bootstrap | facade-cmd, facade-tui, facade-web | - |
-| alice-facade-cmd | core-agent | bootstrap |
+| alice-facade-cli | core-agent | bootstrap |
 | alice-facade-tui | core-agent | bootstrap |
-| alice-facade-web | core-agent | bootstrap |
+| alice-facade-rpc | core-agent | bootstrap |
 | alice-core-agent | planner, memory-vault, tool-gateway | facade-cmd, facade-tui, facade-web |
 | alice-core-planner | model, memory-vault | core-agent |
 | alice-memory-vault | - | core-agent, core-planner, guardrail |

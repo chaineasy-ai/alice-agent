@@ -4,18 +4,18 @@ import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import org.cland.alice.agent.command.AgentCommand;
-import org.cland.alice.agent.command.AlignmentCmd;
-import org.cland.alice.agent.command.CancelSubAgentCmd;
-import org.cland.alice.agent.command.CapabilityCmd;
-import org.cland.alice.agent.command.ConnectSubAgentCmd;
-import org.cland.alice.agent.command.ControlCmd;
-import org.cland.alice.agent.command.ExecutionCmd;
-import org.cland.alice.agent.command.GetSubAgentResultsCmd;
-import org.cland.alice.agent.command.ListSubAgentsCmd;
-import org.cland.alice.agent.command.PromptSubAgentCmd;
-import org.cland.alice.agent.command.SendToSubAgentCmd;
-import org.cland.alice.agent.command.SpawnSubAgentCmd;
+import org.cland.alice.agent.proto.AgentCommand;
+import org.cland.alice.agent.proto.AlignmentCmd;
+import org.cland.alice.agent.proto.CancelSubAgentCmd;
+import org.cland.alice.agent.proto.CapabilityCmd;
+import org.cland.alice.agent.proto.ConnectSubAgentCmd;
+import org.cland.alice.agent.proto.ControlCmd;
+import org.cland.alice.agent.proto.ExecutionCmd;
+import org.cland.alice.agent.proto.GetSubAgentResultsCmd;
+import org.cland.alice.agent.proto.ListSubAgentsCmd;
+import org.cland.alice.agent.proto.PromptSubAgentCmd;
+import org.cland.alice.agent.proto.SendToSubAgentCmd;
+import org.cland.alice.agent.proto.SpawnSubAgentCmd;
 import org.cland.alice.agent.subagent.SubAgentManager;
 import org.cland.alice.agent.subagent.SubAgentRecord;
 import org.cland.alice.core.agent.Agent;
@@ -32,6 +32,7 @@ import org.cland.alice.facade.tui.state.TuiState;
 import org.cland.alice.memory.sop.SopGraphPersistence;
 import org.cland.alice.memory.sop.SopRegistry;
 import org.cland.alice.memory.sop.StaticPlanner;
+import org.cland.alice.runtime.compose.StartupBanner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -84,6 +85,9 @@ public class AliceTuiLauncher implements AutoCloseable {
     // 创建 Agent
     Agent agent =
         Agent.createDefault(config).withWal(wal).withGuardrail(new GuardrailVerificatorAdapter());
+    // 启动横幅（七块）——走 stderr，避免与 TUI 画面/协议输出混淆 ✓
+    StartupBanner.print(
+        System.err, StartupBanner.collect(agent, sessionId, java.util.List.of("inprocess")));
 
     // 初始化 SOP 静态规划器（程序性记忆 — 从 ~/.alice/sops/ 加载已有 SOP）
     try {

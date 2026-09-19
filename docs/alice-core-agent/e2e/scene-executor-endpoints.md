@@ -15,7 +15,7 @@ updated: "2026-06-19"
 
 This scene defines **4 hole probes** into the `alice-core-agent` module. Each probe verifies a public API boundary without inspecting internals.
 
-**Case doc**: `docs/alice-agent-command/e2e/case-core-agent.md`
+**Case doc**: `docs/alice-agent-proto/e2e/case-core-agent.md`
 
 ## 2. Probe Map
 

@@ -29,7 +29,7 @@ updated: "2026-06-17"
 `app` 模块作为系统的绝对起点，其依赖和职责极度轻量化：
 
 * **无配置与无内核感知**：不依赖 `config` 逻辑，也不依赖 `alice-core-agent`。`app` 只传递原始的 `args` 或环境变量。
-* **界面调度**：仅依赖 `alice-facade-cmd` 和 `alice-facade-tui` 的引导接口，根据基础启动参数（如 `--tui`）决定激活哪个外壳。
+* **界面调度**：仅依赖 `alice-facade-cli` 和 `alice-facade-tui` 的引导接口，根据基础启动参数（如 `--tui`）决定激活哪个外壳。
 * **控制权移交**：完成基础路由后，迅速将主线程控制权和原始参数移交给选定的 Facade 模块，由 Facade 侧配合下沉的 `agent (含 config)` 进行真正的业务装配。
 
 ---
@@ -63,7 +63,7 @@ classDiagram
 
     %% 外部外壳模块
     class AliceCliLauncher {
-        <<alice-facade-cmd>>
+        <<alice-facade-cli>>
         +launch(String[] args) void
     }
 

@@ -2,7 +2,7 @@
 """
 E2E Test — TUI Slash Commands.
 
-See: docs/alice-agent-command/e2e/case-tui-slash-commands.md
+See: docs/alice-agent-proto/e2e/case-tui-slash-commands.md
      docs/alice-facade-tui/e2e/scene-tui-slash-commands.md
 
 TDD: Case doc → test → pass

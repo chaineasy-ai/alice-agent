@@ -15,7 +15,7 @@ updated: "2026-06-20"
 
 7 hole probes into the `alice-core-planner` module, covering all major inbound entities.
 
-**Case doc**: `docs/alice-agent-command/e2e/case-core-planner.md`
+**Case doc**: `docs/alice-agent-proto/e2e/case-core-planner.md`
 
 ## 2. Probe Map
 

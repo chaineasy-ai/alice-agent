@@ -13,7 +13,8 @@ module alice.agent.facade.tui.main {
   requires alice.agent.app.main;
   requires alice.agent.alice.core.agent.main;
   requires alice.agent.alice.guardrail.main;
-  requires alice.agent.command.main;
+  requires alice.agent.proto.main;
+  requires alice.agent.runtime.main;
   requires alice.agent.alice.memory.vault.main;
   requires alice.agent.alice.core.planner.main;
 

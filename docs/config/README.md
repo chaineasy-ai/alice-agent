@@ -8,7 +8,7 @@ read_when:
   - "adding new models, providers, or env var references"
   - "copying or setting up model.json for alice-model"
 scope:
-  - alice-facade-cmd
+  - alice-facade-cli
   - alice-model
 status: "active"
 updated: "2026-06-29"

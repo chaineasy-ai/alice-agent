@@ -8,9 +8,9 @@ read_when:
   - "understanding facade SPI discovery"
 scope:
   - "alice-bootstrap"
-  - "alice-facade-cmd"
+  - "alice-facade-cli"
   - "alice-facade-tui"
-  - "alice-facade-web"
+  - "alice-facade-rpc"
 status: "active"
 updated: "2026-06-19"
 ---
@@ -30,7 +30,7 @@ graph TD
         FacadeSelector -->|ServiceLoader| SPI[AliceFacade SPI]
     end
 
-    subgraph cli [alice-facade-cmd]
+    subgraph cli [alice-facade-cli]
         CLI[AliceCliFacade] -.->|provides| SPI
         CLI --> AliceCliLauncher
     end
@@ -40,7 +40,7 @@ graph TD
         TUI --> AliceTuiLauncher
     end
 
-    subgraph web [alice-facade-web]
+    subgraph web [alice-facade-rpc]
         WEB[AliceWebFacade] -.->|provides| SPI
         WEB --> HealthController
     end
@@ -76,13 +76,13 @@ graph TD
 ./gradlew :alice-bootstrap:compileJava
 
 # CLI facade only
-./gradlew :alice-facade-cmd:compileJava
+./gradlew :alice-facade-cli:compileJava
 
 # TUI facade only
 ./gradlew :alice-facade-tui:compileJava
 
 # Web facade only
-./gradlew :alice-facade-web:compileJava
+./gradlew :alice-facade-rpc:compileJava
 ```
 
 ---
@@ -96,7 +96,7 @@ uses `ServiceLoader` to discover available facades at runtime.
 
 ```bash
 # Run via Gradle
-./gradlew :alice-facade-cmd:run
+./gradlew :alice-facade-cli:run
 
 # Or via bootstrap (auto-selects CLI)
 ./gradlew :alice-bootstrap:run
@@ -143,11 +143,11 @@ alice --tui
 
 ```bash
 # Run via Quarkus dev mode (hot reload)
-./gradlew :alice-facade-web:quarkusDev
+./gradlew :alice-facade-rpc:quarkusDev
 
 # Or run as a standalone Quarkus app
-./gradlew :alice-facade-web:compileJava
-java -jar alice-facade-web/build/libs/alice-facade-web-0.1.0.jar
+./gradlew :alice-facade-rpc:compileJava
+java -jar alice-facade-rpc/build/libs/alice-facade-rpc-0.1.0.jar
 ```
 
 **Web endpoints:**
@@ -183,9 +183,9 @@ Output:
 ### Build Individual Module JARs
 
 ```bash
-./gradlew :alice-facade-cmd:jar     # → alice-facade-cmd/build/libs/alice-facade-cmd-0.1.0.jar
+./gradlew :alice-facade-cli:jar     # → alice-facade-cli/build/libs/alice-facade-cli-0.1.0.jar
 ./gradlew :alice-facade-tui:jar     # → alice-facade-tui/build/libs/alice-facade-tui-0.1.0.jar
-./gradlew :alice-facade-web:jar     # → alice-facade-web/build/libs/alice-facade-web-0.1.0.jar
+./gradlew :alice-facade-rpc:jar     # → alice-facade-rpc/build/libs/alice-facade-rpc-0.1.0.jar
 ```
 
 ---
@@ -204,16 +204,16 @@ Output:
 Each facade module provides a file at
 `META-INF/services/org.cland.alice.agent.spi.AliceFacade`:
 
-- **alice-facade-cmd**: `org.cland.alice.facade.cmd.AliceCliFacade`
+- **alice-facade-cli**: `org.cland.alice.facade.cli.AliceCliFacade`
 - **alice-facade-tui**: `org.cland.alice.facade.tui.AliceTuiFacade`
-- **alice-facade-web**: (to be added when `AliceWebFacade` exists)
+- **alice-facade-rpc**: (to be added when `AliceWebFacade` exists)
 
 JPMS `provides` declarations in each module's `module-info.java`:
 
 ```java
-// alice-facade-cmd/src/main/java/module-info.java
+// alice-facade-cli/src/main/java/module-info.java
 provides org.cland.alice.agent.spi.AliceFacade
-    with org.cland.alice.facade.cmd.AliceCliFacade;
+    with org.cland.alice.facade.cli.AliceCliFacade;
 
 // alice-facade-tui/src/main/java/module-info.java
 provides org.cland.alice.agent.spi.AliceFacade
@@ -225,7 +225,7 @@ provides org.cland.alice.agent.spi.AliceFacade
 To add a new facade (e.g., `alice-facade-rest`):
 
 1. Create the module with `build.gradle` depending on `project(':alice-bootstrap')`
-   (for the SPI interface) and `project(':alice-agent-command')` (for command contracts)
+   (for the SPI interface) and `project(':alice-agent-proto')` (for command contracts)
 2. Implement `AliceFacade` with a unique `name()` (e.g., `"rest"`)
 3. Add `META-INF/services/org.cland.alice.agent.spi.AliceFacade` listing your impl class
 4. Declare `provides ... with ...` in `module-info.java`
@@ -248,7 +248,7 @@ classpath. To run with a specific facade, use that facade's `run` task instead:
 
 ```bash
 # CLI — facade-cmd includes bootstrap transitively
-./gradlew :alice-facade-cmd:run
+./gradlew :alice-facade-cli:run
 
 # TUI — facade-tui includes bootstrap transitively
 java --module-path alice-bootstrap.jar:alice-facade-tui.jar:... -m alice.agent.app.main/org.cland.alice.agent.AliceApp --tui

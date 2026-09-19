@@ -28,7 +28,8 @@ dependencies {
     implementation project(':alice-bootstrap')
     implementation project(':alice-core-agent')
     implementation project(':alice-guardrail')
-    implementation project(':alice-agent-command')
+    implementation project(':alice-agent-proto')
+    implementation project(':alice-agent-runtime')
     implementation project(':alice-memory-vault')
     implementation project(':alice-core-planner')
 

@@ -4,9 +4,9 @@
  * Tests FacadeSelector SPI discovery and AliceApp exit codes.
  * Does NOT test Agent/Model/Config — those are handled by facade modules.
  *
- * Note: These tests require alice-facade-cmd on the test classpath so that
+ * Note: These tests require alice-facade-cli on the test classpath so that
  * ServiceLoader can discover AliceCliFacade. The bootstrap build.gradle
- * declares testImplementation project(':alice-facade-cmd') for this reason.
+ * declares testImplementation project(':alice-facade-cli') for this reason.
  */
 package org.cland.alice.agent
 

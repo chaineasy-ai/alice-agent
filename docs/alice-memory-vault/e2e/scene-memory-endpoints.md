@@ -17,7 +17,7 @@ updated: "2026-06-20"
 
 **Aggregation root**: `VaultController` (facade over all three vault types)
 
-**Case doc**: `docs/alice-agent-command/e2e/case-memory-vault.md`
+**Case doc**: `docs/alice-agent-proto/e2e/case-memory-vault.md`
 
 **Inbound doc**: `docs/alice-memory-vault/inbound.md`
 

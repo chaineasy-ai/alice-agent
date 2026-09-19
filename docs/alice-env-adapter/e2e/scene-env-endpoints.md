@@ -15,7 +15,7 @@ updated: "2026-06-19"
 
 4 hole probes into the `alice-env-adapter` module.
 
-**Case doc**: `docs/alice-agent-command/e2e/case-env-adapter.md`
+**Case doc**: `docs/alice-agent-proto/e2e/case-env-adapter.md`
 
 ## 2. Probe Map
 

@@ -6,7 +6,7 @@ Each probe invokes CoreAgentHoleTest directly via Gradle JavaExec (runHoleTest),
 exercising module boundary without going through unit test runners.
 
 See:
-  docs/alice-agent-command/e2e/case-core-agent.md
+  docs/alice-agent-proto/e2e/case-core-agent.md
   docs/alice-core-agent/e2e/scene-core-agent-endpoints.md
 """
 

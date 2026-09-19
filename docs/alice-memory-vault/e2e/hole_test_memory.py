@@ -6,7 +6,7 @@ Directly invokes MemoryVaultHoleTest (Java) via Gradle runHoleTest task.
 Each probe instantiates module public API classes at the module boundary.
 
 See:
-  docs/alice-agent-command/e2e/case-memory-vault.md
+  docs/alice-agent-proto/e2e/case-memory-vault.md
   docs/alice-memory-vault/e2e/scene-memory-endpoints.md
   docs/alice-memory-vault/inbound.md
 """

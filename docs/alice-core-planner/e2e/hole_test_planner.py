@@ -6,7 +6,7 @@ Each probe invokes PlannerHoleTest directly via Gradle JavaExec (runHoleTest),
 exercising module boundary without going through unit test runners.
 
 See:
-  docs/alice-agent-command/e2e/case-core-planner.md
+  docs/alice-agent-proto/e2e/case-core-planner.md
   docs/alice-core-planner/e2e/scene-planner-endpoints.md
   docs/alice-core-planner/inbound.md
 """

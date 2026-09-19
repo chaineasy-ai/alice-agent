@@ -16,7 +16,7 @@ updated: "2026-06-20"
 9 hole probes into the `alice-tool-gateway` module, each calling the module boundary
 directly via `BuiltinToolsHoleTest` (Gradle `runHoleTest` task — no unit test runners).
 
-**Case doc**: `docs/alice-agent-command/e2e/case-tool-gateway.md`
+**Case doc**: `docs/alice-agent-proto/e2e/case-tool-gateway.md`
 
 ## 2. Probe Map
 

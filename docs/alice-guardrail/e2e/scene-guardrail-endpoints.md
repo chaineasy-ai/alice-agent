@@ -15,7 +15,7 @@ updated: "2026-06-19"
 
 5 hole probes into the `alice-guardrail` module. Note: this module currently has **0 unit tests**, so hole tests are particularly valuable here.
 
-**Case doc**: `docs/alice-agent-command/e2e/case-guardrail.md`
+**Case doc**: `docs/alice-agent-proto/e2e/case-guardrail.md`
 
 ## 2. Probe Map
 

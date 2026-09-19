@@ -9,8 +9,8 @@ import java.util.ArrayList;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
-import org.cland.alice.agent.command.AgentCommand;
-import org.cland.alice.agent.command.ControlCmd;
+import org.cland.alice.agent.proto.AgentCommand;
+import org.cland.alice.agent.proto.ControlCmd;
 import org.cland.alice.core.agent.prompt.PromptManager;
 import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
 import org.cland.alice.facade.tui.bridge.EventBridge;
@@ -212,7 +212,7 @@ public class CommandHandler {
         PromptManager.reloadFromDisk();
         // 通过 UpdateRulesCmd 派发给 Agent（已在本地完成拷贝 + reload）
         AgentCommand ac =
-            new org.cland.alice.agent.command.CapabilityCmd.UpdateRulesCmd(
+            new org.cland.alice.agent.proto.CapabilityCmd.UpdateRulesCmd(
                 dest.toAbsolutePath().toString(), sessionId(), traceId());
         if (ac != null) {
           dispatchToAgent(ac);

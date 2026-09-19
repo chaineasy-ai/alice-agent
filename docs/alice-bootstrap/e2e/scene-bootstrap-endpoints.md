@@ -15,7 +15,7 @@ updated: "2026-06-19"
 
 3 hole probes into the `alice-bootstrap` module.
 
-**Case doc**: `docs/alice-agent-command/e2e/case-bootstrap.md`
+**Case doc**: `docs/alice-agent-proto/e2e/case-bootstrap.md`
 
 ## 2. Probe Map
 

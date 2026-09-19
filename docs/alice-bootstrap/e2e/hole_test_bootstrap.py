@@ -6,7 +6,7 @@ Each probe invokes BootstrapHoleTest directly via Gradle JavaExec (runHoleTest),
 exercising module boundary without going through unit test runners.
 
 See:
-  docs/alice-agent-command/e2e/case-bootstrap.md
+  docs/alice-agent-proto/e2e/case-bootstrap.md
   docs/alice-bootstrap/e2e/scene-bootstrap-endpoints.md
 """
 

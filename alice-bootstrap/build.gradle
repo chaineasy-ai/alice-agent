@@ -25,13 +25,14 @@ dependencies {
     // Facade modules are discovered at runtime via SPI (ServiceLoader).
     // Compile-time dependency is only on the SPI interface in this module.
     // runtimeOnly keeps facade JARs on the module path so ServiceLoader finds them.
-    runtimeOnly project(':alice-facade-cmd')
+    runtimeOnly project(':alice-facade-cli')
     runtimeOnly project(':alice-facade-tui')
+    runtimeOnly project(':alice-facade-rpc')
 
     // Test-only dependencies
     testImplementation project(':alice-model')
-    testImplementation project(':alice-agent-command')
-    testImplementation project(':alice-facade-cmd')
+    testImplementation project(':alice-agent-proto')
+    testImplementation project(':alice-facade-cli')
     testImplementation 'org.apache.groovy:groovy:4.0.30'
     testImplementation 'org.spockframework:spock-core:2.4-groovy-4.0'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

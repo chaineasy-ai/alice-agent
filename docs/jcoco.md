@@ -8,11 +8,11 @@ read_when:
   - "为多模块 Gradle 项目配置覆盖率聚合"
 scope:
   - "build.gradle"
-  - "alice-agent-command"
+  - "alice-agent-proto"
   - "alice-core-agent"
   - "alice-core-planner"
   - "alice-env-adapter"
-  - "alice-facade-cmd"
+  - "alice-facade-cli"
   - "alice-facade-tui"
   - "alice-guardrail"
   - "alice-memory-vault"
@@ -21,7 +21,7 @@ scope:
 status: "active"
 updated: "2026-07-12"
 
-> **最终覆盖率状态**: 8/11 模块达标，alice-facade-cmd 和 alice-facade-tui 跳过覆盖率检查（UI/CLI 前端层，E2E 覆盖）
+> **最终覆盖率状态**: 8/11 模块达标，alice-facade-cli 和 alice-facade-tui 跳过覆盖率检查（UI/CLI 前端层，E2E 覆盖）
 ---
 
 # JaCoCo 单元测试覆盖率配置
@@ -137,7 +137,7 @@ subprojects {
 ### 单模块
 
 ```bash
-./gradlew :alice-agent-command:check
+./gradlew :alice-agent-proto:check
 ```
 
 ## 排除规则

@@ -1,0 +1,57 @@
+/*
+ * alice-facade-rpc: HTTP RPC 2.0（协议适配层）
+ *
+ * 把协议契约层（alice-agent-proto）的命令/事件以 HTTP+SSE 暴露；
+ * 只依赖 proto + runtime，不依赖 core 实现（Dispatcher 由组合根注入）。
+ * MVP 用 JDK 内置 HttpServer（零三方依赖）；Quarkus 留作后续响应式升级。
+ */
+
+plugins {
+    id 'groovy'
+    id 'java-library'
+}
+
+group = "org.cland.alice"
+version = "0.1.0"
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.slf4j:slf4j-api:2.0.16'
+
+    // 契约 + 宿主（不引 core）
+    implementation project(':alice-agent-proto')
+    implementation project(':alice-agent-runtime')
+    // SPI（AliceFacade；bootstrap 不编译期依赖门面，无环 ✓）
+    implementation project(':alice-bootstrap')
+
+    // Test
+    testImplementation 'org.apache.groovy:groovy:4.0.30'
+    testImplementation 'org.spockframework:spock-core:2.4-groovy-4.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation project(':alice-agent-proto')
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+    modularity.inferModulePath = true
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 25
+    options.encoding = 'UTF-8'
+}
+
+tasks.withType(GroovyCompile).configureEach {
+    sourceCompatibility = '25'
+    targetCompatibility = '25'
+    options.encoding = 'UTF-8'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}

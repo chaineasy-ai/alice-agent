@@ -6,7 +6,7 @@ Each probe invokes EnvAdapterHoleTest directly via Gradle JavaExec (runHoleTest)
 exercising module boundary without going through unit test runners.
 
 See:
-  docs/alice-agent-command/e2e/case-env-adapter.md
+  docs/alice-agent-proto/e2e/case-env-adapter.md
   docs/alice-env-adapter/e2e/scene-env-adapter-endpoints.md
 """
 

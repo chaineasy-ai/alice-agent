@@ -6,7 +6,7 @@ All 9 probes run in a single Gradle JavaExec invocation (key="all") to avoid
 Gradle daemon overhead/crashes from repeated invocations.
 
 See:
-  docs/alice-agent-command/e2e/case-tool-gateway.md
+  docs/alice-agent-proto/e2e/case-tool-gateway.md
   docs/alice-tool-gateway/e2e/scene-tool-gateway-endpoints.md
 """
 

@@ -1,17 +1,21 @@
 ---
-title: "alice-facade-tui DESIGN"
-summary: "TUI facade design - JLine 3-based terminal UI, AgentCommand dispatch, prompt management"
+title: "alice-facade-tui DESIGN（UI 适配层）"
+summary: "TUI facade design - JLine 3-based terminal UI, AgentCommand dispatch, prompt management（事件源可换 runtime EventStream）"
 read_when:
   - "implementing or modifying TUI facade"
   - "understanding slash command flow"
   - "managing prompts in TUI"
 scope:
   - "alice-facade-tui"
-  - "alice-agent-command"
+  - "alice-agent-proto"
 status: "active"
-updated: "2026-07-03"
+updated: "2026-09-19"
 ---
 # alice-facade-tui 设计文档
+
+> **本次调整（2026-09-19）**：定位确认 = **UI 适配层（面向人）**；事件桥接的输入源可切换为
+> `alice-agent-runtime` 的 `EventStream`（门面不感知传输）；模块依赖名随 `alice-agent-proto` /
+> 新增 `alice-agent-runtime` 同步。工作项见 `docs/release/20260919/协议层转正与门面收敛-清单.md`。
 ## 目录
 1. 模块概述
 2. 实体关系图

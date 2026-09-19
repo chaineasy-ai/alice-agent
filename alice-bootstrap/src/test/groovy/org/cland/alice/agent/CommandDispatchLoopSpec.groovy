@@ -8,11 +8,11 @@
  * 仅验证 dispatch switch 表达式能接收所有 AgentCommand 子类型并正确路由。
  *
  * 注意：alice-bootstrap 使用 SPI 发现 facade 模块。以下测试依赖于
- *       alice-facade-cmd 在测试 classpath 上（通过 testImplementation 引入）。
+ *       alice-facade-cli 在测试 classpath 上（通过 testImplementation 引入）。
  */
 package org.cland.alice.agent
 
-import org.cland.alice.agent.command.*
+import org.cland.alice.agent.proto.*
 import org.cland.alice.model.Call
 import org.cland.alice.model.ModelProvider
 import spock.lang.Specification
@@ -83,7 +83,7 @@ class CommandDispatchLoopSpec extends Specification {
 
         then:
         cmd instanceof ExecutionCmd.AcquireGoalCmd
-        org.cland.alice.facade.cmd.AliceCliLauncher.dispatchCommand("/run 写测试") == org.cland.alice.facade.cmd.AliceCliLauncher.EXIT_SUCCESS
+        org.cland.alice.facade.cli.AliceCliLauncher.dispatchCommand("/run 写测试") == org.cland.alice.facade.cli.AliceCliLauncher.EXIT_SUCCESS
     }
 
     def "CLI dispatchCommand /exec 分发到 ExecuteRawCmd"() {
@@ -92,7 +92,7 @@ class CommandDispatchLoopSpec extends Specification {
 
         then:
         cmd instanceof ExecutionCmd.ExecuteRawCmd
-        org.cland.alice.facade.cmd.AliceCliLauncher.dispatchCommand("/exec ls") == org.cland.alice.facade.cmd.AliceCliLauncher.EXIT_SUCCESS
+        org.cland.alice.facade.cli.AliceCliLauncher.dispatchCommand("/exec ls") == org.cland.alice.facade.cli.AliceCliLauncher.EXIT_SUCCESS
     }
 
     def "CLI dispatchCommand /skill 分发到 RegisterSkillCmd"() {
@@ -101,8 +101,8 @@ class CommandDispatchLoopSpec extends Specification {
 
         then:
         cmd instanceof CapabilityCmd.RegisterSkillCmd
-        org.cland.alice.facade.cmd.AliceCliLauncher.dispatchCommand("/skill my-tool") ==
-            org.cland.alice.facade.cmd.AliceCliLauncher.EXIT_SUCCESS
+        org.cland.alice.facade.cli.AliceCliLauncher.dispatchCommand("/skill my-tool") ==
+            org.cland.alice.facade.cli.AliceCliLauncher.EXIT_SUCCESS
     }
 
     def "CLI dispatchCommand /rules 分发到 UpdateRulesCmd"() {
@@ -111,8 +111,8 @@ class CommandDispatchLoopSpec extends Specification {
 
         then:
         cmd instanceof CapabilityCmd.UpdateRulesCmd
-        org.cland.alice.facade.cmd.AliceCliLauncher.dispatchCommand("/rules my.prompt") ==
-            org.cland.alice.facade.cmd.AliceCliLauncher.EXIT_SUCCESS
+        org.cland.alice.facade.cli.AliceCliLauncher.dispatchCommand("/rules my.prompt") ==
+            org.cland.alice.facade.cli.AliceCliLauncher.EXIT_SUCCESS
     }
 
     def "CLI dispatchCommand /reload 分发到 ReloadKernelCmd"() {
@@ -121,8 +121,8 @@ class CommandDispatchLoopSpec extends Specification {
 
         then:
         cmd instanceof CapabilityCmd.ReloadKernelCmd
-        org.cland.alice.facade.cmd.AliceCliLauncher.dispatchCommand("/reload") ==
-            org.cland.alice.facade.cmd.AliceCliLauncher.EXIT_SUCCESS
+        org.cland.alice.facade.cli.AliceCliLauncher.dispatchCommand("/reload") ==
+            org.cland.alice.facade.cli.AliceCliLauncher.EXIT_SUCCESS
     }
 
     def "CLI dispatchCommand /model 分发到 SwitchModelCmd"() {
@@ -132,8 +132,8 @@ class CommandDispatchLoopSpec extends Specification {
         then:
         cmd instanceof AlignmentCmd.SwitchModelCmd
         (cmd as AlignmentCmd.SwitchModelCmd).modelId() == "gpt-4o"
-        org.cland.alice.facade.cmd.AliceCliLauncher.dispatchCommand("/model gpt-4o") ==
-            org.cland.alice.facade.cmd.AliceCliLauncher.EXIT_SUCCESS
+        org.cland.alice.facade.cli.AliceCliLauncher.dispatchCommand("/model gpt-4o") ==
+            org.cland.alice.facade.cli.AliceCliLauncher.EXIT_SUCCESS
     }
 
     def "CLI dispatchCommand /new 分发到 ResetSessionCmd"() {
@@ -142,8 +142,8 @@ class CommandDispatchLoopSpec extends Specification {
 
         then:
         cmd instanceof ControlCmd.ResetSessionCmd
-        org.cland.alice.facade.cmd.AliceCliLauncher.dispatchCommand("/new") ==
-            org.cland.alice.facade.cmd.AliceCliLauncher.EXIT_SUCCESS
+        org.cland.alice.facade.cli.AliceCliLauncher.dispatchCommand("/new") ==
+            org.cland.alice.facade.cli.AliceCliLauncher.EXIT_SUCCESS
     }
 
     def "CLI dispatchCommand /feedback 分发到 FeedbackCmd"() {
@@ -153,8 +153,8 @@ class CommandDispatchLoopSpec extends Specification {
         then:
         cmd instanceof ControlCmd.FeedbackCmd
         (cmd as ControlCmd.FeedbackCmd).message() == "请简化输出"
-        org.cland.alice.facade.cmd.AliceCliLauncher.dispatchCommand("/feedback 请简化输出") ==
-            org.cland.alice.facade.cmd.AliceCliLauncher.EXIT_SUCCESS
+        org.cland.alice.facade.cli.AliceCliLauncher.dispatchCommand("/feedback 请简化输出") ==
+            org.cland.alice.facade.cli.AliceCliLauncher.EXIT_SUCCESS
     }
 
     def "CLI dispatchCommand /exit 分发到 InterruptCmd"() {
@@ -164,8 +164,8 @@ class CommandDispatchLoopSpec extends Specification {
         then:
         cmd instanceof ControlCmd.InterruptCmd
         (cmd as ControlCmd.InterruptCmd).cause() == "user-exit"
-        org.cland.alice.facade.cmd.AliceCliLauncher.dispatchCommand("/exit") ==
-            org.cland.alice.facade.cmd.AliceCliLauncher.EXIT_SUCCESS
+        org.cland.alice.facade.cli.AliceCliLauncher.dispatchCommand("/exit") ==
+            org.cland.alice.facade.cli.AliceCliLauncher.EXIT_SUCCESS
     }
 
     def "CLI dispatchCommand /clear 分发到 ClearContextCmd"() {
@@ -175,8 +175,8 @@ class CommandDispatchLoopSpec extends Specification {
         then:
         cmd instanceof ControlCmd.ClearContextCmd
         (cmd as ControlCmd.ClearContextCmd).reason() == "clear-context"
-        org.cland.alice.facade.cmd.AliceCliLauncher.dispatchCommand("/clear") ==
-            org.cland.alice.facade.cmd.AliceCliLauncher.EXIT_SUCCESS
+        org.cland.alice.facade.cli.AliceCliLauncher.dispatchCommand("/clear") ==
+            org.cland.alice.facade.cli.AliceCliLauncher.EXIT_SUCCESS
     }
 
     def "CLI dispatchCommand /context 分发到 ViewContextCmd"() {
@@ -186,8 +186,8 @@ class CommandDispatchLoopSpec extends Specification {
         then:
         cmd instanceof ControlCmd.ViewContextCmd
         (cmd as ControlCmd.ViewContextCmd).reason() == "view-context"
-        org.cland.alice.facade.cmd.AliceCliLauncher.dispatchCommand("/context") ==
-            org.cland.alice.facade.cmd.AliceCliLauncher.EXIT_SUCCESS
+        org.cland.alice.facade.cli.AliceCliLauncher.dispatchCommand("/context") ==
+            org.cland.alice.facade.cli.AliceCliLauncher.EXIT_SUCCESS
     }
 
     def "CLI dispatchCommand /compact 分发到 CompactContextCmd"() {
@@ -197,8 +197,8 @@ class CommandDispatchLoopSpec extends Specification {
         then:
         cmd instanceof ControlCmd.CompactContextCmd
         (cmd as ControlCmd.CompactContextCmd).reason() == "compact-context"
-        org.cland.alice.facade.cmd.AliceCliLauncher.dispatchCommand("/compact") ==
-            org.cland.alice.facade.cmd.AliceCliLauncher.EXIT_SUCCESS
+        org.cland.alice.facade.cli.AliceCliLauncher.dispatchCommand("/compact") ==
+            org.cland.alice.facade.cli.AliceCliLauncher.EXIT_SUCCESS
     }
 
     def "CLI dispatchCommand 自然语言默认当作 AcquireGoalCmd"() {
@@ -208,14 +208,14 @@ class CommandDispatchLoopSpec extends Specification {
         then:
         cmd instanceof ExecutionCmd.AcquireGoalCmd
         (cmd as ExecutionCmd.AcquireGoalCmd).goal() == "帮我查天气"
-        org.cland.alice.facade.cmd.AliceCliLauncher.dispatchCommand("帮我查天气") ==
-            org.cland.alice.facade.cmd.AliceCliLauncher.EXIT_SUCCESS
+        org.cland.alice.facade.cli.AliceCliLauncher.dispatchCommand("帮我查天气") ==
+            org.cland.alice.facade.cli.AliceCliLauncher.EXIT_SUCCESS
     }
 
     def "CLI dispatchCommand 未知命令返回 EXIT_PARAM_ERROR"() {
         expect:
-        org.cland.alice.facade.cmd.AliceCliLauncher.dispatchCommand("/unknown") ==
-            org.cland.alice.facade.cmd.AliceCliLauncher.EXIT_PARAM_ERROR
+        org.cland.alice.facade.cli.AliceCliLauncher.dispatchCommand("/unknown") ==
+            org.cland.alice.facade.cli.AliceCliLauncher.EXIT_PARAM_ERROR
     }
 
     // ================================================================
@@ -224,8 +224,8 @@ class CommandDispatchLoopSpec extends Specification {
 
     def "CLI dispatchCommand /feedback with empty message 返回 EXIT_SUCCESS"() {
         expect:
-        org.cland.alice.facade.cmd.AliceCliLauncher.dispatchCommand("/feedback") ==
-            org.cland.alice.facade.cmd.AliceCliLauncher.EXIT_SUCCESS
+        org.cland.alice.facade.cli.AliceCliLauncher.dispatchCommand("/feedback") ==
+            org.cland.alice.facade.cli.AliceCliLauncher.EXIT_SUCCESS
     }
 
     // ================================================================
@@ -239,8 +239,8 @@ class CommandDispatchLoopSpec extends Specification {
         then:
         cmd instanceof RoutineTimeCmd.RegisterRoutineCmd
         (cmd as RoutineTimeCmd.RegisterRoutineCmd).cronExpression() == "0 */5 * * * ?"
-        org.cland.alice.facade.cmd.AliceCliLauncher.dispatchCommand("/routine 0 */5 * * * ?") ==
-            org.cland.alice.facade.cmd.AliceCliLauncher.EXIT_SUCCESS
+        org.cland.alice.facade.cli.AliceCliLauncher.dispatchCommand("/routine 0 */5 * * * ?") ==
+            org.cland.alice.facade.cli.AliceCliLauncher.EXIT_SUCCESS
     }
 
     def "CLI dispatchCommand /routine without args 分发到 RegisterRoutineCmd"() {
@@ -250,8 +250,8 @@ class CommandDispatchLoopSpec extends Specification {
         then:
         cmd instanceof RoutineTimeCmd.RegisterRoutineCmd
         (cmd as RoutineTimeCmd.RegisterRoutineCmd).cronExpression() == ""
-        org.cland.alice.facade.cmd.AliceCliLauncher.dispatchCommand("/routine") ==
-            org.cland.alice.facade.cmd.AliceCliLauncher.EXIT_SUCCESS
+        org.cland.alice.facade.cli.AliceCliLauncher.dispatchCommand("/routine") ==
+            org.cland.alice.facade.cli.AliceCliLauncher.EXIT_SUCCESS
     }
 
     def "完整链路测试 — 全指令集逐一验证 dispatch 不抛出异常"() {
@@ -276,8 +276,8 @@ class CommandDispatchLoopSpec extends Specification {
         for (def input : inputs) {
             def cmd = AgentCommand.parse(input, SESSION, TRACE)
             cmd != null
-            def exitCode = org.cland.alice.facade.cmd.AliceCliLauncher.dispatchCommand(input)
-            assert exitCode == org.cland.alice.facade.cmd.AliceCliLauncher.EXIT_SUCCESS
+            def exitCode = org.cland.alice.facade.cli.AliceCliLauncher.dispatchCommand(input)
+            assert exitCode == org.cland.alice.facade.cli.AliceCliLauncher.EXIT_SUCCESS
         }
     }
 }

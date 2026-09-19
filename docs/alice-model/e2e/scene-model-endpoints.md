@@ -15,7 +15,7 @@ updated: "2026-06-19"
 
 5 hole probes into the `alice-model` module.
 
-**Case doc**: `docs/alice-agent-command/e2e/case-model.md`
+**Case doc**: `docs/alice-agent-proto/e2e/case-model.md`
 
 ## 2. Probe Map
 

@@ -1,11 +1,11 @@
 package org.cland.alice.facade.tui.command;
 
-import org.cland.alice.agent.command.AgentCommand;
+import org.cland.alice.agent.proto.AgentCommand;
 
 /**
  * 斜杠命令定义，对应设计文档 §7.3 的斜杠命令表。
  *
- * <p>现在基于 {@link org.cland.alice.agent.command.AgentCommand} 抽象指令层实现。
+ * <p>现在基于 {@link org.cland.alice.agent.proto.AgentCommand} 抽象指令层实现。
  *
  * <p>命令分为三类：
  *

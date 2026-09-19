@@ -13,17 +13,26 @@ scope:
   - "alice-tool-gateway"
   - "alice-guardrail"
   - "alice-memory-vault"
-  - "alice-agent-command"
-  - "alice-facade-cmd"
+  - "alice-agent-proto"
+  - "alice-facade-cli"
   - "alice-facade-tui"
-  - "alice-facade-web"
+  - "alice-facade-rpc"
 status: "active"
-updated: "2026-07-03"
+updated: "2026-09-19"
 ---
 
 # Changelog
 
 ## Unreleased
+
+### BREAKING
+
+- **模块改名（协议层转正 + 门面命名修正，2026-09-19）**: `alice-agent-command` → **`alice-agent-proto`**（协议契约层：
+  命令入 + 事件出 + Dispatcher 端口 + codec/版本，见 `docs/alice-agent-proto/DESIGN.md`）；
+  `alice-facade-cmd` → **`alice-facade-cli`**（UI 适配层，消除 "cmd" 撞名）。
+  同步项：目录/包名（`org.cland.alice.agent.proto`、`org.cland.alice.facade.cli`）、JPMS 模块名
+  （`alice.agent.proto.main`、`alice.agent.facade.cli.main`）、Gradle 工程名、SPI 实现类名与全部 import/文档。
+  外部引用方需同步改名；**功能行为不变**（纯机械重构，已过 `./gradlew clean build`）。
 
 ### Refactoring
 
@@ -181,7 +190,56 @@ updated: "2026-07-03"
   - `ScreenManager`: 使用 `ObservationResult.elapsedSec()` 替代硬编码的 `addTiming(0.0)`
 - **PPAO observe 事件使用 rawData**: 工具执行结果从 `summary`（截断+ `"Tool [X] returned: "` 前缀）改为 `rawData`（完整原生输出），在 ObserveBlock 中展示完整内容
 
+### Docs
+
+- **Pi 通信对接协议（`docs/pi-integration/`）**: 整理 cland-reverser × pi 实战的三层通信方式——
+  ① stdio RPC（JSONL 命令/事件帧、framing 规则、轮结束判定＝`agent_settled`、usage 按轮累计）
+  ② 常驻 worker HTTP（`/health` `/prompt` `/steer` `/abort` `/new_session` `/shutdown` 契约与轮次并发语义）
+  ③ 调度唤醒/插话/自愈通道（唤醒口 + 收件箱、**签收权在最后一跳**）；
+  附会话与生命周期约定（启动即新会话/显式续接）、观测埋点口径（round/tool/skill + trace_id）、
+  alice-agent 落地清单（MVP → RPC → HTTP → 会话落盘 → 埋点 → 自愈）与 9 条踩坑；供 alice-agent 实现同构接口被外部调度器驱动。
+
 ### Features
+
+- **启动横幅（七块）**: 新增 `alice-agent-runtime.compose.StartupBanner` —— 启动时打印
+  `[Context]`（AGENTS.md↑找工程根 · rules/prompts 数）`[Skills]`（ToolRegistry 工具）`[Prompts]`（managed prompts）
+  `[Extensions]`（第一方/第三方）`[agents]`（主/子 Agent）`[runtime]`（session/JVM/OS/transports）`[loop]`（maxIterations/graphKernel/skipMicro）；
+  由 `AgentComposer` 采集（门面不碰 core）；已接线三个入口：`AliceRpcFacade`（stdio 走 stderr，stdout 保纯 JSONL）、
+  `facade-cli`（挪到工具注册后 ⇒ `[Skills]` 有内容）、`facade-tui`；测试 +3。
+
+- **`--json` 帧并入统一 codec（C2）**: `facade-cli` 的 `JsonOutputRenderer` 不再自造 JSON，改为输出协议 v1
+  `StepEvent` 帧（JSONL）：Continue→`TOOL_CALL`/`TOOL_RESULT`、Finish→`SUMMARY`、Failure→`ERROR`、
+  `renderFinal/renderError`→补 `DONE`；`OutputRenderer.create()` 注入 sessionId 与统一 traceId；测试 8 例。
+
+- **组合根与 RPC 门面接线（C4 P0-P2）**: 新增 `alice-agent-runtime.compose.AgentComposer`（唯一装配点：AgentConfig + WAL +
+  Guardrail + 内置工具，对外只给 `AgentEngine`，不泄露 core 类型）与 `compose.Ids`（会话=雪花 / trace=12 位 UUID，终结门面各自造 ID）；
+  `alice-facade-rpc` 实现 bootstrap SPI：`--facade rpc`（HTTP，默认 8080）或 `--mode rpc`（stdio JSONL）；
+  冒烟：bootstrap 真实进程起服 → `/api/v1/health` 200、`/chat/interrupt` 200；测试 +7（组合根 4 + 门面 3）。
+
+- **HTTP RPC 2.0 门面 `alice-facade-rpc`（新模块）**: 协议适配层落地——请求体 = 协议 v1 命令信封（与 stdio 同构）、
+  响应帧 = StepEvent v1（SSE）；路由 `/api/v1/{command, session, chat/stream, chat/steer, chat/interrupt, health}`；
+  错误映射 400/404/409/503；MVP 用 JDK 内置 HttpServer + 虚拟线程（零三方依赖），只依赖 proto + runtime（不碰 core）。
+  顺带把 `AgentEngine.events()` 改为 runtime 自有抽象 `EngineEvents`（**修掉 core 类型泄露到 runtime 公开签名**，
+  引擎替身不再被迫依赖 core）；测试 +11。
+
+- **会话宿主 `alice-agent-runtime`（新模块）**: 把会话语义从门面/引擎收口——`AgentHost` 实现协议端口
+  `AgentCommandDispatcher`：一轮一锁（原子 CAS，实测 ReentrantLock 可重入/属主两坑会静默失效 ✗）、单写者、控制类不抢轮锁
+  （steer→注入 / abort→中止当轮 / new→清上下文）、内核 `EventStream` → `StepEvent` 映射、每轮必发 `DONE`（含 usage）、
+  `ERROR` 先发再收口、`health()` 快照；`engine.AgentEngine` 端口 + `CoreAgentEngine` 适配；
+  `transport.InProcessTransport` 直调（无序列化，`await` 阻塞收集到 DONE）；回放缓冲发布器（先执行后订阅不丢帧）。
+  依赖：proto（契约）+ core（引擎）；测试 +15（AgentHost 12 / InProcessTransport 3）。
+
+- **stdio JSONL 传输（`alice-agent-runtime`）**: `StdioJsonlTransport` —— 进程被外部调度器驱动（对应 pi `--mode rpc`）：
+  字节级按 `\n` 分帧（容忍 `\r\n`、UTF-8、**不用宽松 readLine**）、非法帧/未知命令/版本不支持 ⇒ `ERROR` 帧且不执行、
+  校验/忙分别映射 `ERROR(validation|busy)`、输出单写者 JSONL、EOF 残帧不静默丢；`runBlocking()` 供 CLI 入口；测试 +7。
+
+- **协议契约层转正（`alice-agent-proto`）**: 入方向新增 `ControlCmd.SteerCmd`（人工插话·忙时插队）与
+  `ControlCmd.AbortCmd`（中止当前轮·**会话保留**，与 `/exit` 退出进程语义区分），`AgentCommand.parse` 增 `/steer` `/abort`；
+  出方向新增 `event.StepEvent`（v1：v/type/sessionId/traceId/seq/ts/payload/usage，7 类事件）；
+  新增端口 `port.AgentCommandDispatcher`（`Flow.Publisher<StepEvent>`）+ 错误契约
+  `CommandValidationException`(→400) / `DispatcherBusyException`(→409)；新增 `codec/`（命令信封 + 命令/事件 JSON v1
+  编解码，Jackson 仅内部使用）；帧规范落 `docs/alice-agent-proto/PROTOCOL.md`（含兼容纪律与 pi 映射）。
+  测试：Spock +33（往返/兼容/异常），洞测试 CMD-P01 23/23、CMD-P02 8/8。
 
 - **TUI traceId 追踪 (`alice-facade-tui`)**: PPAO 事件携带 traceId，在 ThinkBlock step 标记中显示 traceId 短哈希。
   - `TuiEvent.NewThought`/`ActionExecuting`/`ObservationResult`: 新增 `traceId` 字段
@@ -209,6 +267,11 @@ updated: "2026-07-03"
   - `restoreLowerArea()`/`fullRedraw()`/`redrawScrollArea()`: 同步渲染队列状态行
 
 ### Fixes
+
+- **并发构建互踩 test-results（假失败，长期偶发）**: 两个 Gradle 构建并发时互删 `build/test-results` 中间文件，
+  表现为莫名的 `EOFException` / `NoSuchFileException: in-progress-results-generic.bin`（与代码无关 ✗）。治理：
+  ① 根 `build.gradle` 增**跨进程构建锁**（拿不到锁 ⇒ 明确报错 + 规避提示，不再写坏目录）；
+  ② 每个 Test 任务执行前清 `test-results/test`（上次崩溃遗留的半截结果自愈）。
 
 - **alice-facade-tui/渲染循环输入活跃期误写终端 — 导致二次交互时光标下移**: 渲染线程在 `inputActive=true` 时仍调用 `redrawScrollArea()` 写入终端，与 JLine `readLine()` 竞争光标控制权。第二次 `readLine()` 调用时光标已偏离 inputRow。
   - `renderLoop()`: inputActive 时不再调用 `redrawScrollArea()`，仅标记 `pendingRedraw`，由主线程在 `readLine()` 返回后处理

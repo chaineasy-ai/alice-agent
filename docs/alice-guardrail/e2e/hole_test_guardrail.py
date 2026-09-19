@@ -6,7 +6,7 @@ Each probe invokes GuardrailHoleTest directly via Gradle JavaExec (runHoleTest),
 exercising module boundary without going through unit test runners.
 
 See:
-  docs/alice-agent-command/e2e/case-guardrail.md
+  docs/alice-agent-proto/e2e/case-guardrail.md
   docs/alice-guardrail/e2e/scene-guardrail-endpoints.md
 """
 

@@ -42,7 +42,7 @@ subprojects {
 }
 ```
 
-所有子模块（`alice-agent-command`、`alice-model`、`alice-core-agent` 等）均可直接使用 MapStruct。
+所有子模块（`alice-agent-proto`、`alice-model`、`alice-core-agent` 等）均可直接使用 MapStruct。
 
 ## 基本用法
 
@@ -81,7 +81,7 @@ public interface ModelMapper {
 
 | 场景 | 说明 |
 |------|------|
-| API DTO ↔ 领域模型 | 如果 `alice-facade-web` 模块需要 REST API 响应 |
+| API DTO ↔ 领域模型 | 如果 `alice-facade-rpc` 模块需要 REST API 响应 |
 | 配置 POJO ↔ 配置对象 | 从文件/环境变量加载的配置映射到强类型配置类 |
 | 持久化实体 ↔ 领域对象 | 如果引入数据库持久化 |
 | 工具模型转换 | `Tool` ↔ `McpTool`、`Resource` ↔ `ResourceResult` 等 |

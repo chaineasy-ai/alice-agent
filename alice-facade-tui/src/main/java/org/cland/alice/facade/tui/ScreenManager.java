@@ -11,7 +11,7 @@ import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
-import org.cland.alice.agent.command.AgentCommand;
+import org.cland.alice.agent.proto.AgentCommand;
 import org.cland.alice.facade.tui.bridge.EventBridge;
 import org.cland.alice.facade.tui.bridge.TuiEvent;
 import org.cland.alice.facade.tui.command.CommandHandler;

@@ -10,7 +10,7 @@ import org.cland.alice.facade.tui.command.SlashCommand
 import org.cland.alice.facade.tui.command.CommandHandler
 import org.cland.alice.facade.tui.bridge.TuiEvent
 import org.cland.alice.facade.tui.bridge.EventBridge
-import org.cland.alice.agent.command.*
+import org.cland.alice.agent.proto.*
 
 class TuiSpec extends Specification {
 
