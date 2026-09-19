@@ -17,6 +17,7 @@ module alice.agent.runtime.main {
   exports org.cland.alice.runtime;
   exports org.cland.alice.runtime.compose;
   exports org.cland.alice.runtime.engine;
+  exports org.cland.alice.runtime.subagent;
   exports org.cland.alice.runtime.transport;
 
   requires alice.agent.proto.main;

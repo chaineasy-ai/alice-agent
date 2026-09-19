@@ -54,6 +54,9 @@ public class SubAgentManager implements AutoCloseable {
   private final Map<String, AcpClientWrapper> acpClients = new ConcurrentHashMap<>();
   private final Map<String, BlockingQueue<String>> messageQueues = new ConcurrentHashMap<>();
 
+  /** 子 Agent 执行端口（缺省进程内 Agent；注入契约实现 ⇒ 跨进程只换传输 ✓）。 */
+  private SubAgentRunner runner = new DefaultSubAgentRunner();
+
   /**
    * 创建子 Agent 编排器。
    *
@@ -96,6 +99,15 @@ public class SubAgentManager implements AutoCloseable {
     this.baseAgentConfig = config;
   }
 
+  /**
+   * 设置子 Agent 执行端口（企业级/契约替换用；缺省 {@link DefaultSubAgentRunner}）。
+   *
+   * @param runner 执行器（业务层应确保非 null）
+   */
+  public void setRunner(SubAgentRunner runner) {
+    this.runner = runner;
+  }
+
   // ──────────────────────────────────────────────────────────────────────────
   // 生命周期：spawn
   // ──────────────────────────────────────────────────────────────────────────
@@ -126,9 +138,10 @@ public class SubAgentManager implements AutoCloseable {
   }
 
   /**
-   * 内部方法：使用真实的 {@link Agent} 实例执行子 Agent 目标。
+   * 内部方法：执行子 Agent 目标（经 {@link SubAgentRunner} 端口）。
    *
-   * <p>为每个子 Agent 创建独立的 {@link Agent} 实例，具有独立的 Vertx 实例和 AgentExecutor。 子 Agent 执行完毕后，结果通过
+   * <p>缺省 {@link DefaultSubAgentRunner}：为每个子 Agent 创建独立 {@link Agent} 实例（同历史行为）； 注入契约实现（如 runtime 的
+   * {@code ContractSubAgentRunner}）即可让子 Agent 走 AgentHost + 传输， 跨进程只换传输。执行完毕后结果通过
    * registry.updateResult() 回传给父会话。
    */
   /**
@@ -164,10 +177,9 @@ public class SubAgentManager implements AutoCloseable {
    * registry.updateResult() 回传给父会话，并通过 {@link #notifyCompletion} 通知注册的监听器。
    */
   private void executeSubAgent(String subAgentId, String goal, String model) {
-    Agent subAgent = null;
     SubAgentResult result = null;
     try {
-      // 创建独立的 Agent 实例
+      // 创建独立的子 Agent 配置
       AgentConfig config =
           AgentConfig.builder()
               .defaultModelId(model != null ? model : baseAgentConfig.defaultModelId())
@@ -177,16 +189,14 @@ public class SubAgentManager implements AutoCloseable {
               .postVerifyEnabled(baseAgentConfig.postVerifyEnabled())
               .build();
 
-      subAgent = new Agent(subAgentId, config);
-
       logger.info(
           "Sub-agent {} executing goal='{}' with model={}",
           subAgentId,
           goal,
           config.defaultModelId());
 
-      // 同步阻塞 — ask() 内部使用 CountDownLatch 等待 PPAO 循环完成
-      String response = subAgent.ask(goal, config.defaultModelId());
+      // 端口化执行：缺省进程内 Agent（同历史行为）；注入契约实现即走 AgentHost + 传输（跨进程只换传输 ✓）
+      String response = runner.run(subAgentId, goal, config);
 
       registry.updateStatus(subAgentId, SubAgentStatus.COMPLETED);
       registry.updateResult(subAgentId, response);
@@ -216,14 +226,7 @@ public class SubAgentManager implements AutoCloseable {
               System.currentTimeMillis()
                   - registry.get(subAgentId).map(SubAgentRecord::createdAt).orElse(0L));
     } finally {
-      if (subAgent != null) {
-        try {
-          subAgent.close();
-        } catch (Exception e) {
-          logger.warn("Error closing sub-agent {}", subAgentId, e);
-        }
-      }
-      // 通知所有注册的监听器
+      // 生命周期归 runner（它负责创建/关闭）；这里只做完成通知
       if (result != null) {
         notifyCompletion(result);
       }

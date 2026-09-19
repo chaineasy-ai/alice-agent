@@ -201,6 +201,11 @@ updated: "2026-09-19"
 
 ### Features
 
+- **子 Agent 执行端口（B5）**: core 新增 `subagent.SubAgentRunner` + 默认 `DefaultSubAgentRunner`（保持原行为），
+  `SubAgentManager.setRunner()` 可注入替换；runtime 新增 `ContractSubAgentRunner` —— 子 Agent 也走协议契约
+  （组合根 → `AgentHost` → `InProcessTransport`），**跨进程只需换 `StdioJsonlTransport`**，`SubAgentManager` 不感知差异；
+  测试 +5。
+
 - **启动横幅（七块）**: 新增 `alice-agent-runtime.compose.StartupBanner` —— 启动时打印
   `[Context]`（AGENTS.md↑找工程根 · rules/prompts 数）`[Skills]`（ToolRegistry 工具）`[Prompts]`（managed prompts）
   `[Extensions]`（第一方/第三方）`[agents]`（主/子 Agent）`[runtime]`（session/JVM/OS/transports）`[loop]`（maxIterations/graphKernel/skipMicro）；
