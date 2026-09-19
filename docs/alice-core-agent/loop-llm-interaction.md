@@ -162,7 +162,7 @@ Example: ANALYZE SEARCH CODE GENERATE</task>   ← 期望输出：纯意图词�
 
 发送 `messages = [system, user]` + `tools`：
 
-- **system** = `ctx["__micro_system_prompt"]`（`buildMicroLoopSystemPrompt()` 静态缓存一次）：优先 `~/.alice/prompts/micro_loop.ftl`，否则内置 `micro_loop.ftl`。⚠️ 内置版仅为**骨架占位**（`<read_files>` 段含 `path1/path2/…` 示例文本），不含可执行规则；真正的执行规范依赖 `buildRules("micro_loop")` 从用户 rules 注入。
+- **system** = `ctx["__micro_system_prompt"]`（`buildMicroLoopSystemPrompt()` 静态缓存一次）：优先 `~/.alice/prompts/micro_loop.ftl`，否则内置 `micro_loop.ftl`。内置版已包含可执行规范（角色设定 + 工具使用规则 + user 消息格式说明）；`buildRules("micro_loop")` 从用户 rules 注入的项目约定会追加在末尾。
 - **user** 分两种形态：
 
 | 轮次 | 内容 | 形态 |

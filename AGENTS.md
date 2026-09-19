@@ -75,7 +75,7 @@ Distribution archives are in `alice-bootstrap/build/distributions`.
 ```bash
 ./gradlew installDist
 ```
-Application binaries are at `alice-bootstrap/build/install/alice-agent/bin/`.
+Application binaries are at `alice-bootstrap/build/install/alice/bin/` (the application name is `alice`).
 
 ## Key Source Files
 
