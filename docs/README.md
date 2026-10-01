@@ -49,6 +49,12 @@ updated: "2026-09-19"
 | [pi-integration/rpc-stdio.md](./pi-integration/rpc-stdio.md) | 层① stdio RPC（JSONL）：启动参数、与 framing 规则、命令/事件帧、轮结束判定（`agent_settled`）与 usage 累计 |
 | [pi-integration/worker-http.md](./pi-integration/worker-http.md) | 层② 常驻 worker HTTP API：`/health` `/prompt` `/steer` `/abort` `/new_session` `/shutdown` 契约、轮次并发语义、客户端行为与 curl 验收 |
 
+## 管理
+
+| 文档 | 说明 |
+|------|------|
+| [管理/接管与路线图-20261001.md](./管理/接管与路线图-20261001.md) | **接管建档（#173）**：T1 构建测试基线 + CI 红根因、T2 资产盘点（模块/docs/specs/todos/e2e）、T3 M1–M3 路线图与出口判据、T4 M1 第一切片（#174 取消语义）、T5 治理建议 |
+
 ## 发布 / 工作清单
 
 | 文档 | 说明 |
