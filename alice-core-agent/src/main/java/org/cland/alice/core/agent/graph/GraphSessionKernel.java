@@ -23,9 +23,12 @@ import org.cland.alice.core.agent.kernel.graph.EffectOutcome;
 import org.cland.alice.core.agent.kernel.graph.GraphNode;
 import org.cland.alice.core.agent.kernel.graph.KernelTraceListener;
 import org.cland.alice.core.agent.kernel.graph.R0Interpreter;
+import org.cland.alice.core.agent.kernel.graph.SafePoint;
 import org.cland.alice.core.agent.kernel.graph.SessionOutcome;
 import org.cland.alice.core.agent.kernel.graph.StandardSkeleton;
 import org.cland.alice.core.agent.kernel.graph.ToolCallReq;
+import org.cland.alice.core.agent.wal.GraphCheckpointAdapter;
+import org.cland.alice.core.agent.wal.WalStore;
 import org.cland.alice.core.planner.PlannerService;
 import org.cland.alice.tool.gateway.ToolRegistry;
 import org.slf4j.Logger;
@@ -64,6 +67,9 @@ public final class GraphSessionKernel implements Loop {
 
   /** 取消标志（安全点语义：下个 execute 前生效）。 */
   private volatile boolean cancelled;
+
+  /** 可选 WAL/Checkpoint 存储（§3.2 ⑥）。为 null 时图内核行为与现状完全一致。 */
+  private volatile WalStore walStore;
 
   private volatile String lastSessionId;
   private volatile SessionOutcome lastOutcome;
@@ -216,13 +222,78 @@ public final class GraphSessionKernel implements Loop {
             revisionBudget,
             taoEffectBudget,
             traceBridge());
-    return skeleton.run(
-        Map.of(
-            R0Interpreter.OPTION_MAX_STEPS,
-            maxSteps,
-            // 取消安全点（#174）：解释器在每个节点边界检查；展开帧（子图）内同样生效
-            R0Interpreter.OPTION_CANCEL_CHECK,
-            (java.util.function.BooleanSupplier) () -> cancelled));
+    Map<String, Object> options = new LinkedHashMap<>();
+    options.put(R0Interpreter.OPTION_MAX_STEPS, maxSteps);
+    // 取消安全点（#174）：解释器在每个节点边界检查；展开帧（子图）内同样生效
+    options.put(
+        R0Interpreter.OPTION_CANCEL_CHECK, (java.util.function.BooleanSupplier) () -> cancelled);
+    if (walStore != null) {
+      // WAL/Checkpoint 接入（§3.2 ⑥）：安全点 sink（节流到 goal 边界/会话 terminal）
+      options.put(
+          R0Interpreter.OPTION_CHECKPOINT_SINK,
+          (org.cland.alice.core.agent.kernel.graph.CheckpointSink)
+              sp -> persistSafePoint(sessionId, sp));
+      SafePoint resume = loadResume(sessionId);
+      if (resume != null) {
+        options.put(R0Interpreter.OPTION_RESUME, resume);
+        logger.info(
+            "[GraphSessionKernel] resume session={} from node={} steps={}",
+            sessionId,
+            resume.pos(),
+            resume.steps());
+      }
+    }
+    return skeleton.run(options);
+  }
+
+  /**
+   * 可选注入 WAL/Checkpoint 存储（链式）。
+   *
+   * <p>不注入 ⇒ 图内核行为与现状完全一致（安全点 sink/恢复均不生效）。注入后：`execute` 对已有 Checkpoint 的 sessionId
+   * 自动恢复（日志可观测）；安全点按 {@link #isCheckpointBoundary(String)} 节流落盘。
+   */
+  public GraphSessionKernel walStore(WalStore store) {
+    this.walStore = store;
+    return this;
+  }
+
+  /**
+   * 显式恢复入口：以 sessionId 加载最新图内核 Checkpoint 并续跑（恢复 = 回放 + 重路由，§3.2 ⑥）。
+   *
+   * <p>无 Checkpoint 时按新会话执行（等价普通 {@link #execute}）。
+   */
+  public Future<SessionResult> resume(String sessionId) {
+    Objects.requireNonNull(sessionId, "sessionId");
+    return execute(new SessionRequest(sessionId, "", defaultModelId, Map.of()));
+  }
+
+  private SafePoint loadResume(String sessionId) {
+    WalStore store = walStore;
+    if (store == null) {
+      return null;
+    }
+    return store
+        .getLatestCheckpoint(sessionId)
+        .flatMap(GraphCheckpointAdapter::fromCheckpoint)
+        .orElse(null);
+  }
+
+  private void persistSafePoint(String sessionId, SafePoint safePoint) {
+    WalStore store = walStore;
+    if (store == null || safePoint == null || !isCheckpointBoundary(safePoint.pos())) {
+      return;
+    }
+    store.saveCheckpoint(GraphCheckpointAdapter.toCheckpoint(sessionId, safePoint));
+    logger.info(
+        "[GraphSessionKernel] checkpoint saved session={} node={} steps={}",
+        sessionId,
+        safePoint.pos(),
+        safePoint.steps());
+  }
+
+  /** 安全点落盘节流：仅 goal 边界（verifyPost gate）与会话 terminal。 */
+  private static boolean isCheckpointBoundary(String pos) {
+    return StandardSkeleton.N_VP.equals(pos) || StandardSkeleton.N_SESSION_END.equals(pos);
   }
 
   private int maxStepsOf(SessionRequest request) {

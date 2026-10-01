@@ -54,7 +54,7 @@ updated: "2026-10-01"
 
 ## 2. 图内核能力补齐
 
-- [ ] WAL/Checkpoint 接入图内核：Ledger trace/产物快照 → Checkpoint；恢复 = 回放 + 重路由（§3.2 ⑥） [priority:: high] [owner:: alice-core-agent]
+- [x] WAL/Checkpoint 接入图内核：Ledger trace/产物快照 → Checkpoint；恢复 = 回放 + 重路由（§3.2 ⑥） [priority:: high] [owner:: alice-core-agent] [date:: 2026-10-01] [verify:: LedgerStateSpec 2 / GraphCheckpointAdapterSpec 4 / R0InterpreterResumeSpec 2 / GraphSessionKernelResumeSpec 2 · ./gradlew check 全绿]
 - [x] verifyPost(g) 规则适配：GuardrailVerificatorAdapter 语义 → GatePolicy（D8：模型判据提交 + 规则后检 + 迭代预算兜底，维持原语义） [priority:: high] [owner:: alice-core-agent, alice-guardrail] [date:: 2026-10-01] [verify:: VerifyPostGatePolicySpec 12 例（parity 矩阵）/ AgentGraphSwitchSpec 3 例 / ./gradlew check 全绿]
 - [ ] HITL gate：HitlChannel.suspend 挂起/恢复/超时语义接入骨架（§4 ② hook） [priority:: medium]
 - [ ] 多级预算（D12）定标：goal 内效果数上限、嵌套子图深度上限、会话 token 预算注解默认值（现 revisionBudget=2/taoEffectBudget=config.maxMicroDepth/maxSteps=10000 需评审） [priority:: medium]

@@ -38,6 +38,18 @@ public final class R0Interpreter {
    */
   public static final String OPTION_CANCEL_CHECK = "cancelCheck";
 
+  /**
+   * 安全点回调键（run options，值为 {@link CheckpointSink}）：在每个节点边界（{@code steps++} 之前）通知装配方， 用于
+   * WAL/Checkpoint 落点（§3.2 ⑥）。回调抛异常即中止遍历（故障注入/恢复演练）。
+   */
+  public static final String OPTION_CHECKPOINT_SINK = "checkpointSink";
+
+  /**
+   * 恢复键（run options，值为 {@link SafePoint}）：从安全点恢复续跑（回放 + 重路由）——重置账本、游标与解释器局部状态， 自 {@code
+   * safePoint.pos()} 继续遍历。
+   */
+  public static final String OPTION_RESUME = "resumeFrom";
+
   /** 默认遍历步数预算。 */
   public static final int DEFAULT_MAX_STEPS = 10_000;
 
@@ -95,16 +107,47 @@ public final class R0Interpreter {
             ? n.intValue()
             : DEFAULT_MAX_STEPS;
 
-    String pos = graph.startId();
-    String lastObservation = "";
-    ToolCallReq pendingEffect = null;
-    Map<String, Integer> effectRuns = new HashMap<>();
-    List<Frame> frames = new ArrayList<>();
-    frames.add(new Frame(graph, graph.terminalExits()));
+    CheckpointSink sink = sinkOf(opts);
+    SafePoint resume = resumeOf(opts);
 
-    int steps = 0;
+    String pos;
+    String lastObservation;
+    ToolCallReq pendingEffect;
+    Map<String, Integer> effectRuns;
+    List<Frame> frames;
+    int steps;
+    if (resume != null) {
+      // 恢复 = 回放 + 重路由（§3.2 ⑥）：账本/游标/局部状态由安全点重置，自 pos 继续遍历
+      ledger.restore(resume.ledgerState());
+      pos = resume.pos();
+      lastObservation = resume.lastObservation() != null ? resume.lastObservation() : "";
+      pendingEffect = resume.pendingEffect();
+      effectRuns = new HashMap<>(resume.effectRuns());
+      frames = reconstructFrames(graph, assembly, pos);
+      steps = resume.steps();
+    } else {
+      pos = graph.startId();
+      lastObservation = "";
+      pendingEffect = null;
+      effectRuns = new HashMap<>();
+      frames = new ArrayList<>();
+      frames.add(new Frame(graph, graph.terminalExits()));
+      steps = 0;
+    }
+
     java.util.function.BooleanSupplier cancelCheck = cancelCheckOf(opts);
     while (true) {
+      // 安全点（§3.2 ⑥）：在 steps++ 之前通知，使恢复续跑的 trace 与不中断一次跑逐字一致
+      if (sink != null) {
+        sink.onSafePoint(
+            new SafePoint(
+                pos,
+                steps,
+                lastObservation,
+                pendingEffect,
+                Map.copyOf(effectRuns),
+                ledger.snapshot()));
+      }
       steps++;
       // 取消安全点（#174）：节点边界统一检查；命中即停止遍历、不执行当前节点（不产生副作用）
       if (cancelCheck != null && cancelCheck.getAsBoolean()) {
@@ -281,6 +324,37 @@ public final class R0Interpreter {
     return v instanceof java.util.function.BooleanSupplier b ? b : null;
   }
 
+  /** 安全点回调选项解析：非 CheckpointSink 视为未提供。 */
+  private static CheckpointSink sinkOf(Map<String, Object> opts) {
+    Object v = opts.get(OPTION_CHECKPOINT_SINK);
+    return v instanceof CheckpointSink s ? s : null;
+  }
+
+  /** 恢复选项解析：非 SafePoint 视为未提供（向后兼容）。 */
+  private static SafePoint resumeOf(Map<String, Object> opts) {
+    Object v = opts.get(OPTION_RESUME);
+    return v instanceof SafePoint sp ? sp : null;
+  }
+
+  /** 恢复重路由：由 {@code pos} 归属图回溯到根，重建展开帧栈（root → … → owner(pos)）。 */
+  private List<Frame> reconstructFrames(SessionGraph root, Assembly assembly, String pos) {
+    List<Frame> frames = new ArrayList<>();
+    frames.add(new Frame(root, root.terminalExits()));
+    SessionGraph owner = assembly.owners().get(pos);
+    java.util.Deque<SessionGraph> chain = new java.util.ArrayDeque<>();
+    while (owner != null && owner != root) {
+      chain.addFirst(owner);
+      owner = assembly.innerOwner().get(owner);
+    }
+    for (SessionGraph inner : chain) {
+      Frame f = assembly.frameOfInner().get(inner);
+      if (f != null) {
+        frames.add(f);
+      }
+    }
+    return frames;
+  }
+
   private SessionOutcome fail(Ledger ledger, int steps, String message) {
     return new SessionOutcome(
         SessionOutcome.Status.FAILED, message, steps, ledger.trace(), ledger.artifacts());
@@ -349,15 +423,21 @@ public final class R0Interpreter {
 
   // ========== 装配校验（prepare） ==========
 
-  /** 装配结果：全树节点 → 归属图。 */
-  private record Assembly(Map<String, GraphNode> nodes, Map<String, SessionGraph> owners) {}
+  /** 装配结果：全树节点 → 归属图 + 复合帧回溯（内层图 → 帧/父图）。 */
+  private record Assembly(
+      Map<String, GraphNode> nodes,
+      Map<String, SessionGraph> owners,
+      Map<SessionGraph, Frame> frameOfInner,
+      Map<SessionGraph, SessionGraph> innerOwner) {}
 
   private Assembly prepare(SessionGraph root) {
     Map<String, GraphNode> byId = new HashMap<>();
     Map<String, SessionGraph> ownerOf = new HashMap<>();
+    Map<SessionGraph, Frame> frameOfInner = new HashMap<>();
+    Map<SessionGraph, SessionGraph> innerOwner = new HashMap<>();
     List<CompositeSpec> composites = new ArrayList<>();
 
-    collect(root, null, byId, ownerOf, composites);
+    collect(root, null, byId, ownerOf, frameOfInner, innerOwner, composites);
 
     // 校验 1：terminal 出口绑定完整（顶层经 terminalExits；内层经其直接 CompositeSpec 绑定表）
     for (CompositeSpec spec : composites) {
@@ -380,7 +460,8 @@ public final class R0Interpreter {
       }
       resolveTarget(e.getValue(), byId);
     }
-    return new Assembly(Map.copyOf(byId), Map.copyOf(ownerOf));
+    return new Assembly(
+        Map.copyOf(byId), Map.copyOf(ownerOf), Map.copyOf(frameOfInner), Map.copyOf(innerOwner));
   }
 
   private void resolveTarget(String target, Map<String, GraphNode> byId) {
@@ -394,6 +475,8 @@ public final class R0Interpreter {
       SessionGraph unused,
       Map<String, GraphNode> byId,
       Map<String, SessionGraph> ownerOf,
+      Map<SessionGraph, Frame> frameOfInner,
+      Map<SessionGraph, SessionGraph> innerOwner,
       List<CompositeSpec> composites) {
     for (GraphNode node : graph.nodes().values()) {
       if (byId.containsKey(node.id())) {
@@ -405,7 +488,9 @@ public final class R0Interpreter {
       if (node.isComposite()) {
         CompositeSpec spec = node.composite();
         composites.add(spec);
-        collect(spec.inner(), graph, byId, ownerOf, composites);
+        frameOfInner.put(spec.inner(), new Frame(spec.inner(), spec.exitBindings()));
+        innerOwner.put(spec.inner(), graph);
+        collect(spec.inner(), graph, byId, ownerOf, frameOfInner, innerOwner, composites);
       }
     }
   }

@@ -290,7 +290,8 @@ public final class FileWalStore implements WalStore {
             checkpoint.stateNode(),
             checkpoint.variableSnapshot(),
             checkpoint.planSnapshot(),
-            checkpoint.createdAt());
+            checkpoint.createdAt(),
+            checkpoint.schemaVersion());
     Path file = dataDir.resolve(checkpoint.sessionId() + CHECKPOINT_SUFFIX);
     try {
       String json = mapper.writeValueAsString(stored);

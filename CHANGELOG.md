@@ -27,6 +27,16 @@ updated: "2026-10-01"
 
 ### Features
 
+- **图内核 WAL/Checkpoint 接入（`alice-core-agent`，M1-S3 · #178）**: 新增 `LedgerState`（账本快照）+
+  `Ledger.snapshot()/restore()`（回放无歧义）；`SafePoint`（节点边界可恢复快照：pos/steps/lastObservation/
+  pendingEffect/effectRuns/ledgerState）+ `CheckpointSink`；`R0Interpreter` 新增 `OPTION_CHECKPOINT_SINK`
+  （节点边界通知，`steps++` 前，保证恢复续跑 trace 与一次跑逐字一致）与 `OPTION_RESUME`（账本回放 +
+  重路由，含复合子图展开帧重建）；`GraphCheckpointAdapter` 复用 `wal.Checkpoint`（`schemaVersion` 前向兼容）；
+  `GraphSessionKernel` 可选注入 `WalStore`（`walStore(store)`）——仅 goal 边界/terminal 节流落盘、
+  自动恢复/`resume(sessionId)` 显式入口；**不注入 store ⇒ 行为与现状完全一致**。新增 `LedgerStateSpec` 2 ·
+  `GraphCheckpointAdapterSpec` 4 · `R0InterpreterResumeSpec` 2（含嵌套帧重建）· `GraphSessionKernelResumeSpec` 2
+  （中断→恢复→完成 / 无 store 零漂移）。
+
 - **图内核取消语义进循环（`alice-core-agent`，M1-S1 · #174）**: R0 解释器新增 `OPTION_CANCEL_CHECK`
   （`BooleanSupplier`）安全点 —— 在**每个节点边界**（decision/effect/gate/observe/composite/terminal）检查，
   命中即停止遍历、当前节点不执行（无副作用），并以新增的 `SessionOutcome.Status.CANCELLED` 收敛；

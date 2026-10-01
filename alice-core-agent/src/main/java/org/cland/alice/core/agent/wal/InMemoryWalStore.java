@@ -138,7 +138,8 @@ public final class InMemoryWalStore implements WalStore {
             checkpoint.stateNode(),
             checkpoint.variableSnapshot(),
             checkpoint.planSnapshot(),
-            checkpoint.createdAt() > 0 ? checkpoint.createdAt() : System.currentTimeMillis());
+            checkpoint.createdAt() > 0 ? checkpoint.createdAt() : System.currentTimeMillis(),
+            checkpoint.schemaVersion());
 
     checkpoints.put(checkpoint.sessionId(), stored);
     log.debug(

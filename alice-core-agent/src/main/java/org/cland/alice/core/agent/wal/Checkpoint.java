@@ -27,7 +27,11 @@ public record Checkpoint(
     String stateNode,
     Map<String, Object> variableSnapshot,
     String planSnapshot,
-    long createdAt) {
+    long createdAt,
+    int schemaVersion) {
+
+  /** 当前 Checkpoint schema 版本（前向兼容：读取旧快照时归一为 1）。 */
+  public static final int SCHEMA_VERSION = 1;
 
   /** 预定义状态节点常量 */
   public static final String NODE_START = "START";
@@ -59,6 +63,29 @@ public record Checkpoint(
     if (planSnapshot == null) {
       planSnapshot = "";
     }
+    if (schemaVersion <= 0) {
+      schemaVersion = SCHEMA_VERSION;
+    }
+  }
+
+  /** 兼容构造器（无 schemaVersion，默认 {@link #SCHEMA_VERSION}）。 */
+  public Checkpoint(
+      long checkpointId,
+      String sessionId,
+      long lastAppliedMessageId,
+      String stateNode,
+      Map<String, Object> variableSnapshot,
+      String planSnapshot,
+      long createdAt) {
+    this(
+        checkpointId,
+        sessionId,
+        lastAppliedMessageId,
+        stateNode,
+        variableSnapshot,
+        planSnapshot,
+        createdAt,
+        SCHEMA_VERSION);
   }
 
   /** 返回一个新的 Checkpoint，其 lastAppliedMessageId 被推进到指定值。 用于恢复完成后生成新的快照。 */
@@ -70,7 +97,8 @@ public record Checkpoint(
         stateNode,
         variableSnapshot,
         planSnapshot,
-        System.currentTimeMillis());
+        System.currentTimeMillis(),
+        schemaVersion);
   }
 
   @Override

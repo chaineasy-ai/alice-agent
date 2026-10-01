@@ -138,4 +138,33 @@ public final class Ledger {
   public synchronized void appendTrace(String entry) {
     trace.add(entry);
   }
+
+  // ========== 检查点快照 / 恢复（§3.2 ⑥） ==========
+
+  /** 账本快照（内核检查点用；只读镜像，不改变账本）。 */
+  public synchronized LedgerState snapshot() {
+    return new LedgerState(goals, cursor, route, artifacts, revisions, aborted, trace);
+  }
+
+  /**
+   * 从快照恢复账本（内核初始化入口；非 effect 写）。
+   *
+   * <p>恢复 = 回放 + 重路由（§3.2 ⑥）：单写点纪律使状态回滚无歧义；本方法只重置槽位，不追加额外 trace，保证「续跑 trace == 不中断一次跑」。
+   */
+  public synchronized void restore(LedgerState state) {
+    LedgerState s = state != null ? state : LedgerState.empty();
+    goals.clear();
+    goals.addAll(s.goals());
+    cursor = s.cursor();
+    route.clear();
+    route.putAll(s.route());
+    artifacts.clear();
+    artifacts.putAll(s.artifacts());
+    revisions.clear();
+    revisions.putAll(s.revisions());
+    aborted.clear();
+    aborted.putAll(s.aborted());
+    trace.clear();
+    trace.addAll(s.trace());
+  }
 }
