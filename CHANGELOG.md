@@ -18,12 +18,21 @@ scope:
   - "alice-facade-tui"
   - "alice-facade-rpc"
 status: "active"
-updated: "2026-09-19"
+updated: "2026-10-01"
 ---
 
 # Changelog
 
 ## Unreleased
+
+### Features
+
+- **图内核取消语义进循环（`alice-core-agent`，M1-S1 · #174）**: R0 解释器新增 `OPTION_CANCEL_CHECK`
+  （`BooleanSupplier`）安全点 —— 在**每个节点边界**（decision/effect/gate/observe/composite/terminal）检查，
+  命中即停止遍历、当前节点不执行（无副作用），并以新增的 `SessionOutcome.Status.CANCELLED` 收敛；
+  展开帧（子图）内同样生效（嵌套传播骨架）。`GraphSessionKernel` 将 `cancel()` 接线到解释器，
+  会话结果映射为 `SessionStatus.CANCELLED`、`state().phase()=="CANCELLED"`。新增 6 例 R0InterpreterSpec +
+  1 例 GraphSessionKernelSpec（决策前/效果间/多步中断/无取消零漂移/嵌套传播/收敛快照）。
 
 ### BREAKING
 

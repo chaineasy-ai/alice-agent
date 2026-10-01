@@ -14,7 +14,7 @@ scope:
   - "alice-guardrail"
   - "alice-bootstrap"
 status: "active"
-updated: "2026-09-10"
+updated: "2026-10-01"
 ---
 
 # TODO: R0 图内核换轨收口
@@ -59,7 +59,7 @@ updated: "2026-09-10"
 - [ ] HITL gate：HitlChannel.suspend 挂起/恢复/超时语义接入骨架（§4 ② hook） [priority:: medium]
 - [ ] 多级预算（D12）定标：goal 内效果数上限、嵌套子图深度上限、会话 token 预算注解默认值（现 revisionBudget=2/taoEffectBudget=config.maxMicroDepth/maxSteps=10000 需评审） [priority:: medium]
 - [ ] LedgerScopeValidator（D11）：效果写 artifact 的权限校验 + 结构槽位仅写点的运行时断言（校验器清单与规则） [priority:: medium] [owner:: alice-guardrail]
-- [ ] cancel 进循环：R0 解释器 effect 间安全点检查；嵌套会话取消传播（§3.1 并发/嵌套语义） [priority:: medium]
+- [x] cancel 进循环：R0 解释器 effect 间安全点检查；嵌套会话取消传播（§3.1 并发/嵌套语义）  [date:: 2026-10-01]  [verify:: R0InterpreterSpec 16 例 / GraphSessionKernelSpec 7 例 / ./gradlew check 全绿]
 - [ ] 子 agent（003）同契约递归：SessionRequest/Result 作为普通消息的图嵌套接线（SubAgentManager 消费审计） [priority:: medium]
 - [ ] artifact 多产物语义：内容槽位经 GuardrailToolProxy 授权工具写入（read/write 工具链） [priority:: low]
 

@@ -11,6 +11,9 @@ public record SessionOutcome(
     /** 会话正常闭环（仅经最外层会话级 terminal 到达）。 */
     FINISHED,
 
+    /** 会话在安全点被取消（取消信号生效；剩余链路不再执行、不产生副作用）。 */
+    CANCELLED,
+
     /** 结构性错误 / 注解预算耗尽。 */
     FAILED
   }

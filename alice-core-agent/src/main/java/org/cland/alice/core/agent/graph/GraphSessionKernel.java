@@ -154,7 +154,12 @@ public final class GraphSessionKernel implements Loop {
     if (outcome == null) {
       return new KernelState(lastSessionId, "IDLE", 0, lastMaxSteps, cancelled);
     }
-    String phase = outcome.status() == SessionOutcome.Status.FINISHED ? "FINISH" : "FAILED";
+    String phase =
+        switch (outcome.status()) {
+          case FINISHED -> "FINISH";
+          case CANCELLED -> "CANCELLED";
+          case FAILED -> "FAILED";
+        };
     return new KernelState(lastSessionId, phase, outcome.steps(), lastMaxSteps, cancelled);
   }
 
@@ -211,7 +216,13 @@ public final class GraphSessionKernel implements Loop {
             revisionBudget,
             taoEffectBudget,
             traceBridge());
-    return skeleton.run(Map.of(R0Interpreter.OPTION_MAX_STEPS, maxSteps));
+    return skeleton.run(
+        Map.of(
+            R0Interpreter.OPTION_MAX_STEPS,
+            maxSteps,
+            // 取消安全点（#174）：解释器在每个节点边界检查；展开帧（子图）内同样生效
+            R0Interpreter.OPTION_CANCEL_CHECK,
+            (java.util.function.BooleanSupplier) () -> cancelled));
   }
 
   private int maxStepsOf(SessionRequest request) {
@@ -241,14 +252,13 @@ public final class GraphSessionKernel implements Loop {
     if (outcome.status() == SessionOutcome.Status.FAILED) {
       meta.put("error", outcome.message());
     }
-    return new SessionResult(
-        outcome.status() == SessionOutcome.Status.FINISHED
-            ? SessionStatus.FINISHED
-            : SessionStatus.FAILED,
-        sessionId,
-        outcome.answer(),
-        outcome.steps(),
-        meta);
+    SessionStatus status =
+        switch (outcome.status()) {
+          case FINISHED -> SessionStatus.FINISHED;
+          case CANCELLED -> SessionStatus.CANCELLED;
+          case FAILED -> SessionStatus.FAILED;
+        };
+    return new SessionResult(status, sessionId, outcome.answer(), outcome.steps(), meta);
   }
 
   /** 事件流实现：线程安全订阅 + 内部触发（由 trace 桥调用）。 */

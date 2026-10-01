@@ -192,4 +192,25 @@ class GraphSessionKernelSpec extends Specification {
         noExceptionThrown()
         kernel.state().phase() == "IDLE"
     }
+
+    def "cancel mid-run converges the session to CANCELLED"() {
+        given: "模型节点内触发取消 → 下个安全点停止遍历"
+        def holder = new AtomicReference<GraphSessionKernel>()
+        def planner = staticPlanner([Plan.Step.of(Plan.Intent.ANALYZE, "graph-model")])
+        registerModelSupplier { Call c ->
+            holder.get().cancel()
+            Call.Response.textOnly("最终回答",
+                    new Call.TokenUsage(1, 1, 2),
+                    ["raw": '{"choices":[{"message":{"content":"最终回答"}}]}'])
+        }
+        def kernel = kernel(planner)
+        holder.set(kernel)
+
+        when:
+        def result = await(kernel.execute(SessionRequest.of("cancel-s1")))
+
+        then:
+        result.status() == SessionStatus.CANCELLED
+        kernel.state().phase() == "CANCELLED"
+    }
 }

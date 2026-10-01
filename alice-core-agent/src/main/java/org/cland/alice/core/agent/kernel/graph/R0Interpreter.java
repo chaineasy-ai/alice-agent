@@ -30,6 +30,14 @@ public final class R0Interpreter {
   /** 遍历步数预算键（run options）：步数 = 图遍历步数（单一来源，修 P4 双计数）。 */
   public static final String OPTION_MAX_STEPS = "maxSteps";
 
+  /**
+   * 取消检查键（run options，值为 {@link java.util.function.BooleanSupplier}）：
+   *
+   * <p>在每个节点边界（decision / effect / gate / observe / composite / terminal）检查；命中即停止遍历并收敛为 {@link
+   * SessionOutcome.Status#CANCELLED}。展开帧（子图）内部同样生效——取消信号随遍历全局传播（嵌套传播骨架）。
+   */
+  public static final String OPTION_CANCEL_CHECK = "cancelCheck";
+
   /** 默认遍历步数预算。 */
   public static final int DEFAULT_MAX_STEPS = 10_000;
 
@@ -95,8 +103,19 @@ public final class R0Interpreter {
     frames.add(new Frame(graph, graph.terminalExits()));
 
     int steps = 0;
+    java.util.function.BooleanSupplier cancelCheck = cancelCheckOf(opts);
     while (true) {
       steps++;
+      // 取消安全点（#174）：节点边界统一检查；命中即停止遍历、不执行当前节点（不产生副作用）
+      if (cancelCheck != null && cancelCheck.getAsBoolean()) {
+        ledger.appendTrace("cancel:safe-point");
+        return new SessionOutcome(
+            SessionOutcome.Status.CANCELLED,
+            "session cancelled at traversal safe point",
+            steps,
+            ledger.trace(),
+            ledger.artifacts());
+      }
       if (steps > maxSteps) {
         return new SessionOutcome(
             SessionOutcome.Status.FAILED,
@@ -254,6 +273,12 @@ public final class R0Interpreter {
     } catch (Exception e) {
       logger.warn("[R0] trace listener threw exception", e);
     }
+  }
+
+  /** 取消检查选项解析：非 BooleanSupplier 视为未提供（向后兼容）。 */
+  private static java.util.function.BooleanSupplier cancelCheckOf(Map<String, Object> opts) {
+    Object v = opts.get(OPTION_CANCEL_CHECK);
+    return v instanceof java.util.function.BooleanSupplier b ? b : null;
   }
 
   private SessionOutcome fail(Ledger ledger, int steps, String message) {

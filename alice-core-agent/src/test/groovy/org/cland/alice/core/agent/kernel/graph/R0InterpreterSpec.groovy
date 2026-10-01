@@ -254,6 +254,186 @@ class R0InterpreterSpec extends Specification {
     }
 
     // ========================================================================
+    // 取消语义（#174 M1-S1）：安全点 + 收敛 + 嵌套传播
+    // ========================================================================
+
+    def "cancel at the first safe point stops before any node executes"() {
+        given:
+        def graph = SessionGraph.builder("g")
+            .node(GraphNode.of("d1", NodeKind.DECISION))
+            .node(GraphNode.of("end", NodeKind.TERMINAL))
+            .start("d1")
+            .edge("d1", "end", "done")
+            .terminalExit("end", SessionGraph.SESSION_END)
+            .build()
+        def decisions = 0
+        def interpreter = new R0Interpreter()
+            .decision("d1", { n, l, o -> decisions++; Decision.answer("done", "x") } as DecisionSource)
+
+        when:
+        def outcome = interpreter.run(graph, [cancelCheck: { -> true } as java.util.function.BooleanSupplier])
+
+        then:
+        outcome.status() == SessionOutcome.Status.CANCELLED
+        outcome.steps() == 1
+        decisions == 0
+        outcome.trace() == ["cancel:safe-point"]
+    }
+
+    def "cancel between effects stops before the next effect runs"() {
+        given:
+        def graph = SessionGraph.builder("g")
+            .node(GraphNode.of("d", NodeKind.DECISION))
+            .node(GraphNode.of("fx", NodeKind.EFFECT))
+            .node(GraphNode.of("end", NodeKind.TERMINAL))
+            .start("d")
+            .edge("d", "fx", "act")
+            .edge("d", "end", "done")
+            .edge("fx", "d", null)
+            .terminalExit("end", SessionGraph.SESSION_END)
+            .build()
+        def effects = []
+        def rounds = 0
+        def interpreter = new R0Interpreter()
+            .decision("d", { n, l, o ->
+                rounds++
+                rounds == 1 ? Decision.act("act", ToolCallReq.of("ping")) : Decision.answer("done", "x")
+            } as DecisionSource)
+            .effect("fx", { ToolCallReq c -> effects << c.name(); EffectOutcome.ok("pong") } as EffectGateway)
+
+        when: "第一个 effect 执行后取消 → 不再推进"
+        def outcome = interpreter.run(
+            graph, [cancelCheck: { -> effects.size() >= 1 } as java.util.function.BooleanSupplier])
+
+        then:
+        outcome.status() == SessionOutcome.Status.CANCELLED
+        effects == ["ping"]
+        outcome.trace().any { it.contains("effect:ping") }
+        outcome.trace().any { it.contains("cancel:safe-point") }
+    }
+
+    def "cancel at a decision boundary prevents the downstream effect"() {
+        given:
+        def graph = SessionGraph.builder("g")
+            .node(GraphNode.of("d", NodeKind.DECISION))
+            .node(GraphNode.of("fx", NodeKind.EFFECT))
+            .node(GraphNode.of("end", NodeKind.TERMINAL))
+            .start("d")
+            .edge("d", "fx", "act")
+            .edge("fx", "end", null)
+            .terminalExit("end", SessionGraph.SESSION_END)
+            .build()
+        def decisions = 0
+        def effects = []
+        def interpreter = new R0Interpreter()
+            .decision("d", { n, l, o -> decisions++; Decision.act("act", ToolCallReq.of("ping")) } as DecisionSource)
+            .effect("fx", { ToolCallReq c -> effects << c.name(); EffectOutcome.ok("pong") } as EffectGateway)
+
+        when: "decision 执行后即取消（下个安全点在 effect 之前）"
+        def outcome = interpreter.run(
+            graph, [cancelCheck: { -> decisions >= 1 } as java.util.function.BooleanSupplier])
+
+        then:
+        outcome.status() == SessionOutcome.Status.CANCELLED
+        effects.isEmpty()
+        outcome.trace().any { it.contains("d(DECISION)") }
+        !outcome.trace().any { it.contains("fx(EFFECT)") }
+    }
+
+    def "absent/false cancel check keeps traversal behaviour unchanged (zero drift)"() {
+        given:
+        def build = {
+            SessionGraph.builder("g")
+                .node(GraphNode.of("d1", NodeKind.DECISION))
+                .node(GraphNode.of("end", NodeKind.TERMINAL))
+                .start("d1")
+                .edge("d1", "end", "done")
+                .terminalExit("end", SessionGraph.SESSION_END)
+                .build()
+        }
+        def source = { n, l, o -> Decision.answer("done", "hello") } as DecisionSource
+
+        when:
+        def baseline = new R0Interpreter().decision("d1", source).run(build())
+        def withFalse =
+            new R0Interpreter().decision("d1", source)
+                .run(build(), [cancelCheck: { -> false } as java.util.function.BooleanSupplier])
+
+        then:
+        baseline.status() == SessionOutcome.Status.FINISHED
+        withFalse.status() == SessionOutcome.Status.FINISHED
+        withFalse.steps() == baseline.steps()
+        withFalse.trace() == baseline.trace()
+    }
+
+    def "cancel signal propagates into composite expansion frames (nested skeleton)"() {
+        given:
+        def inner = SessionGraph.builder("inner")
+            .node(GraphNode.of("it", NodeKind.DECISION))
+            .node(GraphNode.of("ifx", NodeKind.EFFECT))
+            .node(GraphNode.of("iend", NodeKind.TERMINAL))
+            .start("it")
+            .edge("it", "ifx", "act")
+            .edge("ifx", "iend", null)
+            .terminalExit("iend", "outer-end")
+            .build()
+        def graph = SessionGraph.builder("session")
+            .node(GraphNode.composite("c", new CompositeSpec(inner, ["iend": "outer-end"])))
+            .node(GraphNode.of("outer-end", NodeKind.TERMINAL))
+            .start("c")
+            .terminalExit("outer-end", SessionGraph.SESSION_END)
+            .build()
+        def innerEffects = []
+        def innerDecisions = 0
+        def interpreter = new R0Interpreter()
+            .decision("it", { n, l, o -> innerDecisions++; Decision.act("act", ToolCallReq.of("inner")) } as DecisionSource)
+            .effect("ifx", { ToolCallReq c -> innerEffects << c.name(); EffectOutcome.ok("ok") } as EffectGateway)
+
+        when: "内层决策后取消 → 内层 effect 不执行（取消跨展开帧生效）"
+        def outcome = interpreter.run(
+            graph, [cancelCheck: { -> innerDecisions >= 1 } as java.util.function.BooleanSupplier])
+
+        then:
+        outcome.status() == SessionOutcome.Status.CANCELLED
+        innerEffects.isEmpty()
+        outcome.trace().any { it.contains("c(COMPOSITE)") }
+        outcome.trace().any { it.contains("it(DECISION)") }
+        !outcome.trace().any { it.contains("ifx(EFFECT)") }
+    }
+
+    def "cancelled outcome records converged steps and append-only trace snapshot"() {
+        given:
+        def graph = SessionGraph.builder("g")
+            .node(GraphNode.of("d", NodeKind.DECISION))
+            .node(GraphNode.of("fx", NodeKind.EFFECT))
+            .node(GraphNode.of("d2", NodeKind.DECISION))
+            .node(GraphNode.of("end", NodeKind.TERMINAL))
+            .start("d")
+            .edge("d", "fx", "act")
+            .edge("fx", "d2", null)
+            .edge("d2", "end", "done")
+            .terminalExit("end", SessionGraph.SESSION_END)
+            .build()
+        def effects = 0
+        def interpreter = new R0Interpreter()
+            .decision("d", { n, l, o -> Decision.act("act", ToolCallReq.of("ping")) } as DecisionSource)
+            .decision("d2", { n, l, o -> Decision.answer("done", "x") } as DecisionSource)
+            .effect("fx", { ToolCallReq c -> effects++; EffectOutcome.ok("pong") } as EffectGateway)
+
+        when: "effect 后、d2 前取消"
+        def outcome = interpreter.run(
+            graph, [cancelCheck: { -> effects >= 1 } as java.util.function.BooleanSupplier])
+
+        then:
+        outcome.status() == SessionOutcome.Status.CANCELLED
+        outcome.steps() == 3
+        effects == 1
+        outcome.message().contains("cancelled")
+        outcome.trace().last() == "cancel:safe-point"
+        !outcome.trace().any { it.contains("d2(DECISION)") }
+    }
+
+    // ========================================================================
     // Ledger 槽位语义（R4 写点纪律）
     // ========================================================================
 
