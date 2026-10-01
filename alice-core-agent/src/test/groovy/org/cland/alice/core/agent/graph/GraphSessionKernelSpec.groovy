@@ -67,6 +67,17 @@ class GraphSessionKernelSpec extends Specification {
                 null, 2, 10)
     }
 
+    private GraphSessionKernel kernelWithVerifyPost(PlannerService planner,
+            org.cland.alice.core.agent.kernel.graph.GatePolicy verifyPost,
+            String modelId = "graph-model") {
+        new GraphSessionKernel(
+                Vertx.vertx(), planner, new org.cland.alice.tool.gateway.ToolRegistry(),
+                new TextLlmPipeline(), modelId, null,
+                { g, l, o -> org.cland.alice.core.agent.kernel.graph.StandardSkeleton.Arbitration.pass() }
+                        as org.cland.alice.core.agent.kernel.graph.StandardSkeleton.ArbitrationBrain,
+                verifyPost, 2, 10)
+    }
+
     private SessionResult await(Future resultFuture) {
         def latch = new CountDownLatch(1)
         def ref = new AtomicReference<SessionResult>()
@@ -212,5 +223,44 @@ class GraphSessionKernelSpec extends Specification {
         then:
         result.status() == SessionStatus.CANCELLED
         kernel.state().phase() == "CANCELLED"
+    }
+
+    def "verifyPost gate intercepts hallucination answer then revision yields final answer"() {
+        given: "首答命中幻觉规则（no data），修订后次答正常"
+        def planner = staticPlanner([Plan.Step.of(Plan.Intent.ANALYZE, "graph-model")])
+        def calls = new java.util.concurrent.atomic.AtomicInteger(0)
+        registerModelSupplier { Call c ->
+            def content = calls.getAndIncrement() == 0 ? "no data found" : "最终回答：已完成"
+            Call.Response.textOnly(content, new Call.TokenUsage(1, 1, 2),
+                    ["raw": '{"choices":[{"message":{"content":"' + content + '"}}]}'])
+        }
+        def vp = new org.cland.alice.core.agent.guardrail.VerifyPostGatePolicy(
+                new org.cland.alice.core.agent.guardrail.GuardrailVerificatorAdapter(false))
+        def kernel = kernelWithVerifyPost(planner, vp)
+
+        when:
+        def result = await(kernel.execute(SessionRequest.of("vp-block")))
+
+        then: "首答被 vp gate 拦下，修订后取次答"
+        result.status() == SessionStatus.FINISHED
+        result.answer() == "最终回答：已完成"
+        calls.get() >= 2
+    }
+
+    def "control: without verifyPost the hallucination answer is not intercepted"() {
+        given:
+        def planner = staticPlanner([Plan.Step.of(Plan.Intent.ANALYZE, "graph-model")])
+        registerModelSupplier { Call c ->
+            Call.Response.textOnly("no data found", new Call.TokenUsage(1, 1, 2),
+                    ["raw": '{"choices":[{"message":{"content":"no data found"}}]}'])
+        }
+        def kernel = kernel(planner)
+
+        when:
+        def result = await(kernel.execute(SessionRequest.of("vp-none")))
+
+        then:
+        result.status() == SessionStatus.FINISHED
+        result.answer() == "no data found"
     }
 }

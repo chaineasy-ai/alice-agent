@@ -34,6 +34,15 @@ updated: "2026-10-01"
   会话结果映射为 `SessionStatus.CANCELLED`、`state().phase()=="CANCELLED"`。新增 6 例 R0InterpreterSpec +
   1 例 GraphSessionKernelSpec（决策前/效果间/多步中断/无取消零漂移/嵌套传播/收敛快照）。
 
+- **图内核 verifyPost(g) → GatePolicy 适配（`alice-core-agent`，M1-S2 · #175）**: 新增 `VerifyPostGatePolicy`
+  —— 图内核 `vp` gate 判定直接委托 legacy `Verificator.audit(new StepResult.Finish(answer))`（与
+  `Agent.verifyPost` 同一公开入口），规则后检零漂移；通过 → `pass`（→ ARBITRATE），拦截 →
+  `guard("reject")`（→ `rev-budget` 修订回路，迭代预算兜底）。账本无 `answer` 产物时回退解释器最后观测
+  （覆盖效果预算熔断退出，等价 legacy `Continue(Observation)` 后检对象）。`Agent.graphKernel()` 按
+  `postVerifyEnabled && guardrail != null`（与 legacy 同门）装配；默认开关不变。新增
+  `VerifyPostGatePolicySpec` 12 例（parity 矩阵/拦截端口/回退/skeleton 修订回路/泛型委托）+
+  `AgentGraphSwitchSpec` 3 例（拦截重跑/无 guardrail 对照/postVerifyEnabled 门）。
+
 ### BREAKING
 
 - **模块改名（协议层转正 + 门面命名修正，2026-09-19）**: `alice-agent-command` → **`alice-agent-proto`**（协议契约层：

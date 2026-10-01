@@ -9,7 +9,7 @@ scope:
   - "alice-guardrail"
   - "alice-core-agent"
 status: "active"
-updated: "2026-06-29"
+updated: "2026-10-01"
 ---
 
 # Verificator — 验证器接口与双循环 Guardrail 架构
@@ -133,6 +133,26 @@ audit(stepResult)
             ├─ 错误模式检测（error: / exception: / timeout 等）
             └─ 类型一致性（TOOL_CALL 应有数据，LLM_INFERENCE 不应为空）
 ```
+
+---
+
+## 三·补、图内核 verifyPost(g) → GatePolicy（#175 · M1-S2）
+
+图内核 `vp` gate 的 `verifyPost(g)` 判定由 `VerifyPostGatePolicy` 承接（`alice-core-agent/.../guardrail/`）。
+
+- **等价入口**：委托 `Verificator.audit(new StepResult.Finish(answer))` —— 与 legacy `Agent.verifyPost`
+  同一公开入口，规则后检零漂移；`answer` 取账本产物 `ledger.artifacts["answer"]`，缺失时回退解释器
+  `lastObservation`（覆盖效果预算熔断退出，等价 legacy `Continue(Observation)` 后检对象）。
+- **判定映射**：`audit()==true` → `GateResult.passed()`（pass 边 → ARBITRATE）；否则
+  `GateResult.guard(StandardSkeleton.PORT_VP_REJECT)`（reject 边 → `rev-budget` gate → 同 goal 修订；
+  超限回规划）。迭代预算兜底 = 骨架既有 rev-budget 注解 gate（D8，不重复造）。
+- **装配**：`Agent.graphKernel()` 在 `config.postVerifyEnabled() && guardrail != null` 时注入（与 legacy
+  `Agent.verifyPost` 的门条件一致）；`graphKernelEnabled` 默认仍为 false。
+- **目标上下文（P7）**：goal 由 `GatePolicy.verify(…, Ledger, …)` 的账本游标携带，记入判定日志；
+  D8 不引入结构化 goal 判据、不改规则内容。
+
+测试：`alice-core-agent/src/test/groovy/.../guardrail/VerifyPostGatePolicySpec.groovy`（parity 矩阵 /
+拦截端口 / 回退 / skeleton 修订回路 / 泛型委托）。
 
 ---
 

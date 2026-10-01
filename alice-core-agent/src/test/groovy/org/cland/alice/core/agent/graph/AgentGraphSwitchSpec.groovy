@@ -66,12 +66,15 @@ class AgentGraphSwitchSpec extends Specification {
             .build())
     }
 
-    private Agent graphAgent(List supplierResponses, Closure effectRecorder) {
-        def agent = new Agent("graph-switch", AgentConfig.builder()
+    private Agent graphAgent(List supplierResponses, Closure effectRecorder, Map cfg = [:]) {
+        def builder = AgentConfig.builder()
             .defaultModelId("graph-model")
             .graphKernelEnabled(true)
             .maxMicroDepth(10)
-            .build())
+        if (cfg.postVerifyEnabled != null) {
+            builder.postVerifyEnabled(cfg.postVerifyEnabled as boolean)
+        }
+        def agent = new Agent("graph-switch", builder.build())
         agent.withPlannerService(staticPlanner([Plan.Step.of(Plan.Intent.ANALYZE, "graph-model")]))
 
         def registry = new ToolRegistry()
@@ -158,5 +161,54 @@ class AgentGraphSwitchSpec extends Specification {
 
         then:
         result.status() == SessionStatus.CANCELLED
+    }
+
+    def "verifyPost(g) gate blocks rule-invalid answer and revision recovers (D8 wiring)"() {
+        given: "模型先提交含错误模式的作答，再提交正常作答"
+        def agent = graphAgent([
+            Call.Response.textOnly("error: bad answer", new Call.TokenUsage(1, 1, 2),
+                ["raw": '{"choices":[{"message":{"content":"error: bad answer"}}]}']),
+            Call.Response.textOnly("正常回答", new Call.TokenUsage(1, 1, 2),
+                ["raw": '{"choices":[{"message":{"content":"正常回答"}}]}'])
+        ], null)
+        agent.withGuardrail(new org.cland.alice.core.agent.guardrail.GuardrailVerificatorAdapter(false))
+
+        when:
+        def result = await(agent.kernel().execute(SessionRequest.of("do it")))
+
+        then: "首答被规则后检拦截 → 同 goal 修订重跑 → 次答通过"
+        result.status() == SessionStatus.FINISHED
+        result.answer() == "正常回答"
+    }
+
+    def "without guardrail the first answer stands (control group)"() {
+        given:
+        def agent = graphAgent([
+            Call.Response.textOnly("error: bad answer", new Call.TokenUsage(1, 1, 2),
+                ["raw": '{"choices":[{"message":{"content":"error: bad answer"}}]}'])
+        ], null)
+
+        when:
+        def result = await(agent.kernel().execute(SessionRequest.of("do it")))
+
+        then: "无 guardrail → vp 恒放行（legacy guardrail==null 等价）"
+        result.status() == SessionStatus.FINISHED
+        result.answer() == "error: bad answer"
+    }
+
+    def "postVerifyEnabled=false keeps vp gate open (legacy config parity)"() {
+        given:
+        def agent = graphAgent([
+            Call.Response.textOnly("error: bad answer", new Call.TokenUsage(1, 1, 2),
+                ["raw": '{"choices":[{"message":{"content":"error: bad answer"}}]}'])
+        ], null, [postVerifyEnabled: false])
+        agent.withGuardrail(new org.cland.alice.core.agent.guardrail.GuardrailVerificatorAdapter(false))
+
+        when:
+        def result = await(agent.kernel().execute(SessionRequest.of("do it")))
+
+        then: "postVerifyEnabled=false → 与 legacy Agent.verifyPost 同门：不调 audit"
+        result.status() == SessionStatus.FINISHED
+        result.answer() == "error: bad answer"
     }
 }

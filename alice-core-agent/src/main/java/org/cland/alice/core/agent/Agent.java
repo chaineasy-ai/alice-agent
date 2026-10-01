@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import org.cland.alice.core.agent.executor.AgentExecutor;
 import org.cland.alice.core.agent.graph.GraphSessionKernel;
+import org.cland.alice.core.agent.guardrail.VerifyPostGatePolicy;
 import org.cland.alice.core.agent.kernel.EventStream;
 import org.cland.alice.core.agent.kernel.Inferencer;
 import org.cland.alice.core.agent.kernel.KernelDelegates;
@@ -394,7 +395,9 @@ public class Agent implements KernelDelegates {
                   config.defaultModelId(),
                   null,
                   null,
-                  null,
+                  config.postVerifyEnabled() && guardrail != null
+                      ? new VerifyPostGatePolicy(guardrail)
+                      : null,
                   AgentConfig.DEFAULT_MAX_ITERATIONS,
                   config.maxMicroDepth());
           graphKernel = k;

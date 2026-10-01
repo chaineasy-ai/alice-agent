@@ -118,6 +118,9 @@ public final class StandardSkeleton {
   /** 修订预算注解键（rev-budget gate 节点 attr）。 */
   public static final String ATTR_REVISION_BUDGET = "revisionBudget";
 
+  /** verifyPost(g) gate 拦截端口（reject 边 → rev-budget 修订回路）。 */
+  public static final String PORT_VP_REJECT = "reject";
+
   private final String task;
   private final StrategizeBrain strategize;
   private final ActorBrain actor;
@@ -255,7 +258,7 @@ public final class StandardSkeleton {
         .edge(N_GOAL_AVAIL, N_SESSION_END, "none")
         // verifyPost(g) gate → 反思仲裁
         .edge(N_VP, N_ARBITRATE, R0Interpreter.PORT_PASS)
-        .edge(N_VP, N_REV_BUDGET, "reject") // 规则后检拦截 → 按 FAIL 修订处理
+        .edge(N_VP, N_REV_BUDGET, PORT_VP_REJECT) // 规则后检拦截 → 按 FAIL 修订处理
         // ARBITRATE 三出口 + abort
         .edge(N_ARBITRATE, N_NEXT_GOAL, "pass")
         .edge(N_ARBITRATE, N_REV_BUDGET, "fail")
