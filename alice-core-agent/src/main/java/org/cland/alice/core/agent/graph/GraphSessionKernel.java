@@ -52,8 +52,8 @@ public final class GraphSessionKernel implements Loop {
 
   private static final Logger logger = LoggerFactory.getLogger(GraphSessionKernel.class);
 
-  /** 会话级步数预算（图遍历步数单一来源，P4）。 */
-  private static final int DEFAULT_MAX_STEPS = 10_000;
+  /** 会话级步数预算（图遍历步数单一来源，P4）。默认收紧为 200（原 10000 过大，#314）。 */
+  private static final int DEFAULT_MAX_STEPS = 200;
 
   private final Vertx vertx;
   private final PlannerService planner;
