@@ -1,6 +1,7 @@
 package org.cland.alice.core.agent.graph;
 
 import io.vertx.core.Future;
+import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -124,28 +125,35 @@ public final class GraphSessionKernel implements Loop {
     this.lastSessionId = sessionId;
     this.lastMaxSteps = maxSteps;
 
-    return vertx
-        .executeBlocking(() -> runSync(sessionId, input, modelId, maxSteps))
-        .map(
-            outcome -> {
-              this.lastOutcome = outcome;
-              return toResult(sessionId, outcome);
-            })
-        .otherwise(
-            err -> {
-              // 异常也收敛为 FAILED outcome，保证 state()/lastOutcome 单一真相
-              logger.error("[GraphSessionKernel] session {} failed", sessionId, err);
-              Throwable root = err;
-              while (root.getCause() != null && root.getCause().getMessage() != null) {
-                root = root.getCause();
+    // #314：不再用 vertx.executeBlocking 承载整段多步会话（会长期占用 worker 并触发
+    // BlockedThreadChecker；且 TextLlmPipeline 传输为同步 java.net.http，不需 Vert.x 上下文）。
+    // 改用专用虚拟线程执行 runSync，经 Promise 桥回 Future。
+    Promise<SessionResult> promise = Promise.promise();
+    Thread.ofVirtual()
+        .name("graph-kernel-" + sessionId)
+        .start(
+            () -> {
+              try {
+                SessionOutcome outcome = runSync(sessionId, input, modelId, maxSteps);
+                this.lastOutcome = outcome;
+                promise.complete(toResult(sessionId, outcome));
+              } catch (Throwable err) {
+                // 异常也收敛为 FAILED outcome，保证 state()/lastOutcome 单一真相
+                logger.error("[GraphSessionKernel] session {} failed", sessionId, err);
+                Throwable root = err;
+                while (root.getCause() != null && root.getCause().getMessage() != null) {
+                  root = root.getCause();
+                }
+                String message =
+                    root.getMessage() != null ? root.getMessage() : root.getClass().getSimpleName();
+                SessionOutcome failed =
+                    new SessionOutcome(
+                        SessionOutcome.Status.FAILED, message, 0, List.of(), Map.of());
+                this.lastOutcome = failed;
+                promise.complete(toResult(sessionId, failed));
               }
-              String message =
-                  root.getMessage() != null ? root.getMessage() : root.getClass().getSimpleName();
-              SessionOutcome failed =
-                  new SessionOutcome(SessionOutcome.Status.FAILED, message, 0, List.of(), Map.of());
-              this.lastOutcome = failed;
-              return toResult(sessionId, failed);
             });
+    return promise.future();
   }
 
   @Override
