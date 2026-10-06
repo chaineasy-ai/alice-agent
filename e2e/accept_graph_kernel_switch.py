@@ -134,6 +134,17 @@ class GraphKernelSwitchAcceptance(unittest.TestCase):
         self.assertRegex(out, rf"\b{EXPECTED_MD}\b",
                          f"on 会话应完成工具任务并给出根目录 .md 计数 {EXPECTED_MD}")
 
+    def test_A7_exec_mode_marker(self):
+        """横幅 exec 标注：on -> exec=graph，off -> exec=legacy（#313-A）。"""
+        CONFIG_PATH.unlink(missing_ok=True)
+        r_on, out_on, _, _ = self._run(["--graph-kernel=on"])
+        self.assertEqual(r_on.returncode, 0, out_on[-400:])
+        self.assertIn("exec=graph", out_on, "on 应标注 exec=graph")
+
+        r_off, out_off, _, _ = self._run(["--graph-kernel=off"])
+        self.assertEqual(r_off.returncode, 0, out_off[-400:])
+        self.assertIn("exec=legacy", out_off, "off 应标注 exec=legacy")
+
 
 if __name__ == "__main__":
     print("=" * 64)

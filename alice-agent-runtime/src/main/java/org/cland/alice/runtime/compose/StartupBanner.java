@@ -88,14 +88,15 @@ public final class StartupBanner {
       Agent agent, String sessionId, List<String> transports, String graphKernelSource) {
     Objects.requireNonNull(agent, "agent must not be null");
     AgentConfig config = agent.config();
+    String execMode = config.graphKernelEnabled() ? "graph" : "legacy";
     String kernelLine =
         "maxIterations="
             + config.maxIterations()
             + " · graphKernel="
             + config.graphKernelEnabled()
             + (graphKernelSource != null && !graphKernelSource.isBlank()
-                ? " (source=" + graphKernelSource + ")"
-                : "")
+                ? " (source=" + graphKernelSource + ", exec=" + execMode + ")"
+                : " (exec=" + execMode + ")")
             + " · skipMicro="
             + config.skipMicro();
     return new Data(

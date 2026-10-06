@@ -7,6 +7,8 @@ package org.cland.alice.agent
 
 import spock.lang.Specification
 import spock.lang.Title
+import org.cland.alice.model.Call
+import org.cland.alice.model.ModelProvider
 
 @Title("FacadeSelector coverage supplement")
 class FacadeSelectorSpec extends Specification {
@@ -51,8 +53,20 @@ class FacadeSelectorSpec extends Specification {
     }
 
     def "launch with run subcommand after --facade"() {
+        given: "离线 hermetic 模型 stub（阻断真实 LLM 网络调用）"
+        def provider = ModelProvider.getInstance()
+        def stub = {
+            Call call ->
+                Call.Response.textOnly("[FINISH]", new Call.TokenUsage(0, 0, 0), [:]) as Call.Response
+        } as org.cland.alice.model.ModelSupplier
+        provider.registerSupplier(stub)
+        provider.setRouter({ String modelId -> stub.name() })
+
         expect:
         FacadeSelector.launch(["--facade", "cli", "run", "test"] as String[]) == AliceApp.EXIT_SUCCESS
+
+        cleanup:
+        ModelProvider.reset()
     }
 
     def "launch filters --facade from facade args"() {

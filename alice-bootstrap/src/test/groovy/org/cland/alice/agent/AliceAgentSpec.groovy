@@ -65,11 +65,12 @@ class AliceAgentSpec extends Specification {
     def "FacadeSelector.launch with 'run' subcommand delegates to AliceCliLauncher"() {
         given: "离线 hermetic 模型 stub（阻断真实 LLM 网络调用）"
         def provider = ModelProvider.getInstance()
-        provider.setRouter({ String modelId -> "hermetic-stub" })
-        provider.registerSupplier({
+        def stub = {
             Call call ->
                 Call.Response.textOnly("[FINISH]", new Call.TokenUsage(0, 0, 0), [:]) as Call.Response
-        } as org.cland.alice.model.ModelSupplier)
+        } as org.cland.alice.model.ModelSupplier
+        provider.registerSupplier(stub)
+        provider.setRouter({ String modelId -> stub.name() })
 
         expect:
         FacadeSelector.launch(["run", "测试任务"] as String[]) == AliceApp.EXIT_SUCCESS
