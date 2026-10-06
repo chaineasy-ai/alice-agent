@@ -180,7 +180,9 @@ public final class ExecutionCoordinator {
       Agent agent =
           new Agent(null, sessionId, agentConfig)
               .withWal(wal)
-              .withGuardrail(new GuardrailVerificatorAdapter());
+              .withGuardrail(new GuardrailVerificatorAdapter())
+              // #313-B：图内核需要 PlannerService（graphKernel() 要求 planner != null）
+              .withPlannerService(Agent.newDefaultPlannerService(agentConfig));
       logger.debug("Agent created: {} session={} walDir={}", agent.agentId(), sessionId, sessionId);
       // 3c. 动态加载 SOP — 从 ~/.alice/sops/*.graphml 自动加载所有 SOP
       var sopRegistry = new SopRegistry();
@@ -223,6 +225,30 @@ public final class ExecutionCoordinator {
               java.util.List.of(new org.cland.alice.tool.gateway.builtin.BuiltinTools()));
       agent.withToolRegistry(tr);
       logger.info("Registered {} builtin tool(s) from BuiltinTools", toolCount);
+
+      // #313-C：图内核 on 时，verbose 订阅内核事件流（thought/action/observe）替代占位渲染
+      if (agentConfig.graphKernelEnabled() && config.verbose()) {
+        agent
+            .kernel()
+            .events()
+            .subscribe(
+                new org.cland.alice.core.agent.kernel.EventStream.Listener() {
+                  @Override
+                  public void onThought(String reasoning) {
+                    System.err.println("[thought] " + reasoning);
+                  }
+
+                  @Override
+                  public void onAction(String target, java.util.Map<String, Object> params) {
+                    System.err.println("[action] " + target + " " + params);
+                  }
+
+                  @Override
+                  public void onObserve(String rawData, String summary, long elapsedMs) {
+                    System.err.println("[observe] " + summary);
+                  }
+                });
+      }
 
       // 启动横幅（七块：Context/Skills/Prompts/Extensions + agents/runtime/loop）——走 stderr，stdout 留给结果/JSON
       // ✓
