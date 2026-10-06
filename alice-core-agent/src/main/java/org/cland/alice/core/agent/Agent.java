@@ -797,23 +797,13 @@ public class Agent implements KernelDelegates {
    * @param config Agent 配置
    * @return 已装配所有子模块的 Agent 实例
    */
-  public static Agent createDefault(AgentConfig config) {
-    Agent agent = new Agent(config);
-
-    // 1. 初始化工具注册中心并发现内置工具
-    ToolRegistry toolRegistry = ToolRegistryHolder.INSTANCE.registry();
-    try {
-      int count = new ToolDiscovery(toolRegistry).scanAndRegister(List.of(new BuiltinTools()));
-      logger.info("[Agent] Registered {} builtin tool(s)", count);
-    } catch (Exception e) {
-      logger.warn("[Agent] Failed to discover builtin tools", e);
-    }
-    agent.withToolRegistry(toolRegistry);
-
-    // 2. 确定双路径模型：
-    //    - 推理/慢路径 (System 2)：使用 config.defaultModelId()
-    //    - 指令/快路径 (System 1)：从 model.json 的 planner.instruction_model_id 读取，
-    //      未设置则回退到 defaultModelId()
+  /**
+   * 构建默认双路径 {@link PlannerService}（图内核与 legacy 共用）。
+   *
+   * <p>推理/慢路径用 {@code config.defaultModelId()}；指令/快路径从 {@code model.json} 的 {@code
+   * planner.instruction_model_id} 读取，未设置则回退默认模型。
+   */
+  public static PlannerService newDefaultPlannerService(AgentConfig config) {
     String reasoningModelId = config.defaultModelId();
     String instructionModelId = reasoningModelId;
     org.cland.alice.model.ModelConfigLoader.PlannerConfig plannerCfg = null;
@@ -832,8 +822,6 @@ public class Agent implements KernelDelegates {
     } catch (Exception e) {
       logger.warn("[Agent] Failed to load model config: {}", e.getMessage());
     }
-
-    // 3. 初始化 PlannerService（双路径规划引擎）
     var plannerSupplier =
         DefaultPlannerModelSupplier.builder()
             .provider(ModelProvider.getInstance())
@@ -850,28 +838,39 @@ public class Agent implements KernelDelegates {
             .mctsIterations(10)
             .build();
     var selector = StrategySelector.builder().fastPath(fastPath).slowPath(slowPath).build();
-    // SOP 静态规划器（可选）可通过 withPlannerService() 注入。
-    // 调用者（如 alice-bootstrap 或 facade 模块）若有 alice-memory-vault 访问权限，
-    // 可创建 StaticPlanner + SopRegistry 并通过 PlannerService.builder().staticPlannerFn() 注入。
-    var planner = PlannerService.builder().strategySelector(selector).build();
-    agent.withPlannerService(planner);
+    return PlannerService.builder().strategySelector(selector).build();
+  }
+
+  public static Agent createDefault(AgentConfig config) {
+    Agent agent = new Agent(config);
+
+    // 1. 初始化工具注册中心并发现内置工具
+    ToolRegistry toolRegistry = ToolRegistryHolder.INSTANCE.registry();
+    try {
+      int count = new ToolDiscovery(toolRegistry).scanAndRegister(List.of(new BuiltinTools()));
+      logger.info("[Agent] Registered {} builtin tool(s)", count);
+    } catch (Exception e) {
+      logger.warn("[Agent] Failed to discover builtin tools", e);
+    }
+    agent.withToolRegistry(toolRegistry);
+
+    // 2+3. 双路径 PlannerService（legacy 执行与图内核共用同一装配口径）
+    agent.withPlannerService(newDefaultPlannerService(config));
 
     // 4. 注册 tool 层 plan 工具（D10）：与 STRATEGIZE/ARBITRATE 共用同一规划后端；
     //    产出结构化 goal/step 建议，供决策循环内按需调用。ToolRegistry.register 幂等，重复装配安全。
     if (agent.toolRegistry() != null) {
       try {
         int planToolCount =
-            new ToolDiscovery(agent.toolRegistry()).scanAndRegister(List.of(new PlanTool(planner)));
+            new ToolDiscovery(agent.toolRegistry())
+                .scanAndRegister(List.of(new PlanTool(agent.plannerService())));
         logger.info("[Agent] Registered {} plan tool(s) against planner backend", planToolCount);
       } catch (Exception e) {
         logger.warn("[Agent] Failed to register plan tool: {}", e.getMessage());
       }
     }
 
-    logger.info(
-        "[Agent] Default Agent created: reasoningModel={}, instructionModel={}",
-        config.defaultModelId(),
-        instructionModelId);
+    logger.info("[Agent] Default Agent created: model={}", config.defaultModelId());
 
     return agent;
   }
