@@ -17,9 +17,6 @@ import org.cland.alice.core.agent.kernel.EventStream;
 import org.cland.alice.core.agent.kernel.Inferencer;
 import org.cland.alice.core.agent.kernel.KernelDelegates;
 import org.cland.alice.core.agent.kernel.Loop;
-import org.cland.alice.core.agent.kernel.SessionRequest;
-import org.cland.alice.core.agent.kernel.SessionResult;
-import org.cland.alice.core.agent.kernel.SessionStatus;
 import org.cland.alice.core.agent.lifecycle.Action;
 import org.cland.alice.core.agent.memory.AgentSession;
 import org.cland.alice.core.agent.pipeline.TextLlmPipeline;
@@ -447,41 +444,9 @@ public class Agent implements KernelDelegates {
    * @return 异步结果（io.vertx.core.Future）
    */
   public Future<AgentContext> askAsync(String prompt) {
-    if (config.graphKernelEnabled()) {
-      return askViaGraphKernel(prompt);
-    }
     AgentContext context = new AgentContext(this.sessionId, config.maxIterations());
     context.put("prompt", prompt);
     return executor.execute(prompt, context);
-  }
-
-  private Future<AgentContext> askViaGraphKernel(String prompt) {
-    SessionRequest request =
-        new SessionRequest(
-            this.sessionId,
-            prompt,
-            config.defaultModelId(),
-            Map.of("maxIterations", config.maxIterations()));
-    return graphKernel()
-        .execute(request)
-        .flatMap(
-            result -> {
-              if (result.status() == SessionStatus.FAILED) {
-                Object err = result.metadata().get("error");
-                return Future.failedFuture(
-                    new RuntimeException(
-                        err != null ? String.valueOf(err) : "graph session failed"));
-              }
-              return Future.succeededFuture(toAgentContext(result));
-            });
-  }
-
-  private AgentContext toAgentContext(SessionResult result) {
-    AgentContext context = new AgentContext(this.sessionId, config.maxIterations());
-    context.put("result", result.answer() != null ? result.answer() : "");
-    context.put("status", result.status().name());
-    context.put("iteration", result.iteration());
-    return context;
   }
 
   // ========== 验证钩子（原 AgentCore 方法，供 AgentExecutor 调用） ==========
