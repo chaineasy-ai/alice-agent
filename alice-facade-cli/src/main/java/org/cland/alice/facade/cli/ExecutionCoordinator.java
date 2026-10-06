@@ -65,6 +65,23 @@ public final class ExecutionCoordinator {
     this.modelOverride = modelOverride;
   }
 
+  /** 解析 graphKernel 开关字面量：off/false/0/disable 视为关闭，其余为开启。 */
+  private static boolean parseGraphKernel(String value) {
+    if (value == null) return true;
+    String v = value.trim().toLowerCase(java.util.Locale.ROOT);
+    return !(v.equals("off") || v.equals("false") || v.equals("0") || v.equals("disable"));
+  }
+
+  /** 返回首个非空白值（用于配置键兼容映射）。 */
+  private static String firstNonBlank(String... values) {
+    for (String v : values) {
+      if (v != null && !v.isBlank()) {
+        return v;
+      }
+    }
+    return null;
+  }
+
   /**
    * 执行任务（同步阻塞）。
    *
@@ -86,6 +103,9 @@ public final class ExecutionCoordinator {
       // 1. 构建 AgentConfig
       int maxIterations = AgentConfig.DEFAULT_MAX_ITERATIONS;
       boolean skipMicro = AgentConfig.DEFAULT_SKIP_MICRO;
+      // graphKernel 生效值/来源（口径 CLI > 配置 graphKernel.enabled > 默认 on）
+      boolean graphKernelEnabled = true;
+      String graphKernelSource = "default";
       try {
         AliceConfigStore store = new AliceConfigStore();
         String iterStr = store.get("agent.max_iterations");
@@ -97,9 +117,24 @@ public final class ExecutionCoordinator {
         if (skipStr != null && !skipStr.isBlank()) {
           skipMicro = Boolean.parseBoolean(skipStr);
         }
+        String gk =
+            firstNonBlank(
+                store.get("graphKernel.enabled"),
+                store.get("graphKernel_enabled"),
+                store.get("graph_kernel_enabled"));
+        if (gk != null) {
+          graphKernelEnabled = parseGraphKernel(gk);
+          graphKernelSource = "config";
+        }
       } catch (Exception e) {
         logger.debug("Failed to read config, using defaults", e);
       }
+      // CLI 优先（--graph-kernel[=on|off]）
+      if (config.graphKernel() != null && !config.graphKernel().isBlank()) {
+        graphKernelEnabled = parseGraphKernel(config.graphKernel());
+        graphKernelSource = "cli";
+      }
+      logger.info("[graphKernel] enabled={} (source={})", graphKernelEnabled, graphKernelSource);
 
       String effectiveModel = modelOverride != null ? modelOverride : config.model();
       AgentConfig agentConfig =
@@ -107,6 +142,7 @@ public final class ExecutionCoordinator {
               .defaultModelId(effectiveModel)
               .maxIterations(maxIterations)
               .skipMicro(skipMicro)
+              .graphKernelEnabled(graphKernelEnabled)
               .debug(config.verbose())
               .build();
 
@@ -191,7 +227,9 @@ public final class ExecutionCoordinator {
       // 启动横幅（七块：Context/Skills/Prompts/Extensions + agents/runtime/loop）——走 stderr，stdout 留给结果/JSON
       // ✓
       StartupBanner.print(
-          System.err, StartupBanner.collect(agent, sessionId, java.util.List.of("inprocess")));
+          System.err,
+          StartupBanner.collect(
+              agent, sessionId, java.util.List.of("inprocess"), graphKernelSource));
 
       // 5. 构建上下文（使用客户端 sessionId）
       AgentContext context = new AgentContext(sessionId);

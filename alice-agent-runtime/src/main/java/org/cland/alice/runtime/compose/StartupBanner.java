@@ -76,8 +76,28 @@ public final class StartupBanner {
    * @return 横幅数据
    */
   public static Data collect(Agent agent, String sessionId, List<String> transports) {
+    return collect(agent, sessionId, transports, null);
+  }
+
+  /**
+   * 采集横幅数据（带 graphKernel 来源标注）。
+   *
+   * @param graphKernelSource graphKernel 生效来源（cli/config/default；null=不标注）
+   */
+  public static Data collect(
+      Agent agent, String sessionId, List<String> transports, String graphKernelSource) {
     Objects.requireNonNull(agent, "agent must not be null");
     AgentConfig config = agent.config();
+    String kernelLine =
+        "maxIterations="
+            + config.maxIterations()
+            + " · graphKernel="
+            + config.graphKernelEnabled()
+            + (graphKernelSource != null && !graphKernelSource.isBlank()
+                ? " (source=" + graphKernelSource + ")"
+                : "")
+            + " · skipMicro="
+            + config.skipMicro();
     return new Data(
         contextLine(),
         skills(),
@@ -85,12 +105,7 @@ public final class StartupBanner {
         extensions(),
         "主 Agent " + agent.agentId() + "（子 Agent 0）",
         runtimeLine(sessionId, transports),
-        "maxIterations="
-            + config.maxIterations()
-            + " · graphKernel="
-            + config.graphKernelEnabled()
-            + " · skipMicro="
-            + config.skipMicro());
+        kernelLine);
   }
 
   /**

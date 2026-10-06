@@ -221,6 +221,15 @@ public class CommandParser {
     @Option(names = "--timeout", description = "Task timeout in seconds (default: 180)")
     private long timeoutSeconds;
 
+    @Option(
+        names = "--graph-kernel",
+        arity = "0..1",
+        fallbackValue = "on",
+        description =
+            "Graph kernel switch: --graph-kernel[=on|off] (CLI > config 'graphKernel.enabled' >"
+                + " default on)")
+    private String graphKernel;
+
     @Override
     public Integer call() {
       return 0;
@@ -239,6 +248,9 @@ public class CommandParser {
       }
       if (timeoutSeconds > 0) {
         builder.timeoutSeconds(timeoutSeconds);
+      }
+      if (graphKernel != null && !graphKernel.isBlank()) {
+        builder.graphKernel(graphKernel);
       }
 
       return builder.build();
