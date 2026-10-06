@@ -78,6 +78,9 @@ public final class RunConfig {
   private final String resumeSnapshot;
   private final boolean resumeList;
 
+  /** graphKernel 开关（CLI）：null=未指定 / "on" / "off"。 */
+  private final String graphKernel;
+
   private RunConfig(Builder builder) {
     this.task = Objects.requireNonNull(builder.task, "task must not be null");
     this.sessionId = builder.sessionId;
@@ -108,6 +111,7 @@ public final class RunConfig {
     this.resumeMode = builder.resumeMode;
     this.resumeSnapshot = builder.resumeSnapshot;
     this.resumeList = builder.resumeList;
+    this.graphKernel = builder.graphKernel;
   }
 
   // ========== Getters ==========
@@ -252,6 +256,11 @@ public final class RunConfig {
     return resumeList;
   }
 
+  /** graphKernel 开关（CLI）：null=未指定 / "on" / "off" */
+  public String graphKernel() {
+    return graphKernel;
+  }
+
   // ========== Builder ==========
 
   public static Builder builder() {
@@ -287,6 +296,7 @@ public final class RunConfig {
     private boolean resumeMode;
     private String resumeSnapshot;
     private boolean resumeList;
+    private String graphKernel;
 
     private Builder() {}
 
@@ -435,6 +445,11 @@ public final class RunConfig {
 
     public Builder resumeList(boolean resumeList) {
       this.resumeList = resumeList;
+      return this;
+    }
+
+    public Builder graphKernel(String graphKernel) {
+      this.graphKernel = graphKernel;
       return this;
     }
 

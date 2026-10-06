@@ -41,11 +41,22 @@ public final class AgentComposer {
    * @param transports 已启用的传输名（仅用于启动横幅展示）
    */
   public record Options(
-      String sessionId, String model, boolean wal, boolean guardrail, List<String> transports) {
+      String sessionId,
+      String model,
+      boolean wal,
+      boolean guardrail,
+      List<String> transports,
+      Boolean graphKernel) {
 
     /** 便捷构造：传输默认 inprocess。 */
     public Options(String sessionId, String model, boolean wal, boolean guardrail) {
-      this(sessionId, model, wal, guardrail, List.of("inprocess"));
+      this(sessionId, model, wal, guardrail, List.of("inprocess"), null);
+    }
+
+    /** 兼容构造：不指定 graphKernel（走默认 on）。 */
+    public Options(
+        String sessionId, String model, boolean wal, boolean guardrail, List<String> transports) {
+      this(sessionId, model, wal, guardrail, transports, null);
     }
 
     public Options {
@@ -55,7 +66,7 @@ public final class AgentComposer {
               : List.copyOf(transports);
     }
 
-    /** 默认：自动会话 + 默认模型 + WAL + Guardrail。 */
+    /** 默认：自动会话 + 默认模型 + WAL + Guardrail + graphKernel 默认 on。 */
     public static Options defaults() {
       return new Options(null, null, true, true);
     }
@@ -93,6 +104,7 @@ public final class AgentComposer {
         AgentConfig.builder()
             .defaultModelId(model)
             .maxIterations(AgentConfig.DEFAULT_MAX_ITERATIONS)
+            .graphKernelEnabled(opt.graphKernel() == null || opt.graphKernel())
             .build();
     Agent agent = Agent.createDefault(config); // 工具注册 + 默认装配
     if (opt.wal()) {
@@ -105,7 +117,9 @@ public final class AgentComposer {
     if (opt.guardrail()) {
       agent = agent.withGuardrail(new GuardrailVerificatorAdapter());
     }
-    StartupBanner.Data banner = StartupBanner.collect(agent, sessionId, opt.transports());
+    StartupBanner.Data banner =
+        StartupBanner.collect(
+            agent, sessionId, opt.transports(), opt.graphKernel() == null ? "default" : "config");
     return new Composed(new CoreAgentEngine(agent, sessionId), sessionId, banner);
   }
 }
