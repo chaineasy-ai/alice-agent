@@ -61,7 +61,7 @@ class GraphSessionKernelSpec extends Specification {
     private GraphSessionKernel kernel(PlannerService planner, String modelId = "graph-model") {
         new GraphSessionKernel(
                 Vertx.vertx(), planner, new org.cland.alice.tool.gateway.ToolRegistry(),
-                new TextLlmPipeline(), modelId, null,
+                new TextLlmPipeline(), modelId, "test system prompt",
                 { g, l, o -> org.cland.alice.core.agent.kernel.graph.StandardSkeleton.Arbitration.pass() }
                         as org.cland.alice.core.agent.kernel.graph.StandardSkeleton.ArbitrationBrain,
                 null, 2, 10)
@@ -72,7 +72,7 @@ class GraphSessionKernelSpec extends Specification {
             String modelId = "graph-model") {
         new GraphSessionKernel(
                 Vertx.vertx(), planner, new org.cland.alice.tool.gateway.ToolRegistry(),
-                new TextLlmPipeline(), modelId, null,
+                new TextLlmPipeline(), modelId, "test system prompt",
                 { g, l, o -> org.cland.alice.core.agent.kernel.graph.StandardSkeleton.Arbitration.pass() }
                         as org.cland.alice.core.agent.kernel.graph.StandardSkeleton.ArbitrationBrain,
                 verifyPost, 2, 10)

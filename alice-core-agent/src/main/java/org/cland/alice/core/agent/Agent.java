@@ -393,7 +393,7 @@ public class Agent implements KernelDelegates {
                   toolRegistry,
                   inferencerOverride != null ? inferencerOverride : new TextLlmPipeline(),
                   config.defaultModelId(),
-                  null,
+                  org.cland.alice.core.agent.prompt.PromptManager.buildMicroLoopSystemPrompt(),
                   null,
                   config.postVerifyEnabled() && guardrail != null
                       ? new VerifyPostGatePolicy(guardrail)

@@ -62,7 +62,7 @@ class GraphSessionKernelResumeSpec extends Specification {
             InMemoryWalStore store) {
         def k = new GraphSessionKernel(
                 Vertx.vertx(), planner, new ToolRegistry(),
-                new TextLlmPipeline(), "graph-model", null, arbitration, null, 2, 10)
+                new TextLlmPipeline(), "graph-model", "test system prompt", arbitration, null, 2, 10)
         if (store != null) {
             k.walStore(store)
         }

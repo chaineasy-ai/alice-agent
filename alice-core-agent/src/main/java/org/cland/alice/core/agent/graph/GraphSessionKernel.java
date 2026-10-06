@@ -95,7 +95,8 @@ public final class GraphSessionKernel implements Loop {
     this.toolRegistry = Objects.requireNonNull(toolRegistry, "toolRegistry");
     this.inferencer = Objects.requireNonNull(inferencer, "inferencer");
     this.defaultModelId = Objects.requireNonNull(defaultModelId, "defaultModelId");
-    this.actorSystemPrompt = actorSystemPrompt;
+    this.actorSystemPrompt =
+        Objects.requireNonNull(actorSystemPrompt, "actorSystemPrompt must not be null");
     this.arbitration =
         arbitration != null
             ? arbitration
