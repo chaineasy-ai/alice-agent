@@ -68,6 +68,52 @@ class RoundEventPublisherStressSpec extends Specification {
         noExceptionThrown()
     }
 
+    def "收口回调内立即发起下一轮：不得 DispatcherBusyException（确定性回归）"() {
+        given: "拦停引擎，确保订阅先于收口；收口回调运行在轮次虚拟线程上，此时锁必须已释放"
+        def gate = new CountDownLatch(1)
+        def engine = new FakeEngine()
+        engine.askBody = { String p -> gate.await(3, TimeUnit.SECONDS); "a-" + p } as Closure<String>
+        def host = new AgentHost(engine)
+        def errors = Collections.synchronizedList(new ArrayList<Throwable>())
+        def secondPub = []
+        def secondRoundStarted = new CountDownLatch(1)
+
+        when:
+        def pub = host.dispatch(new ExecutionCmd.AcquireGoalCmd("p1", SESSION, "t1"))
+        pub.subscribe(new Flow.Subscriber<StepEvent>() {
+            @Override
+            void onSubscribe(Flow.Subscription s) { s.request(Long.MAX_VALUE) }
+
+            @Override
+            void onNext(StepEvent e) { }
+
+            @Override
+            void onError(Throwable t) {
+                errors << t
+                secondRoundStarted.countDown()
+            }
+
+            @Override
+            void onComplete() {
+                try {
+                    secondPub << host.dispatch(new ExecutionCmd.AcquireGoalCmd("p2", SESSION, "t2"))
+                } catch (Throwable t) {
+                    errors << t
+                } finally {
+                    secondRoundStarted.countDown()
+                }
+            }
+        })
+        waitFor { engine.listenerCount() == 1 } // 轮次已订阅引擎（证明其在跑且未收口）
+        gate.countDown() // 放行 → 轮次收口
+
+        then:
+        secondRoundStarted.await(5, TimeUnit.SECONDS)
+        errors.isEmpty()
+        secondPub.size() == 1
+        waitFor { host.health().rounds() == 2L }
+    }
+
     // ── helpers ──
 
     static List<StepEvent> collect(Flow.Publisher<StepEvent> pub, long timeoutMs = 3000) {
