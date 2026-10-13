@@ -33,12 +33,28 @@ import unittest
 
 if __name__ == "__main__":
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from helpers import git_status_porcelain, worktree_guard_enabled
 
     # Default verbosity
     if "-v" not in sys.argv:
         sys.argv.append("-v")
 
     e2e_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # ── Working-tree isolation gate (#417) ─────────────────────────────
+    # E2E runs may write into the repo (the CLI resolves relative paths to the
+    # project root).  A dirty tree silently breaks `./gradlew check`, so refuse
+    # to start from one and verify the suite leaves the tree as it found it.
+    allow_dirty = not worktree_guard_enabled()
+    dirty_before = git_status_porcelain()
+    if dirty_before and not allow_dirty:
+        print("\n  ❌ Working tree is not clean -- refusing to run E2E (#417).")
+        print("     Uncommitted entries:")
+        for line in dirty_before:
+            print(f"       {line}")
+        print("     Commit/stash them, or set ALICE_E2E_ALLOW_DIRTY=1 to bypass.\n")
+        sys.exit(3)
+    baseline = set(dirty_before)
 
     # Discover tests from multiple locations
     loader = unittest.TestLoader()
@@ -49,6 +65,9 @@ if __name__ == "__main__":
 
     # 2. Dispatch coverage (test_dispatch.py)
     suite.addTests(loader.discover(e2e_dir, pattern="test_dispatch*.py"))
+
+    # 2b. E2E harness regression guards (test_e2e_guards.py -- #416/#417)
+    suite.addTests(loader.discover(e2e_dir, pattern="test_e2e_guards*.py"))
 
     # 3. PMTEV smoke tests (e2e/smoke/)
     smoke_dir = os.path.join(e2e_dir, "smoke")
@@ -63,6 +82,16 @@ if __name__ == "__main__":
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
 
+    # ── Post-run isolation check (#417) ────────────────────────────────
+    new_dirty = [line for line in git_status_porcelain() if line not in baseline]
+    tree_polluted = bool(new_dirty) and not allow_dirty
+    if new_dirty:
+        print("\n  ❌ E2E polluted the working tree (#417) -- new git status entries:")
+        for line in new_dirty:
+            print(f"       {line}")
+    elif not allow_dirty:
+        print("\n  ✅ Working tree clean before and after E2E (#417)")
+
     print()
     print("=" * 64)
     print(f"  Tests run: {result.testsRun}")
@@ -72,4 +101,4 @@ if __name__ == "__main__":
     print(f"  Skipped:   {len(result.skipped)}")
     print("=" * 64)
 
-    sys.exit(0 if result.wasSuccessful() else 1)
+    sys.exit(0 if result.wasSuccessful() and not tree_polluted else 1)

@@ -62,10 +62,54 @@ def run_gradle(task: str, *extra_args, timeout: int = 300) -> subprocess.Complet
         timeout=timeout,
     )
     if result.returncode != 0:
-        print(f"  ❌ Gradle failed:\n{result.stdout[-500:]}")
+        print(f"  ❌ Gradle failed:\n{diagnostic_tail(result)}")
     else:
         print(f"  ✅ Gradle {task} succeeded")
     return result
+
+
+def diagnostic_tail(result: subprocess.CompletedProcess, length: int = 500) -> str:
+    """Return the last ``length`` chars of diagnostic output for a CompletedProcess.
+
+    ``run_gradle`` merges stderr into stdout (``stderr=subprocess.STDOUT``), so
+    ``result.stderr`` is ``None``.  Indexing it directly (``result.stderr[-500:]``)
+    raises ``TypeError`` and masks the real failure.  Always route through this
+    helper so the original message survives (#416).
+    """
+    return (result.stderr or result.stdout or "")[-length:]
+
+
+# ── Working-Tree Isolation Guard (#417) ────────────────────────────────────
+
+
+def git_status_porcelain() -> list[str]:
+    """Return ``git status --porcelain`` entries for PROJECT_ROOT.
+
+    Returns ``[]`` when git is unavailable, the directory is not a repo, or
+    the command fails -- callers treat that as "cannot determine / clean".
+    """
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=PROJECT_ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if result.returncode != 0:
+        return []
+    return [line for line in result.stdout.splitlines() if line.strip()]
+
+
+def worktree_guard_enabled() -> bool:
+    """Whether the e2e worktree-clean gate is active (default: on).
+
+    Set ``ALICE_E2E_ALLOW_DIRTY=1`` to bypass it for local debugging.
+    """
+    return os.environ.get("ALICE_E2E_ALLOW_DIRTY") != "1"
 
 
 # ── CLI Helpers ────────────────────────────────────────────────────────────

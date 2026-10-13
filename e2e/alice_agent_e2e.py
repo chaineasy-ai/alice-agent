@@ -33,7 +33,16 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from helpers import run_gradle, run_cli, PROJECT_ROOT, GRADLEW, GEMMA4_BASE_URL, GEMMA4_MODEL, skip_if_no_gemma4
+from helpers import (
+    run_gradle,
+    run_cli,
+    diagnostic_tail,
+    PROJECT_ROOT,
+    GRADLEW,
+    GEMMA4_BASE_URL,
+    GEMMA4_MODEL,
+    skip_if_no_gemma4,
+)
 
 TIMEOUT = int(os.environ.get("GEMMA4_TIMEOUT", "180"))
 REBUILD = "--build" in sys.argv
@@ -54,7 +63,7 @@ class BuildAliceAgent(unittest.TestCase):
         print("\n  🔨 Building Alice Agent...")
         result = run_gradle(":alice-bootstrap:installDist", timeout=300)
         if result.returncode != 0:
-            raise RuntimeError(f"Build failed: {result.stderr[-300:]}")
+            raise RuntimeError(f"Build failed: {diagnostic_tail(result, 300)}")
 
     def test_build_succeeds(self):
         """Verify the project compiles."""
@@ -278,7 +287,7 @@ class TestAliceAgentSystem(unittest.TestCase):
         if not REBUILD:
             self.skipTest("Skipped (use --build to run gradle check)")
         result = run_gradle("check", timeout=300)
-        self.assertEqual(result.returncode, 0, msg=result.stderr[-500:])
+        self.assertEqual(result.returncode, 0, msg=diagnostic_tail(result))
         output = result.stdout
         self.assertIn("BUILD SUCCESSFUL", output)
         print("\n  ↳ All unit tests pass")

@@ -29,7 +29,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from e2e.helpers import run_gradle
+from e2e.helpers import git_status_porcelain, run_gradle, worktree_guard_enabled
 from e2e.smoke.cases import SMOKE_CASES
 from e2e.smoke.config import DEEPSEEK_API_KEY, PROJECT_MODEL
 
@@ -87,6 +87,17 @@ def main():
     print(f"  Pattern: {pattern}")
     print(f"{'=' * 64}")
 
+    # ── Working-tree isolation gate (#417) ─────────────────────────────
+    allow_dirty = not worktree_guard_enabled()
+    dirty_before = git_status_porcelain()
+    if dirty_before and not allow_dirty:
+        print("\n  ❌ Working tree is not clean -- refusing to run smoke tests (#417).")
+        for line in dirty_before:
+            print(f"       {line}")
+        print("     Commit/stash them, or set ALICE_E2E_ALLOW_DIRTY=1 to bypass.\n")
+        sys.exit(3)
+    baseline = set(dirty_before)
+
     if not DEEPSEEK_API_KEY:
         print("  ⚠️  DEEPSEEK_API_KEY 未设置，Agent 调用大概率会失败。")
 
@@ -104,6 +115,13 @@ def main():
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
 
+    new_dirty = [line for line in git_status_porcelain() if line not in baseline]
+    tree_polluted = bool(new_dirty) and not allow_dirty
+    if new_dirty:
+        print("\n  ❌ Smoke run polluted the working tree (#417):")
+        for line in new_dirty:
+            print(f"       {line}")
+
     print(f"\n{'=' * 64}")
     print(
         f"  Smoke Test Summary\n"
@@ -111,7 +129,7 @@ def main():
         f"Failures: {len(result.failures)}  Errors: {len(result.errors)}"
     )
     print(f"{'=' * 64}")
-    sys.exit(0 if result.wasSuccessful() else 1)
+    sys.exit(0 if result.wasSuccessful() and not tree_polluted else 1)
 
 
 if __name__ == "__main__":
