@@ -315,10 +315,13 @@ public final class ExecutionCoordinator {
       Boolean success = resolveSuccess(resultCtx);
       Object outcome = resultCtx != null ? resultCtx.get("outcome") : null;
       logger.info(
-          "[SESSION_END] graphKernel={} outcome={} success={}",
+          "[SESSION_END] graphKernel={} outcome={} success={} gate={}",
           agentConfig.graphKernelEnabled(),
           outcome != null ? outcome : "<unknown>",
-          success);
+          success,
+          // #521 P-1 off known-issue（atlas 裁定 b）：legacy 无“任务完成”可判信号 ⇒
+          // off 退出码不作门禁判据（仅信息/对照），避免“既作判据又不可靠”。
+          agentConfig.graphKernelEnabled() ? "on" : "exempt(legacy:exit-not-a-gate-criterion)");
       if (Boolean.FALSE.equals(success)) {
         renderer.renderError(
             "Session did not settle successfully (outcome=" + outcome + ")", config);
