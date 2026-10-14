@@ -185,13 +185,13 @@ jobs:
   #   off 退出码不作门禁判据（仅信息/对照，continue-on-error）。
   # 前提（atlas）：JDK/Gradle + 可写临时目录(worktree) + GRADLE_USER_HOME 缓存；
   #   runner 默认 --isolate，在独立 worktree 内自建 installDist ⇒ 无需单独预构建。
-  # 需仓库 secret: DEEPSEEK_API_KEY（缺失则跳过并告警，不误红）。
-  # 初版仅在 push（main/develop）触发（#515 建议先夜间/非 PR 门禁，稳定后再收紧）。
+  # 需仓库 secret: DEEPSEEK_API_KEY。**fail-closed**：缺失则红（不预挂空门 #217）；
+  #   配套序：先配 secret，再挂门禁。
+  # 触发：push + pull_request（门禁价值在合并前拦）。真实 LLM 有成本/限流，关联 #517。
   # ────────────────────────────────────────────────────────────────────────────
   smoke-gate:
     name: Smoke Gate (graph-kernel on; off informational)
     needs: [build]
-    if: github.event_name == 'push'
     runs-on: ubuntu-latest
 
     steps:
@@ -216,26 +216,21 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Check DEEPSEEK_API_KEY
-        id: key
+      - name: Require DEEPSEEK_API_KEY (fail-closed)
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
           if [ -z "${DEEPSEEK_API_KEY}" ]; then
-            echo "::warning::DEEPSEEK_API_KEY secret 未配置，跳过冒烟门禁"
-            echo "have_key=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "have_key=true" >> "$GITHUB_OUTPUT"
+            echo "::error::DEEPSEEK_API_KEY secret 未配置 —— 冒烟门禁 fail-closed，拒绝绿灯（不预挂空门 #217）"
+            exit 1
           fi
 
       - name: Smoke (graph-kernel on) — gating
-        if: steps.key.outputs.have_key == 'true'
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: python -m e2e.smoke.runner --graph-kernel on
 
       - name: Smoke (graph-kernel off) — informational (exit code not a gate criterion, #521 P-1)
-        if: steps.key.outputs.have_key == 'true'
         continue-on-error: true
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
