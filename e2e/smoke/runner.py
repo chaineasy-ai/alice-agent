@@ -67,6 +67,9 @@ def _reexec_isolated(rest_args: list[str]) -> None:
 
     # Gradle 依赖缓存复用真实 HOME；被测运行的 HOME 另设私有目录。
     real_gradle_home = os.environ.get("GRADLE_USER_HOME") or str(Path.home() / ".gradle")
+    # Python 用户级包（pip --user，如 pytest）位于真实 ~/.local；私有 HOME 会遮蔽它。
+    # 固定 PYTHONUSERBASE 指向真实 base，使 `python -m pytest` 在隔离态仍可见。
+    real_userbase = os.environ.get("PYTHONUSERBASE") or str(Path.home() / ".local")
 
     tmp = Path(tempfile.mkdtemp(prefix="alice-smoke-iso-"))
     wt = tmp / "wt"
@@ -110,6 +113,7 @@ def _reexec_isolated(rest_args: list[str]) -> None:
         env["ALICE_SMOKE_BIN"] = str(wt_dist)
         env["HOME"] = str(home)
         env["GRADLE_USER_HOME"] = real_gradle_home
+        env["PYTHONUSERBASE"] = real_userbase
         env["ALICE_OPTS"] = (env.get("ALICE_OPTS", "") + f' "-Duser.home={home}"').strip()
         env["PYTHONPATH"] = str(wt) + os.pathsep + env.get("PYTHONPATH", "")
         # 临时 worktree：运行后的 fixtures 改动无意义，禁用 #417 污染门（准备前 --detach 干净）
