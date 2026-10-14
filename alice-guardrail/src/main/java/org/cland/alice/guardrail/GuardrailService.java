@@ -178,15 +178,20 @@ public final class GuardrailService {
           CorrectionSuggestion.replan("Re-plan needed due to failed observation"));
     }
 
-    // 遍历后验证链
+    // 遍历后验证链：任一失败即返回；否则保留最后一条告警（ALLOW + 非 LOW 风险）
+    // 以便「结果可信性」类软判据（如数值量级/2^53 边界）不被静默丢弃。
+    AuditResult lastWarning = null;
     for (PostValidator validator : postChain) {
       AuditResult result = validator.check(observationMap, originalPlan);
       if (!result.isPassed()) {
         return result;
       }
+      if (result.risk() != RiskLevel.LOW) {
+        lastWarning = result;
+      }
     }
 
-    return AuditResult.allow();
+    return lastWarning != null ? lastWarning : AuditResult.allow();
   }
 
   // ========================================================================

@@ -3,7 +3,9 @@ package org.cland.alice.guardrail;
 import java.util.Map;
 import org.cland.alice.core.planner.Plan;
 import org.cland.alice.guardrail.validators.HallucinationDetector;
+import org.cland.alice.guardrail.validators.NumericResultValidator;
 import org.cland.alice.guardrail.validators.PermissionSandboxValidator;
+import org.cland.alice.guardrail.validators.RequiredToolCallValidator;
 
 /**
  * Hole test entry point for alice-guardrail.
@@ -13,7 +15,8 @@ import org.cland.alice.guardrail.validators.PermissionSandboxValidator;
  *
  * <p>Usage (via Gradle): ./gradlew :alice-guardrail:runHoleTest --args="&lt;key&gt;"
  *
- * <p>Supported keys: verifyPlan, verifyResult, policyEngine, hallucinate, sandbox, all
+ * <p>Supported keys: verifyPlan, verifyResult, policyEngine, hallucinate, sandbox, numeric,
+ * requiredTool, all
  *
  * <p>Exit 0 = PASS, 1 = FAIL.
  */
@@ -22,7 +25,8 @@ public class GuardrailHoleTest {
   public static void main(String[] args) throws Exception {
     if (args.length == 0) {
       fail(
-          "Usage: <key>\n" + "  verifyPlan, verifyResult, policyEngine, hallucinate, sandbox, all");
+          "Usage: <key>\n"
+              + "  verifyPlan, verifyResult, policyEngine, hallucinate, sandbox, numeric, requiredTool, all");
     }
     switch (args[0]) {
       case "verifyPlan" -> testVerifyPlan();
@@ -30,12 +34,16 @@ public class GuardrailHoleTest {
       case "policyEngine" -> testPolicyEngine();
       case "hallucinate" -> testHallucinationDetector();
       case "sandbox" -> testPermissionSandbox();
+      case "numeric" -> testNumericResultValidator();
+      case "requiredTool" -> testRequiredToolCallValidator();
       case "all" -> {
         testVerifyPlan();
         testVerifyResult();
         testPolicyEngine();
         testHallucinationDetector();
         testPermissionSandbox();
+        testNumericResultValidator();
+        testRequiredToolCallValidator();
       }
       default -> fail("Unknown key: " + args[0]);
     }
@@ -47,7 +55,7 @@ public class GuardrailHoleTest {
     GuardrailService service = new GuardrailService();
 
     // Legal plan
-    Plan legalPlan = Plan.fastPath("say hello", "LLM_INFERENCE", "greeting");
+    Plan legalPlan = Plan.fastPath("say hello", Plan.Intent.ANALYZE, "greeting");
     AuditResult legalResult = service.verifyPlan(legalPlan);
     assertTrue("legal plan passes", legalResult.isPassed());
     assertEq("legal plan status", AuditResult.Status.ALLOW, legalResult.status());
@@ -57,7 +65,7 @@ public class GuardrailHoleTest {
         Plan.builder()
             .type(Plan.Type.FAST_PATH)
             .summary("delete data")
-            .addStep("TOOL_CALL", "DROP TABLE users")
+            .addStep(Plan.Intent.SEARCH, "DROP TABLE users")
             .build();
     AuditResult riskyResult = service.verifyPlan(riskyPlan);
     assertTrue("risky plan needs confirm", riskyResult.needsManualConfirm());
@@ -65,7 +73,7 @@ public class GuardrailHoleTest {
 
     // Pre-validator blocks
     service.registerPreValidator(new PermissionSandboxValidator());
-    Plan blockedPlan = Plan.fastPath("access system", "TOOL_CALL", "/etc/passwd");
+    Plan blockedPlan = Plan.fastPath("access system", Plan.Intent.SEARCH, "/etc/passwd");
     AuditResult blockedResult = service.verifyPlan(blockedPlan);
     assertTrue("blocked plan rejected", !blockedResult.isPassed());
     assertEq("blocked plan status", AuditResult.Status.REJECT, blockedResult.status());
@@ -81,7 +89,7 @@ public class GuardrailHoleTest {
 
   static void testVerifyResult() {
     GuardrailService service = new GuardrailService();
-    Plan plan = Plan.fastPath("query data", "TOOL_CALL", "database");
+    Plan plan = Plan.fastPath("query data", Plan.Intent.SEARCH, "database");
 
     // Valid observation
     Map<String, Object> validObs =
@@ -167,7 +175,7 @@ public class GuardrailHoleTest {
 
   static void testHallucinationDetector() {
     HallucinationDetector detector = new HallucinationDetector();
-    Plan plan = Plan.fastPath("search", "TOOL_CALL", "web");
+    Plan plan = Plan.fastPath("search", Plan.Intent.SEARCH, "web");
 
     // Normal observation
     Map<String, Object> normalObs =
@@ -214,23 +222,24 @@ public class GuardrailHoleTest {
     PermissionSandboxValidator validator = new PermissionSandboxValidator();
 
     // Bounded action: allowed
-    Plan allowedPlan = Plan.fastPath("read tmp", "TOOL_CALL", "/tmp/somefile");
+    Plan allowedPlan = Plan.fastPath("read tmp", Plan.Intent.SEARCH, "/tmp/somefile");
     AuditResult allowedResult = validator.check(allowedPlan);
     assertTrue("bounded action passes", allowedResult.isPassed());
 
     // OOB: /etc/ path
-    Plan oobPlan = Plan.fastPath("read etc", "TOOL_CALL", "/etc/shadow");
+    Plan oobPlan = Plan.fastPath("read etc", Plan.Intent.SEARCH, "/etc/shadow");
     AuditResult oobResult = validator.check(oobPlan);
     assertTrue("OOB /etc/ rejected", !oobResult.isPassed());
     assertEq("OOB status", AuditResult.Status.REJECT, oobResult.status());
 
     // OOB: rm -rf /
-    Plan rmPlan = Plan.fastPath("rm root", "TOOL_CALL", "rm -rf /");
+    Plan rmPlan = Plan.fastPath("rm root", Plan.Intent.SEARCH, "rm -rf /");
     AuditResult rmResult = validator.check(rmPlan);
     assertTrue("rm -rf / rejected", !rmResult.isPassed());
 
     // OOB: Windows System32
-    Plan winPlan = Plan.fastPath("access system32", "TOOL_CALL", "C:\\Windows\\System32\\config");
+    Plan winPlan =
+        Plan.fastPath("access system32", Plan.Intent.SEARCH, "C:\\Windows\\System32\\config");
     AuditResult winResult = validator.check(winPlan);
     assertTrue("System32 rejected", !winResult.isPassed());
 
@@ -239,13 +248,87 @@ public class GuardrailHoleTest {
         Plan.builder()
             .type(Plan.Type.FAST_PATH)
             .summary("multi-step")
-            .addStep("TOOL_CALL", "/tmp/file")
-            .addStep("TOOL_CALL", "/etc/config")
+            .addStep(Plan.Intent.SEARCH, "/tmp/file")
+            .addStep(Plan.Intent.SEARCH, "/etc/config")
             .build();
     AuditResult multiResult = validator.check(multiPlan);
     assertTrue("multi-step with OOB rejected", !multiResult.isPassed());
 
     System.out.println("PASS: GRD-P05 PermissionSandboxValidator");
+  }
+
+  // ==================== GRD-P06: NumericResultValidator ====================
+
+  static void testNumericResultValidator() {
+    NumericResultValidator validator = new NumericResultValidator();
+
+    // #528 regression: silent float precision loss must be caught
+    Plan calcPlan =
+        Plan.builder()
+            .type(Plan.Type.FAST_PATH)
+            .summary("calc")
+            .addStep(
+                Plan.Step.of(
+                    Plan.Intent.SEARCH,
+                    "calculator",
+                    Map.of("expression", "123456789012*987654321")))
+            .build();
+    Map<String, Object> wrongObs =
+        Map.of("status", "SUCCESS", "summary", "calc", "rawData", "121932631124487127040");
+    AuditResult wrongResult = validator.check(wrongObs, calcPlan);
+    assertTrue("silent numeric error detected", !wrongResult.isPassed());
+    assertEq("numeric mismatch is INVALID", AuditResult.Status.INVALID, wrongResult.status());
+
+    // Correct value passes
+    Map<String, Object> correctObs =
+        Map.of("status", "SUCCESS", "summary", "calc", "rawData", "121932631124487120852");
+    assertTrue("correct numeric result passes", validator.check(correctObs, calcPlan).isPassed());
+
+    // No expression available: &gt;2^53 integer raises a warning (not a hard failure)
+    Plan idPlan = Plan.fastPath("id", Plan.Intent.SEARCH, "id_generator");
+    Map<String, Object> bigObs =
+        Map.of("status", "SUCCESS", "summary", "id", "rawData", "9007199254740993");
+    AuditResult warn = validator.check(bigObs, idPlan);
+    assertTrue("big integer still passes with warning", warn.isPassed());
+    assertTrue(
+        "warning reason mentions 2^53", warn.reason() != null && warn.reason().contains("2^53"));
+
+    System.out.println("PASS: GRD-P06 NumericResultValidator");
+  }
+
+  // ==================== GRD-P07: RequiredToolCallValidator ====================
+
+  static void testRequiredToolCallValidator() {
+    RequiredToolCallValidator validator = new RequiredToolCallValidator();
+
+    // No metadata ⇒ no-op
+    assertTrue(
+        "no requiredTools is a no-op",
+        validator.check(Plan.fastPath("answer", Plan.Intent.ANALYZE, "gpt-4o")).isPassed());
+
+    // Required tool invoked ⇒ pass
+    Plan invokedPlan =
+        Plan.builder()
+            .type(Plan.Type.FAST_PATH)
+            .summary("calc")
+            .metadata(RequiredToolCallValidator.metadata(java.util.List.of("calculator")))
+            .addStep(Plan.Step.of(Plan.Intent.SEARCH, "calculator"))
+            .build();
+    assertTrue("required tool invoked passes", validator.check(invokedPlan).isPassed());
+
+    // Required tool skipped ⇒ reject
+    Plan skippedPlan =
+        Plan.builder()
+            .type(Plan.Type.FAST_PATH)
+            .summary("mental math")
+            .metadata(RequiredToolCallValidator.metadata(java.util.List.of("calculator")))
+            .addStep(Plan.Step.of(Plan.Intent.FINISH, "FINISH"))
+            .build();
+    AuditResult skipped = validator.check(skippedPlan);
+    assertTrue("skipped required tool rejected", !skipped.isPassed());
+    assertEq("required-tool miss is REJECT", AuditResult.Status.REJECT, skipped.status());
+
+    System.out.println("PASS: GRD-P07 RequiredToolCallValidator");
   }
 
   // ==================== Assertion helpers ====================
