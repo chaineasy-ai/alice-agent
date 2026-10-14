@@ -4,7 +4,7 @@
 - 决策：mint（实现）· atlas（裁定）
 - 日期：2026-10-14
 - 被测基线：`alice-agent@1d23564`（P-1 合入 main 后）
-- 关联：`#515`（评审报告 `docs/audit/2026-10-14-smoke-test-review.md`）· `#520`（图内核 on 修复）· `#521`（升门禁 5 前置）
+- 关联：`#515`（评审报告 `docs/audit/2026-10-14-smoke-test-review.md`）· `#520`（图内核 on 修复）· `#521`（升门禁 5 前置）· `#522`（Guardrail 结构化）· `#523`（pass^k）
 
 ---
 
@@ -17,11 +17,14 @@
 
 atlas 裁定：off known-issue 必须在 **AC-3（挂门禁）前二选一**，且 **不允许 off 退出码“既作判据又不可靠”**。
 
-## 2. 决策（择 **(b)**）
+## 2. 决策（择 **(b)** · 门禁范围 = **ON-only**）
 
-> **off（legacy）退出码不作门禁判据**（仅信息/对照）。门禁判据只断言 **on 路径**。
+> **门禁只断言 on 路径**：退出码 **与** 内容/结果断言均**只取 on**。
+> **off 路径全程仅信息/对照**：退出码 **及** 内容断言都**不作门禁判据**。
 
-理由：off 现有 `AgentContext` 不含“任务完成”可靠信号（`FINISH` 只代表循环结束），无法区分“改对/未改”。与其把不可靠信号混入门禁，不如显式豁免。
+理由（atlas 口径 + `#521` 复跑实证）：off（legacy）既无“任务完成”可靠信号（`FINISH` 只代表循环结束），且实测**完成率方差大**——agent `exit=0` 但**零编辑** ⇒ **内容断言仍红**（parser/divide/config 未改）。故把 off 退出码**或内容断言**混入门禁，都会引入不可靠信号。
+
+> 若将来要把 off 内容断言纳入门禁，**必须**用 **pass^k**（runner `--repeat/--require`，见 `#523`）吸收完成率方差。
 
 ## 3. 落地
 
@@ -40,9 +43,10 @@ atlas 裁定：off known-issue 必须在 **AC-3（挂门禁）前二选一**，�
 
 ## 4. 门禁判据（#521 P-1..P-5 全绿后挂载，AC-3）
 
-1. **on 路径**：`[SESSION_END] outcome=FINISHED && success=true` 且 smoke 内容断言全过（exit 必须 0）；
-2. **off 路径**：仅作对照/信息，**其退出码不作判据**（本档显式声明）；
-3. 弱断言（如 `test_agent_searched_for_old_field`）须改 outcome-based —— 归 `#521` P-4。
+1. **on 路径**：`[SESSION_END] outcome=FINISHED && success=true` 且 smoke 内容断言全过（exit 必须 0）—— **唯一门禁判据**；
+2. **off 路径**：退出码 **与内容断言均不作判据**（仅信息/对照；完成率方差见 §2）；
+3. 弱断言（如 `test_agent_searched_for_old_field`）须改 outcome-based —— 归 `#521` P-4；
+4. **（可选）** 若纳入 off 内容断言：用 **pass^k**（`python -m e2e.smoke.runner --repeat K --require R`）—— 归 `#523`（K=1/R=1 为默认，等价旧行为）。
 
 ## 5. 复现
 

@@ -171,6 +171,20 @@ def main():
         help="P-2 (#521): run the smoke suite on the graph kernel (on) or the legacy "
         "path (off). Omit to use the CLI default (on).",
     )
+    parser.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        metavar="K",
+        help="pass^k: run the selected suite K times (default 1).",
+    )
+    parser.add_argument(
+        "--require",
+        type=int,
+        default=None,
+        metavar="R",
+        help="pass^k: require at least R of K runs to pass (default = K). Exit 0 iff >=R pass.",
+    )
     args = parser.parse_args()
 
     if args.graph_kernel:
@@ -208,11 +222,17 @@ def main():
         print(f"[DRY RUN] Would run: python -m unittest discover -s {test_dir} -p {pattern}")
         sys.exit(0)
 
+    # pass^k（#521）：默认 K=1（等价旧行为）；K>1 时重复跑 K 次，要求 ≥R 次通过。
+    repeat_k = max(1, args.repeat)
+    require_r = args.require if args.require is not None else repeat_k
+    require_r = max(1, min(require_r, repeat_k))
+
     print(f"\n{'=' * 64}")
     print(f"  PMTEV Smoke Test Runner")
     print(f"  Model:   {PROJECT_MODEL}")
     print(f"  Pattern: {pattern}")
     print(f"  Kernel:  {args.graph_kernel or 'default (on)'}")
+    print(f"  Repeat:  {repeat_k} (require >= {require_r} pass)")
     print(f"{'=' * 64}")
 
     # ── Working-tree isolation gate (#417) ─────────────────────────────
@@ -238,10 +258,23 @@ def main():
             print("❌ Pre-build failed, aborting.")
             sys.exit(1)
 
-    loader = unittest.TestLoader()
-    suite = loader.discover(str(test_dir), pattern=pattern)
-    runner = unittest.TextTestRunner(verbosity=2)
-    result = runner.run(suite)
+    tests_total = 0
+    failures_total = 0
+    errors_total = 0
+    passes = 0
+    for i in range(1, repeat_k + 1):
+        if repeat_k > 1:
+            print(f"\n──── pass^{repeat_k} · run {i}/{repeat_k} ────", flush=True)
+        loader = unittest.TestLoader()
+        suite = loader.discover(str(test_dir), pattern=pattern)
+        result = unittest.TextTestRunner(verbosity=2).run(suite)
+        tests_total += result.testsRun
+        failures_total += len(result.failures)
+        errors_total += len(result.errors)
+        run_ok = result.wasSuccessful()
+        passes += 1 if run_ok else 0
+        if repeat_k > 1:
+            print(f"  [pass^{repeat_k}] run {i}/{repeat_k}: {'PASS' if run_ok else 'FAIL'}")
 
     new_dirty = [line for line in git_status_porcelain() if line not in baseline]
     tree_polluted = bool(new_dirty) and not allow_dirty
@@ -253,11 +286,12 @@ def main():
     print(f"\n{'=' * 64}")
     print(
         f"  Smoke Test Summary\n"
-        f"  Ran: {result.testsRun}  "
-        f"Failures: {len(result.failures)}  Errors: {len(result.errors)}"
+        f"  Runs: {repeat_k}  Passed: {passes}/{repeat_k} (require >= {require_r})\n"
+        f"  Ran: {tests_total}  "
+        f"Failures: {failures_total}  Errors: {errors_total}"
     )
     print(f"{'=' * 64}")
-    sys.exit(0 if result.wasSuccessful() and not tree_polluted else 1)
+    sys.exit(0 if passes >= require_r and not tree_polluted else 1)
 
 
 if __name__ == "__main__":
