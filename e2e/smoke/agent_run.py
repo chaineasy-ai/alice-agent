@@ -52,12 +52,16 @@ def build_agent_command(prompt: str, model: str, task_timeout: int) -> list[str]
     prompt_flat = " ".join(prompt.split())
     if '"' in prompt_flat:
         raise ValueError("prompt 不能包含双引号：Gradle --args 无法转义。")
+    # P-2（#521）：内核 on/off 参数化。读 env 在**调用时**求值，
+    # 便于 runner 在同一进程内先设置再跑用例（default = 不传，走 CLI 默认 on）。
+    kernel = os.environ.get("ALICE_SMOKE_GRAPH_KERNEL", "").strip().lower()
+    kernel_flag = f" --graph-kernel={kernel}" if kernel in ("on", "off") else ""
     return [
         str(GRADLEW),
         ":alice-bootstrap:run",
         "--console=plain",
         "--args",
-        f'run "{prompt_flat}" --model {model} --timeout {task_timeout} --verbose',
+        f'run "{prompt_flat}" --model {model} --timeout {task_timeout} --verbose{kernel_flag}',
     ]
 
 
