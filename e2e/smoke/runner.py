@@ -22,6 +22,7 @@ Usage:
 """
 
 import argparse
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -60,7 +61,17 @@ def main():
         action="store_true",
         help="Skip the pre-build (incremental installDist)",
     )
+    parser.add_argument(
+        "--graph-kernel",
+        choices=["on", "off"],
+        default=None,
+        help="P-2 (#521): run the smoke suite on the graph kernel (on) or the legacy "
+        "path (off). Omit to use the CLI default (on).",
+    )
     args = parser.parse_args()
+
+    if args.graph_kernel:
+        os.environ["ALICE_SMOKE_GRAPH_KERNEL"] = args.graph_kernel
 
     if args.list:
         print("Available PMTEV smoke cases:")
@@ -85,6 +96,7 @@ def main():
     print(f"  PMTEV Smoke Test Runner")
     print(f"  Model:   {PROJECT_MODEL}")
     print(f"  Pattern: {pattern}")
+    print(f"  Kernel:  {args.graph_kernel or 'default (on)'}")
     print(f"{'=' * 64}")
 
     # ── Working-tree isolation gate (#417) ─────────────────────────────

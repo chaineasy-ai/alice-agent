@@ -25,6 +25,17 @@ updated: "2026-10-01"
 
 ## Unreleased
 
+### Tests
+
+- **冒烟套件升门禁前置 P-2/P-4（`e2e/smoke`，承 `#515` · `#521`）**:
+  - **P-2 内核 on/off 参数化**：`e2e/smoke/runner.py` 新增 `--graph-kernel {on,off}`（默认不传 = CLI 默认 on），
+    经 `ALICE_SMOKE_GRAPH_KERNEL` 传给 `agent_run.build_agent_command`，官方 runner 现可跑 legacy（off）路径；
+  - **P-4 弱断言改 outcome-or-evidence**：`test_smoke_case_2.py` 的 `test_agent_searched_for_old_field`（只认
+    `grep|search_file` 的实现耦合断言）改为 `test_old_field_removed_or_retrieval_evidence` ——
+    **旧字段消失（outcome）或日志含检索/读取类工具（evidence）任一即通过**，消除"用 `read_file` 达成同一目标
+    却判红"的假失败；规范 Case2 断言 #2「全局检索」降为**证据面之一**（手段非结果）。
+
+
 ### Features
 
 - **图内核 WAL/Checkpoint 接入（`alice-core-agent`，M1-S3 · #178）**: 新增 `LedgerState`（账本快照）+
