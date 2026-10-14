@@ -135,8 +135,9 @@ class StdioJsonlTransportSpec extends Specification {
     }
 
     def "close 后停止服务"() {
-        given:
-        def input = new java.io.PipedInputStream()
+        given: "输入为“已连接但无数据”的管道 → read() 阻塞（而非未连接管道立即抛 IOException 与 close() 竞态）"
+        def writeEnd = new java.io.PipedOutputStream()
+        def input = new java.io.PipedInputStream(writeEnd)
         def out = new ByteArrayOutputStream()
         def transport = new StdioJsonlTransport(input, out)
         transport.start(new AgentHost(new FakeEngine()))
