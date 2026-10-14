@@ -151,8 +151,10 @@ public final class AgentHost implements AgentCommandDispatcher {
                 lastRoundMs = System.currentTimeMillis() - t0;
                 rounds.incrementAndGet();
                 emit(pub, StepEventType.DONE, sessionId, traceId, Map.of(), usage);
-                pub.complete();
+                // 先放锁再收口：complete() 会同步回调订阅者，若此时仍持锁，订阅者紧接着发起
+                // 下一轮 dispatch 会 CAS 失败抛 DispatcherBusyException（CI 高负载下偶发红 ✗）。
                 roundActive.set(false);
+                pub.complete();
               }
             });
     return pub;
