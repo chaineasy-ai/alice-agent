@@ -15,10 +15,27 @@ Usage:
     python -m e2e.smoke.test_smoke_case_2
 """
 
+import io
 import re
 import sys
+import tokenize
 import unittest
 from pathlib import Path
+
+def _code_without_comments(source: str) -> str:
+    """剥离 Python 注释，返回仅含代码/字符串的文本（#521 P-4）。
+
+    用途：判定"旧字段是否仍被**代码**引用" —— 迁移说明写在注释里（如
+    ``# migrated from legacy TIMEOUT_MS``）不应算失败。用 tokenizer 剥离
+    ``COMMENT`` token，避免"判原始字符串而非代码引用"的假红。
+    """
+    try:
+        tokens = tokenize.generate_tokens(io.StringIO(source).readline)
+        kept = [t for t in tokens if t.type != tokenize.COMMENT]
+        return tokenize.untokenize(kept)
+    except (tokenize.TokenError, IndentationError):
+        return source  # 语法异常时退回原文，保守判定
+
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from e2e.smoke.agent_run import restore_files, run_agent, snapshot_files
@@ -52,17 +69,22 @@ class TestSmokeCase2(unittest.TestCase):
         )
 
     def test_timeout_renamed_across_files(self):
-        """config.py 和 client.py 都必须将 TIMEOUT_MS 替换为 TIMEOUT_SEC。"""
+        """config.py 和 client.py 的**代码**都不再引用旧字段 TIMEOUT_MS（#521 P-4）。
+
+        判"代码引用"而非"原始字符串"：注释/文档里的迁移说明（如
+        ``# migrated from legacy TIMEOUT_MS``）不算失败。
+        """
         config_content = self.CONFIG.read_text(encoding="utf-8")
         self.assertIn(
             "TIMEOUT_SEC",
             config_content,
             f"config.py 未包含 TIMEOUT_SEC\n当前内容:\n{config_content}",
         )
+        config_code = _code_without_comments(config_content)
         self.assertNotIn(
             "TIMEOUT_MS",
-            config_content,
-            f"config.py 仍包含旧字段 TIMEOUT_MS\n当前内容:\n{config_content}",
+            config_code,
+            f"config.py 代码仍引用旧字段 TIMEOUT_MS\n当前内容:\n{config_content}",
         )
 
         client_content = self.CLIENT.read_text(encoding="utf-8")
@@ -71,10 +93,11 @@ class TestSmokeCase2(unittest.TestCase):
             client_content,
             f"client.py 未引用 TIMEOUT_SEC\n当前内容:\n{client_content}",
         )
+        client_code = _code_without_comments(client_content)
         self.assertNotIn(
             "TIMEOUT_MS",
-            client_content,
-            f"client.py 仍引用旧字段 TIMEOUT_MS\n当前内容:\n{client_content}",
+            client_code,
+            f"client.py 代码仍引用旧字段 TIMEOUT_MS\n当前内容:\n{client_content}",
         )
 
     def test_unit_conversion_correct(self):
