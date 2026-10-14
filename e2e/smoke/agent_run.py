@@ -56,6 +56,26 @@ def build_agent_command(prompt: str, model: str, task_timeout: int) -> list[str]
     # 便于 runner 在同一进程内先设置再跑用例（default = 不传，走 CLI 默认 on）。
     kernel = os.environ.get("ALICE_SMOKE_GRAPH_KERNEL", "").strip().lower()
     kernel_flag = f" --graph-kernel={kernel}" if kernel in ("on", "off") else ""
+
+    # P-3（#521）：工作树/并发隔离。设 ALICE_SMOKE_BIN 时直接驱动**预构建分发包**
+    # （不触发 Gradle），配合 runner 的独立 git worktree + 私有 HOME，
+    # 消除共享工作树并发 Gradle 互踩（#515/#521-3）。
+    isolated_bin = os.environ.get("ALICE_SMOKE_BIN", "").strip()
+    if isolated_bin:
+        cmd = [
+            isolated_bin,
+            "run",
+            prompt_flat,
+            "--model",
+            model,
+            "--timeout",
+            str(task_timeout),
+            "--verbose",
+        ]
+        if kernel in ("on", "off"):
+            cmd.append(f"--graph-kernel={kernel}")
+        return cmd
+
     return [
         str(GRADLEW),
         ":alice-bootstrap:run",
