@@ -100,6 +100,72 @@ class HallucinationDetectorSpec extends Specification {
         result.status() == AuditResult.Status.INVALID
     }
 
+    // ── #522: 结构性判定（工具类型门 + 错误行/短语） ──────────────
+
+    def "GRD-P04/#522: inspection tool (read_file) with source containing error-ish words ALLOWs"() {
+        given:
+        def observation = [
+                "status"  : "SUCCESS",
+                "summary" : "read_file parser.py",
+                "rawData" : "Error: not used here\nvalue = null\nundefined = True  # not found\ntimeout = 30\n",
+                "metadata": ["toolName": "read_file"]
+        ] as Map<String, Object>
+
+        when:
+        def result = detector.check(observation, plan)
+
+        then:
+        result.isPassed()
+    }
+
+    def "GRD-P04/#522: bare words null/undefined/not found no longer trigger INVALID"() {
+        given:
+        def observation = [
+                "status" : "SUCCESS",
+                "summary": "source dump",
+                "rawData": "x = null\ny = undefined\n# value not found in config\n"
+        ] as Map<String, Object>
+
+        when:
+        def result = detector.check(observation, plan)
+
+        then:
+        result.isPassed()
+    }
+
+    def "GRD-P04/#522: execution tool real error line still triggers INVALID"() {
+        given:
+        def observation = [
+                "status"  : "SUCCESS",
+                "summary" : "run tests",
+                "rawData" : "bash: foo: command not found",
+                "metadata": ["toolName": "run_command"]
+        ] as Map<String, Object>
+
+        when:
+        def result = detector.check(observation, plan)
+
+        then:
+        !result.isPassed()
+        result.status() == AuditResult.Status.INVALID
+    }
+
+    def "GRD-P04/#522: Traceback line triggers INVALID"() {
+        given:
+        def observation = [
+                "status" : "SUCCESS",
+                "summary": "python run",
+                "rawData": "Traceback (most recent call last):\n  File \"x.py\", line 1\n"
+        ] as Map<String, Object>
+
+        when:
+        def result = detector.check(observation, plan)
+
+        then:
+        !result.isPassed()
+        result.status() == AuditResult.Status.INVALID
+    }
+
     def "GRD-P04: check returns INVALID for FAILURE status observation"() {
         given:
         def observation = [
