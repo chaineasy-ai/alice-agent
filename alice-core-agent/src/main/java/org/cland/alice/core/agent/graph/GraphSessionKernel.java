@@ -223,7 +223,7 @@ public final class GraphSessionKernel implements Loop {
     StandardSkeleton skeleton =
         new StandardSkeleton(
             input,
-            new PlannerGoalBrain(planner),
+            new PlannerGoalBrain(planner, Math.max(1, revisionBudget)),
             new LlmActorBrain(inferencer, modelId, actorSystemPrompt, toolSpecs(), input),
             arbitration,
             verifyPost,

@@ -1,0 +1,6 @@
+# Alice Agent E2E / 冒烟测试 Python 依赖
+# 安装： pip install -r e2e/requirements.txt
+# 被 e2e/run_alice_e2e.sh 引用（脚本在该目录内执行）
+requests>=2.31
+# PMTEV 冒烟 Case 3（沙箱执行 + TDD 自省）需要 pytest
+pytest>=8.0

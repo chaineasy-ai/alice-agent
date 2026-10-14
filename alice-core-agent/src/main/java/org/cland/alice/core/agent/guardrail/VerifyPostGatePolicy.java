@@ -26,8 +26,9 @@ import org.slf4j.LoggerFactory;
  * <p><b>装配门（与 legacy 同构）</b>：由 {@code Agent.graphKernel()} 在 {@code config.postVerifyEnabled() &&
  * guardrail != null} 时注入；{@code verificator == null} 时恒放行（等同 legacy {@code guardrail == null}）。
  *
- * <p><b>观测回退</b>：账本无 {@code answer} 产物时（如效果预算熔断直接退出 goal），以解释器 {@code lastObservation} 为审计对象 —— 等价
- * legacy {@code Continue(Observation)} 的后检对象。
+ * <p><b>审计对象（#520 方案 A）</b>：优先 goal 的动作观测（解释器 {@code lastObservation} = 工具执行结果）—— 与 {@code
+ * HallucinationDetector} 的“观测校验”语义一致；无观测时才回退账本 {@code answer}（纯作答路径）。避免把模型
+ * 最终作答散文当“观测”扫描造成的误拦截（如任务词汇 `TIMEOUT`/`error:` 必中）。
  */
 public final class VerifyPostGatePolicy implements GatePolicy {
 
@@ -51,26 +52,33 @@ public final class VerifyPostGatePolicy implements GatePolicy {
       return GateResult.passed();
     }
     GoalRef goal = ledger != null ? ledger.currentGoal() : null;
-    String answer = resolveAnswer(ledger, lastObservation);
-    boolean passed = verificator.audit(new StepResult.Finish(answer));
+    String subject = resolveAuditSubject(ledger, lastObservation);
+    boolean passed = verificator.audit(new StepResult.Finish(subject));
     if (logger.isDebugEnabled()) {
       logger.debug(
           "[VerifyPostGatePolicy] verifyPost(g={}) {} ({} chars)",
           goal != null ? goal.id() : "<none>",
           passed ? "PASS" : "BLOCK(" + StandardSkeleton.PORT_VP_REJECT + ")",
-          answer.length());
+          subject.length());
     }
     return passed ? GateResult.passed() : GateResult.guard(StandardSkeleton.PORT_VP_REJECT);
   }
 
-  /** 还原 legacy vp 所见的 answer：优先账本产物，回退解释器最后观测。 */
-  private static String resolveAnswer(Ledger ledger, String lastObservation) {
+  /**
+   * 审计对象：优先 goal 的动作观测（工具执行结果），无观测时回退账本 answer（#520 方案 A）。
+   *
+   * <p>保留 answer 回退以兼容纯作答路径与既有 parity 用例（无观测时与 legacy {@code audit(Finish(answer))} 一致）。
+   */
+  private static String resolveAuditSubject(Ledger ledger, String lastObservation) {
+    if (lastObservation != null && !lastObservation.isBlank()) {
+      return lastObservation;
+    }
     if (ledger != null) {
       Object answer = ledger.artifacts().get(ARTIFACT_ANSWER);
       if (answer != null) {
         return String.valueOf(answer);
       }
     }
-    return lastObservation != null ? lastObservation : "";
+    return "";
   }
 }

@@ -98,6 +98,28 @@ class AgentGraphAssemblySpec extends Specification {
         pp.contains("Respond with one or more words")   // planner.ftl 意图分类指令（非原始任务直送）
     }
 
+    def "re-plan cap ends session with no goals (#520 B)"() {
+        given: "maxPlans=2"
+        def plannerCalls = 0
+        def planner = plannerWithStatic({ Map<String, Object> ctx ->
+            plannerCalls++
+            Plan.staticPlan("p", [Plan.Step.of(Plan.Intent.ANALYZE, "x")])
+        } as Function)
+        def brain = new PlannerGoalBrain(planner, 2)
+
+        when:
+        def p1 = brain.strategize("t", new Ledger())
+        def p2 = brain.strategize("t", new Ledger())
+        def p3 = brain.strategize("t", new Ledger())
+
+        then: "前两次正常出 goal；超过封顶返回空 ⇒ 骨架 N_GOAL_AVAIL(none) ⇒ 会话终态"
+        p1.goals().size() == 1
+        p2.goals().size() == 1
+        p3.goals().isEmpty()
+        p3.meta()["capped"] == true
+        plannerCalls == 2
+    }
+
     // ========================================================================
     // ToolRegistryEffectGateway：真实 ExecutionEngine 效果执行
     // ========================================================================

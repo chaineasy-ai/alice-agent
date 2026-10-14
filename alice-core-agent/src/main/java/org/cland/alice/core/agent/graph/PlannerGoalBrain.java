@@ -33,15 +33,41 @@ public final class PlannerGoalBrain implements StandardSkeleton.StrategizeBrain 
 
   private final PlannerService planner;
 
+  /** 总重规划封顶（#520 方案 B）：>0 时，第 maxPlans 次之后的 STRATEGIZE 返回空 goal 队列 ⇒ 会话落终态。 */
+  private final int maxPlans;
+
+  /** 本会话已执行的 STRATEGIZE 次数（每会话一个 brain 实例）。 */
+  private int planCount;
+
   /**
    * @param planner 战略规划后端（PlannerService 聚合根，含 Fast/Slow/SOP）
    */
   public PlannerGoalBrain(PlannerService planner) {
+    this(planner, 0);
+  }
+
+  /**
+   * @param planner 战略规划后端
+   * @param maxPlans 总重规划封顶（≤0 = 不封顶）
+   */
+  public PlannerGoalBrain(PlannerService planner, int maxPlans) {
     this.planner = Objects.requireNonNull(planner, "planner must not be null");
+    this.maxPlans = maxPlans;
   }
 
   @Override
   public StandardSkeleton.StrategyPlan strategize(String task, Ledger ledger) {
+    planCount++;
+    // #520 方案 B：与 legacy maxIterations 等效的总重规划封顶。
+    // 无此封顶时：VP 拦截 → 修订 → 预算耗尽 → re-plan 新 goal → 无界循环，直到 CLI 超时。
+    if (maxPlans > 0 && planCount > maxPlans) {
+      logger.warn(
+          "[PlannerGoalBrain] re-plan cap {} reached (plan #{}) -> ending session with no goals",
+          maxPlans,
+          planCount);
+      return new StandardSkeleton.StrategyPlan(List.of(), Map.of("capped", true));
+    }
+
     Map<String, Object> ctx = new LinkedHashMap<>();
     ctx.put("prompt", task != null ? task : "");
     // #520 根因修复：与 legacy（AgentExecutor）对齐，注入意图分类模板。

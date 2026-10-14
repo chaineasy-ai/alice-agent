@@ -78,6 +78,20 @@ class VerifyPostGatePolicySpec extends Specification {
         !policy.verify(VP, new Ledger(), "no data").pass()
     }
 
+    def "VP-P02c: action observation preferred over answer prose (#520 A)"() {
+        given:
+        def policy = new VerifyPostGatePolicy(new GuardrailVerificatorAdapter(false))
+
+        expect: "answer 含触发词，但工具观测干净 → 以观测为审计对象 ⇒ 放行（避免误拦）"
+        policy.verify(VP, ledgerWithAnswer("error: not found"), "Wrote 167 chars to config.py").pass()
+
+        and: "观测含触发词（如任务词汇 TIMEOUT）→ 拦截"
+        !policy.verify(VP, ledgerWithAnswer("clean"), "TIMEOUT_MS remaining").pass()
+
+        and: "无观测 → 回退 answer（与 legacy parity 不变）"
+        !policy.verify(VP, ledgerWithAnswer("error: boom"), "").pass()
+    }
+
     // ── VP-P03 ───────────────────────────────────────────────────────
 
     def "VP-P03: parity with legacy audit(StepResult.Finish) across answers"() {
