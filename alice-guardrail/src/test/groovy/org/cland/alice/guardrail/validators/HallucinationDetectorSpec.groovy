@@ -67,6 +67,39 @@ class HallucinationDetectorSpec extends Specification {
         result.status() == AuditResult.Status.INVALID
     }
 
+    def "GRD-P04: check returns ALLOW when rawData is source containing 'timeout' identifier (#521)"() {
+        given:
+        // 读源码时很常见的合法内容：`timeout=` / `Timeout in milliseconds` / `TIMEOUT_MS`
+        def observation = [
+                "status" : "SUCCESS",
+                "summary": "read_file config.py",
+                "rawData": "# Timeout in milliseconds (legacy)\nTIMEOUT_MS = 5000\nprint(f\"timeout={TIMEOUT_MS}ms\")"
+        ] as Map<String, Object>
+
+        when:
+        def result = detector.check(observation, plan)
+
+        then:
+        result.isPassed()
+        result.status() == AuditResult.Status.ALLOW
+    }
+
+    def "GRD-P04: check returns INVALID when rawData contains a real timeout error (#521)"() {
+        given:
+        def observation = [
+                "status" : "SUCCESS",
+                "summary": "tool output",
+                "rawData": "request timed out after 30s"
+        ] as Map<String, Object>
+
+        when:
+        def result = detector.check(observation, plan)
+
+        then:
+        !result.isPassed()
+        result.status() == AuditResult.Status.INVALID
+    }
+
     def "GRD-P04: check returns INVALID for FAILURE status observation"() {
         given:
         def observation = [

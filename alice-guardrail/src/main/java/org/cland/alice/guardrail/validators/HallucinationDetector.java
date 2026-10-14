@@ -39,7 +39,13 @@ public final class HallucinationDetector implements PostValidator {
     "permission denied",
     "access denied",
     "connection refused",
-    "timeout",
+    // 注意：不得用裸 "timeout"——它会误伤正常源码/日志里的 `timeout=`、`Timeout in ...`
+    // 等标识符（#521：读 client.py/config.py 被误判 INVALID → 重规划死循环 → 240s 超时）。
+    // 只匹配真正的超时错误文案。
+    "timed out",
+    "timeout after",
+    "timeoutexception",
+    "deadline exceeded",
     "not found"
   };
 
