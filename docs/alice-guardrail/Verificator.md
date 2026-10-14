@@ -233,6 +233,7 @@ executor.withGuardrailToolProxy(proxy);
 |--------|----------|----------|-----------|
 | `LogicSanityValidator` | `GuardrailVerificatorAdapter` | Plan 死循环检测（连续重复 step > 3）、终步骤缺失检测 | Case 4 |
 | `PermissionSandboxValidator` | `GuardrailVerificatorAdapter` | 系统路径黑名单（/etc/、/proc/ 等）、高危命令（rm -rf / 等） | Case 8, 9 |
+| `RequiredToolCallValidator` | 调用方注册（`#530` 未默认注册） | Plan `metadata.requiredTools` 声明的必需工具必须出现对应 `TOOL_CALL`，否则 REJECT（「需工具任务不得跳过工具」） | `#528` 机制发现 · `#530` |
 
 ### Pre-Validators（内层 Micro-ReAct `GuardrailToolProxy`）
 
@@ -252,6 +253,7 @@ executor.withGuardrailToolProxy(proxy);
 | 验证器 | 注册位置 | 校验内容 | 对应 Case |
 |--------|----------|----------|-----------|
 | `ToolResultValidator` | `GuardrailToolProxy.createDefault` | HIGH 风险工具失败 → MANUAL_CONFIRM、返回类型与声明 returnType 一致性 | Case 31, 32 |
+| `NumericResultValidator` | 调用方注册（`#530` 未默认注册） | 数值结果可信性：表达式独立精确复算（决定性）· 整数 2^53 边界 · 量级上限（软告警） | `#528` 副产物 · `#530` |
 
 ---
 
@@ -328,4 +330,7 @@ proxy.guardrailService().registerPostValidator(new MyPostValidator());
 | `ToolExistenceValidator.java` | `alice-guardrail` | 工具存在性校验 |
 | `ToolMicroLoopValidator.java` | `alice-guardrail` | 微循环检测（有状态） |
 | `ToolResultValidator.java` | `alice-guardrail` | 工具结果元数据校验 |
+| `NumericResultValidator.java` | `alice-guardrail` | 数值结果可信性校验（表达式复算 / 2^53 / 量级） |
+| `ExpressionEvaluator.java` | `alice-guardrail` | 精确算术表达式求值（交叉复算的「第二把尺子」） |
+| `RequiredToolCallValidator.java` | `alice-guardrail` | 必需工具调用强制（`metadata.requiredTools`） |
 | `双循环Agent架构·全量原子校验Case清单.md` | `docs/alice-guardrail` | 设计文档：46 个校验 Case |

@@ -38,6 +38,18 @@ updated: "2026-10-01"
 
 ### Features
 
+- **数值结果可信性后验 + 必需工具调用强制（`alice-guardrail`，承 `#528` 副产物 · `#530`）**: 对照实验暴露 lab
+  `calculator` 浮点实现下 >2^53 整数运算**静默出错**（工具成功返回、数值却错），而既有三校验器只判「调用是否发生/
+  是否报错/类型」。新增 `NumericResultValidator`（Post-Validator）：当执行参数含算术表达式（`expression`/`expr`/
+  `formula`）或该工具注册了专属 `NumericRecomputer` 时，用新增 `ExpressionEvaluator`（`BigDecimal` 精确复算，白名单
+  语法 + 幂/结果位数安全上限）**独立复算**再比对，不一致 ⇒ `INVALID`（「第二把尺子」，不依赖工具实现）；无表达式
+  可复算时对 >2^53 整数与超量级结果发软告警（不误伤雪花 ID/哈希）。新增 `RequiredToolCallValidator`
+  （Pre-Validator）：`Plan.metadata.requiredTools` 声明的必需工具必须出现对应 `TOOL_CALL`，缺失即 `REJECT` +
+  `REPLAN`（机制归本类；「何时需要哪些工具」的意图元数据归产品侧 `#516` / @compass）。`GuardrailService.verifyResult`
+  现将后验证链的 `ALLOW+warning` 上浮（原实现静默丢弃告警）。新增 `NumericResultValidatorSpec`（22 例，含 `#528`
+  三条边界回归）· `RequiredToolCallValidatorSpec`（7 例）· hole `GRD-P06`/`GRD-P07`；顺带修复 `GuardrailHoleTest`
+  既有的 `String → Intent` 编译破损（`Plan` 迁移到 `Intent` 后未同步，`runHoleTest` 一直未编译）。
+
 - **图内核 WAL/Checkpoint 接入（`alice-core-agent`，M1-S3 · #178）**: 新增 `LedgerState`（账本快照）+
   `Ledger.snapshot()/restore()`（回放无歧义）；`SafePoint`（节点边界可恢复快照：pos/steps/lastObservation/
   pendingEffect/effectRuns/ledgerState）+ `CheckpointSink`；`R0Interpreter` 新增 `OPTION_CHECKPOINT_SINK`
