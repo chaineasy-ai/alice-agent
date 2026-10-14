@@ -78,6 +78,26 @@ class AgentGraphAssemblySpec extends Specification {
         seenCtx[0]["lastFeedback"] == "route was wrong"
     }
 
+    def "planner context carries intent-classification plannerPrompt (#520)"() {
+        given: "捕获 planner 收到的上下文"
+        def seenCtx = []
+        def planner = plannerWithStatic({ Map<String, Object> ctx ->
+            seenCtx << ctx
+            Plan.staticPlan("done", [Plan.Step.of(Plan.Intent.FINISH, "FINISH")])
+        } as Function)
+        def brain = new PlannerGoalBrain(planner)
+
+        when: "对含修复语义的任务做规划"
+        brain.strategize("修复 parser.py 中的缺陷并跑通测试", new Ledger())
+
+        then: "上下文含意图分类模板（plannerPrompt），与 legacy AgentExecutor 对齐"
+        seenCtx.size() == 1
+        seenCtx[0]["plannerPrompt"] != null
+        def pp = seenCtx[0]["plannerPrompt"].toString()
+        pp.contains("修复 parser.py 中的缺陷并跑通测试")
+        pp.contains("Respond with one or more words")   // planner.ftl 意图分类指令（非原始任务直送）
+    }
+
     // ========================================================================
     // ToolRegistryEffectGateway：真实 ExecutionEngine 效果执行
     // ========================================================================

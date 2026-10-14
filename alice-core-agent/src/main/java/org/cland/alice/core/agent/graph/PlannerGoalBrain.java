@@ -8,6 +8,7 @@ import java.util.Objects;
 import org.cland.alice.core.agent.kernel.graph.GoalRef;
 import org.cland.alice.core.agent.kernel.graph.Ledger;
 import org.cland.alice.core.agent.kernel.graph.StandardSkeleton;
+import org.cland.alice.core.agent.prompt.PromptManager;
 import org.cland.alice.core.planner.Plan;
 import org.cland.alice.core.planner.PlannerService;
 import org.slf4j.Logger;
@@ -43,6 +44,10 @@ public final class PlannerGoalBrain implements StandardSkeleton.StrategizeBrain 
   public StandardSkeleton.StrategyPlan strategize(String task, Ledger ledger) {
     Map<String, Object> ctx = new LinkedHashMap<>();
     ctx.put("prompt", task != null ? task : "");
+    // #520 根因修复：与 legacy（AgentExecutor）对齐，注入意图分类模板。
+    // 缺失时 FastPathStrategy.classifyIntent 会把原始任务当分类 prompt，得到散文 → fallback ANALYZE
+    // ⇒ goal=ANALYZE:* ⇒ actor 只分析不落盘（「能答≠能改」）。
+    ctx.put("plannerPrompt", PromptManager.buildPlannerPrompt(task != null ? task : "", ctx));
     Object feedback = ledger.route().get("feedback");
     if (feedback != null) {
       ctx.put("lastFeedback", feedback);
