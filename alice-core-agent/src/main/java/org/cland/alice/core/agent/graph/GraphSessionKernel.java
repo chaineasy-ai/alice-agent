@@ -252,7 +252,15 @@ public final class GraphSessionKernel implements Loop {
             resume.steps());
       }
     }
-    return skeleton.run(options);
+    SessionOutcome outcome = skeleton.run(options);
+    // #521 P-1：统一终态事件（on/off 共用口径）—— exit=0 ⇔ FINISHED。
+    logger.info(
+        "[SESSION_END] session={} outcome={} steps={} answerChars={}",
+        sessionId,
+        outcome.status(),
+        outcome.steps(),
+        outcome.answer() != null ? outcome.answer().length() : 0);
+    return outcome;
   }
 
   /**

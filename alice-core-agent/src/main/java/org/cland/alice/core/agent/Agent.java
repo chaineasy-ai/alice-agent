@@ -485,6 +485,11 @@ public class Agent implements KernelDelegates {
     context.put("result", result.answer() != null ? result.answer() : "");
     context.put("status", result.status().name());
     context.put("iteration", result.iteration());
+    // #521 P-1：会话终态 outcome → 统一退出码依据（exit=0 ⇔ settled && success）
+    boolean success = result.status() == SessionStatus.FINISHED;
+    context.put("settled", true);
+    context.put("outcome", result.status().name());
+    context.put("success", success);
     return context;
   }
 

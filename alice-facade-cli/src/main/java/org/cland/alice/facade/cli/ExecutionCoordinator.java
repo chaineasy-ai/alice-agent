@@ -310,6 +310,21 @@ public final class ExecutionCoordinator {
 
       // 8. 获取结果并输出
       AgentContext resultCtx = resultRef.get();
+      // #521 P-1：退出码由会话终态 outcome 派生（on/off 共用；exit=0 ⇔ settled && success）。
+      // 不再拿“循环结束”当成功；FAILED/CANCELLED/未收敛 → 非 0。
+      Boolean success = resolveSuccess(resultCtx);
+      Object outcome = resultCtx != null ? resultCtx.get("outcome") : null;
+      logger.info(
+          "[SESSION_END] graphKernel={} outcome={} success={}",
+          agentConfig.graphKernelEnabled(),
+          outcome != null ? outcome : "<unknown>",
+          success);
+      if (Boolean.FALSE.equals(success)) {
+        renderer.renderError(
+            "Session did not settle successfully (outcome=" + outcome + ")", config);
+        agent.close();
+        return 1;
+      }
       if (resultCtx != null) {
         Object resultObj = resultCtx.get("result");
         String result = resultObj != null ? resultObj.toString() : "No result produced.";
@@ -342,6 +357,40 @@ public final class ExecutionCoordinator {
   // ========================================================================
   // 辅助
   // ========================================================================
+
+  /** 从上下文属性安全解析 Boolean（缺失/非布尔 → null ⇒ 未知，沿用旧行为）。 */
+  private static Boolean asBoolean(Object v) {
+    return v instanceof Boolean b ? b : null;
+  }
+
+  /**
+   * 会话终态成功判定（#521 P-1）：优先 `success` 属性；缺失时回退 `status`/`error` 键。
+   *
+   * <p>已知缺口：legacy 路径“未改却 FINISH”，无任务完成信号 ⇒ 返回 null（沿用旧行为），记 known-issue。
+   */
+  private static Boolean resolveSuccess(AgentContext ctx) {
+    if (ctx == null) {
+      return null;
+    }
+    Boolean direct = asBoolean(ctx.get("success"));
+    if (direct != null) {
+      return direct;
+    }
+    Object statusObj = ctx.get("status");
+    if (statusObj != null) {
+      String st = statusObj.toString();
+      if ("FINISHED".equals(st)) {
+        return Boolean.TRUE;
+      }
+      if ("FAILED".equals(st) || "CANCELLED".equals(st) || "FATAL_ERROR".equals(st)) {
+        return Boolean.FALSE;
+      }
+    }
+    if (ctx.containsKey("error")) {
+      return Boolean.FALSE;
+    }
+    return null;
+  }
 
   /** 从上下文中解析中间步骤结果并渲染。 当前实现为占位：真实场景中需要 AgentExecutor 通过 callback 流式发布 StepResult。 */
   private void renderStepResults(AgentContext context) {
