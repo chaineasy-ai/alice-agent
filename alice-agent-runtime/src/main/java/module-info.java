@@ -22,6 +22,8 @@ module alice.agent.runtime.main {
 
   requires alice.agent.proto.main;
   requires alice.agent.alice.core.agent.main;
+  // 基础运行指标（/metrics）：JVM 堆/线程
+  requires java.management;
   // 组合根挂 Guardrail 桥（GuardrailVerificatorAdapter implements Verificator）
   requires alice.agent.alice.guardrail.main;
   // 启动横幅枚举工具（ToolRegistry）

@@ -62,6 +62,7 @@ updated: "2026-09-19"
 |------|------|
 | [ops/deploy.md](./ops/deploy.md) | **部署手册（#173 M3-1）**：单命令启动（`bootstrap.sh`）、运行形态（CLI/TUI/RPC）、打包分发、配置目录（`~/.alice/`）、健康检查与退出码 |
 | [ops/gate.md](./ops/gate.md) | **提交门禁（#173 M3-3）**：统一入口 `scripts/check.sh`、`gate.yaml` 门禁项、pre-commit hook、覆盖率阈值与 CI/Jenkins 用法 |
+| [ops/observability.md](./ops/observability.md) | **可观测手册（#173 M3-2）**：`/health`、`/metrics` 字段、JSON Lines 结构化日志（`info.log`/`error.log`）与轮转策略 |
 
 ## 发布 / 工作清单
 

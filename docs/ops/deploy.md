@@ -82,7 +82,7 @@ tar -xzf alice-0.1.0.tar -C /opt
 | `~/.alice/model.json` | 默认模型（`default_model`） |
 | `~/.alice/wal/<session>/` | WAL / checkpoint（`--no-wal` 可关） |
 | `~/.alice/sops/` | SOP 脚本目录 |
-| `~/.alice/logs/` | 日志（M3-2：`info.log` / `error.log`，JSON 行） |
+| `~/.alice/logs/` | 日志（**JSON Lines**）：`info.log`（INFO+）、`error.log`（仅 ERROR）；可用 `ALICE_LOG_DIR` 覆盖目录 |
 
 > 配置默认无需改动；首次运行缺失项会自动创建/使用默认值。
 
@@ -91,8 +91,11 @@ tar -xzf alice-0.1.0.tar -C /opt
 RPC 形态提供健康端点（`HostHealth` JSON）：
 
 ```bash
-curl -s http://127.0.0.1:8080/api/v1/health
+curl -s http://127.0.0.1:8080/api/v1/health    # 健康快照
+curl -s http://127.0.0.1:8080/api/v1/metrics   # 基础运行指标
 ```
+
+详见 [可观测手册](./observability.md)。
 
 ## 6. 退出码约定
 
@@ -114,6 +117,6 @@ curl -s http://127.0.0.1:8080/api/v1/health
 
 ## 8. 关联
 
-- **M3-2 可观测**：结构化日志（JSON Lines，`info.log`/`error.log`）+ 基础指标（见后续文档）。
+- **M3-2 可观测**：结构化日志（JSON Lines，`info.log`/`error.log`）+ 基础指标（`/api/v1/metrics`）—— 见 [observability.md](./observability.md)。
 - **M3-3 门禁**：`./bootstrap.sh check`（JaCoCo 覆盖率门禁）+ gate 尾巴。
 - **M3-4 运维对接**：部署脚本 / cron / CMDB 登记（归 @steward）。

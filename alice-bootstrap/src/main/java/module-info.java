@@ -14,4 +14,10 @@ module alice.agent.app.main {
 
   requires org.slf4j;
   requires ch.qos.logback.classic;
+  requires ch.qos.logback.core;
+
+  // Logback 通过反射实例化自定义 JSON 编码器（JsonLogEncoder）
+  opens org.cland.alice.agent.logging to
+      ch.qos.logback.classic,
+      ch.qos.logback.core;
 }

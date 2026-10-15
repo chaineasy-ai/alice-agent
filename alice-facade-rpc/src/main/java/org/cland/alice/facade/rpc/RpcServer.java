@@ -36,6 +36,7 @@ import org.cland.alice.agent.proto.port.DispatcherBusyException;
 import org.cland.alice.agent.proto.port.SessionTransport;
 import org.cland.alice.runtime.AgentHost;
 import org.cland.alice.runtime.HostHealth;
+import org.cland.alice.runtime.Metrics;
 
 /**
  * HTTP RPC 2.0 服务端 —— 把协议契约面暴露给外部调度器/看板/其他 agent。
@@ -49,6 +50,7 @@ import org.cland.alice.runtime.HostHealth;
  * POST /api/v1/chat/interrupt   {type:abort}              → 200 {"ok":true}
  * POST /api/v1/command          任意命令信封               → 200/202（按命令语义）
  * GET  /api/v1/health                                     → 200 HostHealth JSON
+ * GET  /api/v1/metrics                                    → 200 基础运行指标 JSON
  * </pre>
  *
  * <p>错误映射（协议 §4）：校验 400｜忙 409｜未就绪 503｜其他 500。
@@ -130,6 +132,7 @@ public final class RpcServer implements SessionTransport {
       String route = ex.getRequestMethod() + " " + ex.getRequestURI().getPath();
       switch (route) {
         case "GET /api/v1/health" -> health(ex);
+        case "GET /api/v1/metrics" -> metrics(ex);
         case "POST /api/v1/command" -> command(ex);
         case "POST /api/v1/session" -> typed(ex, SESSION_TYPES);
         case "POST /api/v1/chat/stream" -> stream(ex);
@@ -173,6 +176,38 @@ public final class RpcServer implements SessionTransport {
               + "\"lastUsage\":"
               + usageJson(StepEvent.Usage.zero())
               + ",\"startedAt\":null}";
+    }
+    respond(ex, 200, json);
+  }
+
+  /** 基础运行指标（轮次/耗时/用量 + JVM 堆/线程/运行时长）。 */
+  private void metrics(HttpExchange ex) throws IOException {
+    AgentCommandDispatcher d = dispatcher;
+    String json;
+    if (d instanceof AgentHost agentHost) {
+      Metrics m = Metrics.collect(agentHost.health());
+      json =
+          "{\"ok\":true,\"sessionId\":"
+              + quote(m.sessionId())
+              + ",\"uptimeMs\":"
+              + m.uptimeMs()
+              + ",\"roundActive\":"
+              + m.roundActive()
+              + ",\"rounds\":"
+              + m.rounds()
+              + ",\"lastRoundMs\":"
+              + m.lastRoundMs()
+              + ",\"tokensLastRound\":"
+              + m.tokensLastRound()
+              + ",\"heapUsedBytes\":"
+              + m.heapUsedBytes()
+              + ",\"heapMaxBytes\":"
+              + m.heapMaxBytes()
+              + ",\"threads\":"
+              + m.threads()
+              + "}";
+    } else {
+      json = "{\"ok\":false,\"error\":\"宿主不支持指标\"}";
     }
     respond(ex, 200, json);
   }
