@@ -18,7 +18,7 @@ scope:
   - "alice-facade-tui"
   - "alice-facade-rpc"
 status: "active"
-updated: "2026-10-01"
+updated: "2026-10-16"
 ---
 
 # Changelog
@@ -37,6 +37,13 @@ updated: "2026-10-01"
 
 
 ### Features
+
+- **部署形态：单命令引导 + 打包分发（`#173` M3-1）**: 新增根目录 `bootstrap.sh`
+  （`setup/build/run/run-tui/run-rpc/test/check/package/shell/clean`），单命令起服务
+  （`./bootstrap.sh run-rpc` → HTTP `:8080`）；JDK 自动解析（`JAVA_HOME`/PATH/sdkman）并做 **JDK ≥ 25 自检**；
+  `package` 产出 `installDist`（`build/install/alice/bin/alice`）+ `distTar`/`distZip` 分发包。新增
+  `docs/ops/deploy.md`（运行形态 / 打包 / 配置 `~/.alice/` / 健康检查 / 退出码 / 升级回滚）。**实测**：
+  `installDist` 制品 `--facade rpc --port 18080` 起服务 → `GET /api/v1/health` **200**（`HostHealth` JSON）。
 
 - **数值结果可信性后验 + 必需工具调用强制（`alice-guardrail`，承 `#528` 副产物 · `#530`）**: 对照实验暴露 lab
   `calculator` 浮点实现下 >2^53 整数运算**静默出错**（工具成功返回、数值却错），而既有三校验器只判「调用是否发生/
