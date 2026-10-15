@@ -35,7 +35,7 @@ updated: "2026-10-16"
 | 6 | `test` | slow | `./gradlew test` |
 | 7 | `coverage` | slow | `./gradlew jacocoTestCoverageVerification`（BUNDLE 阈值） |
 | 8 | `rules` | — | N/A |
-| 9 | `exposure` | — | N/A（发布前启用） |
+| 9 | `exposure` | slow | `scripts/scan-exposure.sh --fail-on-high .`（接口暴露面巡检，HIGH 未清零不得发布） |
 
 - **doclint 排除**：`.specify`/`specs`（spec 模板脚手架）、`.github`（模板）、`tests`/`e2e`（测试夹具）、`.pi`（pi 配置）——非产品文档。
 - **覆盖率阈值**：`alice-core-agent` INSTRUCTION ≥ 40% / BRANCH ≥ 25%，其余模块 80% / 70%（见根 `build.gradle`）。

@@ -82,3 +82,12 @@ curl -s http://127.0.0.1:8080/api/v1/metrics
 | 日志目录 | `~/.alice/logs/`（`ALICE_LOG_DIR` 可覆盖） |
 | 健康端点 | `GET /api/v1/health` |
 | 指标端点 | `GET /api/v1/metrics` |
+
+## 5. 暴露面（发布前）
+
+RPC 形态对外暴露的 HTTP 路由（协议面 `/api/v1`）：`GET /health` · `GET /metrics` · `POST /session` ·
+`POST /chat/stream` · `POST /chat/steer` · `POST /chat/interrupt` · `POST /command`。
+
+- **`/metrics` 为新增暴露面**：仅返回运行指标（轮次/耗时/用量 + JVM 堆/线程/运行时长），**不含敏感业务数据**；
+- **发布前跑**：`./scripts/check.sh --stage all`（含 `exposure` 门禁 = `scripts/scan-exposure.sh --fail-on-high`，HIGH 未清零不得发布）；
+- 暴露面扫描为**只读、不联网**，规则集见 `scripts/scan-exposure.sh` 头部。

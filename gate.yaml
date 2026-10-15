@@ -61,9 +61,12 @@ gates:
   # ── 8. rules ── N/A（本项目暂无语言/领域硬约束脚本）
   # rules: { cmd: "N/A", stage: slow }
 
-  # ── 9. exposure ── N/A：发布前启用接口暴露面扫描
-  # exposure: { cmd: "N/A", stage: slow }
+  # ── 9. exposure ── 接口暴露面静态巡检（HIGH 未清零不得发布；CVE 规则集见脚本头）
+  exposure:
+    cmd: "bash scripts/scan-exposure.sh --fail-on-high ."
+    stage: slow
 
 # 注：gate.py 只支持 **块状列表**（每项独立 `- x` 行），不支持内联 `[]`/`[a,b]`；
 #     `require:`/`forbid:` 留空表示无约束，填则每个目录一行。
 #     N/A 门禁以注释保留占位（不换名、不跳号），启用时取消注释即可。
+#     exposure 由仓库自带 scripts/scan-exposure.sh（vendored；只读扫描、不联网）。
