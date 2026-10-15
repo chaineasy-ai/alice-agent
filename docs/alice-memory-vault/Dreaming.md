@@ -3,6 +3,7 @@ title: "Memory Vault - Dreaming Mechanism"
 summary: "Design of the memory dreaming/simulation mechanism"
 read_when:
   - "implementing or designing memory dreaming mechanism"
+  - "查阅《Memory Vault - Dreaming Mechanism》相关实现/配置"
 scope:
   - "alice-memory-vault"
 status: "active"

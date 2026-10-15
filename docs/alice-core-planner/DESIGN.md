@@ -3,6 +3,7 @@ title: "alice-core-planner DESIGN"
 summary: "Deep modular design for the core planner - dual-path decision engine (Fast/Slow Path)"
 read_when:
   - "implementing or modifying planner, strategy, or decision engine"
+  - "查阅《alice-core-planner DESIGN》相关实现/配置"
 scope:
   - "alice-core-planner"
 status: "active"

@@ -3,12 +3,12 @@ title: "Hole Scene — alice-core-agent executor endpoints"
 summary: "Module-level hole tests probing AgentExecutor, StepResult, AgentContext, SubAgentManager public API boundaries. These are hole_test — not E2E, not unit."
 read_when:
   - "running or debugging hole tests for alice-core-agent"
+  - "查阅《Hole Scene — alice-core-agent executor endpoints》相关实现/配置"
 scope:
   - "alice-core-agent"
 status: "active"
 updated: "2026-06-19"
 ---
-
 # Hole Scene — alice-core-agent Executor Endpoints
 
 ## 1. Scene Overview

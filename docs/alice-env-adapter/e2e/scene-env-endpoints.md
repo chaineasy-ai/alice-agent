@@ -3,12 +3,12 @@ title: "Hole Scene — alice-env-adapter environment endpoints"
 summary: "Module-level hole tests probing EnvManager, McpClient, SnapshotManager public API boundaries."
 read_when:
   - "running or debugging hole tests for alice-env-adapter"
+  - "查阅《Hole Scene — alice-env-adapter environment endpoints》相关实现/配置"
 scope:
   - "alice-env-adapter"
 status: "active"
 updated: "2026-06-19"
 ---
-
 # Hole Scene — alice-env-adapter Environment Endpoints
 
 ## 1. Scene Overview

@@ -1,3 +1,14 @@
+---
+title: "双循环Agent架构 · 全量原子校验Case清单"
+summary: "核心特性：只校验“规划好不好”，不校验任何 Tool 具体参数，失败走全局 Reflection 重规划"
+read_when:
+  - "阅读/维护《双循环Agent架构 · 全量原子校验Case清单》时"
+  - "排查与《双循环Agent架构 · 全量原子校验Case清单》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 # 双循环Agent架构 · 全量原子校验Case清单
 
 # 一、PreVerify 外层规划级校验（Plan 整体/Step 子任务维度）

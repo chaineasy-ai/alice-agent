@@ -3,12 +3,12 @@ title: "Hole Scene — alice-model provider endpoints"
 summary: "Module-level hole tests probing ModelProvider, Call lifecycle, ModelSupplier, config loading, and multi-provider routing."
 read_when:
   - "running or debugging hole tests for alice-model"
+  - "查阅《Hole Scene — alice-model provider endpoints》相关实现/配置"
 scope:
   - "alice-model"
 status: "active"
 updated: "2026-06-19"
 ---
-
 # Hole Scene — alice-model Provider Endpoints
 
 ## 1. Scene Overview

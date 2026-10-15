@@ -1,14 +1,14 @@
 ---
 read_when:
-  - running Alice Agent in TUI mode
+  - "running Alice Agent in TUI mode"
+  - "查阅《TUI Quick Start》相关实现/配置"
 scope:
-  - alice-facade-tui
-status: active
-summary: Quick start guide to run Alice Agent in TUI mode
-title: TUI Quick Start
+  - "alice-facade-tui"
+status: "active"
+summary: "Quick start guide to run Alice Agent in TUI mode"
+title: "TUI Quick Start"
 updated: "2026-06-13"
 ---
-
 # RUN AGENT ON TUI MODE
 
 ```bash

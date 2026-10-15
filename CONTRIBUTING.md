@@ -1,3 +1,14 @@
+---
+title: "Contributing to Alice Agent"
+summary: "This doc is intended for contributors to Alice Agent (hopefully that's you!)"
+read_when:
+  - "阅读/维护《Contributing to Alice Agent》时"
+  - "排查与《Contributing to Alice Agent》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 # Contributing to Alice Agent
 
 This doc is intended for contributors to **Alice Agent** (hopefully that's you!)

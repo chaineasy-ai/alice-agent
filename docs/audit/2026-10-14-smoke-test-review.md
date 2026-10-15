@@ -1,3 +1,14 @@
+---
+title: "alice-agent 冒烟测试用例 · 独立评审与实跑报告"
+summary: "- 单号：base/cland-crawler#515（承 #173）"
+read_when:
+  - "阅读/维护《alice-agent 冒烟测试用例 · 独立评审与实跑报告》时"
+  - "排查与《alice-agent 冒烟测试用例 · 独立评审与实跑报告》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 # alice-agent 冒烟测试用例 · 独立评审与实跑报告
 
 - 单号：base/cland-crawler#515（承 #173）

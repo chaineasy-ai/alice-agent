@@ -1,9 +1,12 @@
 ---
-title: Git Convention
-priority: high
-status: enabled
+title: "Git Convention"
+summary: "Follow Chris Beams style:"
+priority: "high"
+status: "enabled"
+read_when:
+  - "阅读/维护《Git Convention》时"
+  - "排查与《Git Convention》相关问题"
 ---
-
 ## Commit Message Format
 
 Follow [Chris Beams](http://chris.beams.io/posts/git-commit/) style:

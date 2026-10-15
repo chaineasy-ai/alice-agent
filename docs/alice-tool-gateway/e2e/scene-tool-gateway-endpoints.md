@@ -3,12 +3,12 @@ title: "Hole Scene — alice-tool-gateway endpoints"
 summary: "Module-level hole tests probing ToolRegistry, ExecutionEngine, SandboxProvider, and BuiltinTools public API boundaries."
 read_when:
   - "running or debugging hole tests for alice-tool-gateway"
+  - "查阅《Hole Scene — alice-tool-gateway endpoints》相关实现/配置"
 scope:
   - "alice-tool-gateway"
 status: "active"
 updated: "2026-06-20"
 ---
-
 # Hole Scene — alice-tool-gateway Endpoints
 
 ## 1. Scene Overview

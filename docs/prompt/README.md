@@ -6,7 +6,6 @@ read_when:
   - "adding new prompt templates (core_loop, micro_loop, planner)"
   - "debugging prompt loading order or caching behavior"
   - "overriding built-in prompts with user-defined versions"
-  - "tracing the full prompt assembly chain — system → planner → micro loop"
 scope:
   - "alice-core-agent/.../prompt/"
   - "~/.alice/prompts/"
@@ -14,7 +13,6 @@ scope:
 status: "active"
 updated: "2026-07-14"
 ---
-
 # Prompt System — Procedural Memory
 
 ## Overview

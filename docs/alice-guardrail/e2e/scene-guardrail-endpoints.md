@@ -3,12 +3,12 @@ title: "Hole Scene — alice-guardrail validation endpoints"
 summary: "Module-level hole tests probing GuardrailService, PolicyEngine, HallucinationDetector, PermissionSandboxValidator public API boundaries."
 read_when:
   - "running or debugging hole tests for alice-guardrail"
+  - "查阅《Hole Scene — alice-guardrail validation endpoints》相关实现/配置"
 scope:
   - "alice-guardrail"
 status: "active"
 updated: "2026-06-19"
 ---
-
 # Hole Scene — alice-guardrail Validation Endpoints
 
 ## 1. Scene Overview

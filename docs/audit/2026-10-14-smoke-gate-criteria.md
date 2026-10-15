@@ -1,3 +1,14 @@
+---
+title: "alice-agent 冒烟「合并门禁」判据口径（#521 · P-1 off 择一：b）"
+summary: "- 单号：base/cland-crawler#521（承 #515 · P-1）"
+read_when:
+  - "阅读/维护《alice-agent 冒烟「合并门禁」判据口径（#521 · P-1 off 择一：b）》时"
+  - "排查与《alice-agent 冒烟「合并门禁」判据口径（#521 · P-1 off 择一：b）》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 # alice-agent 冒烟「合并门禁」判据口径（#521 · P-1 off 择一：b）
 
 - 单号：base/cland-crawler#521（承 #515 · P-1）

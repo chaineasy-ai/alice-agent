@@ -3,6 +3,7 @@ title: "alice-env-adapter DESIGN"
 summary: "Environment adapter design - external world as an observable, operable, rollbackable state machine with MCP 2.0 support"
 read_when:
   - "implementing or modifying environment adapter or MCP transport"
+  - "查阅《alice-env-adapter DESIGN》相关实现/配置"
 scope:
   - "alice-env-adapter"
 status: "active"

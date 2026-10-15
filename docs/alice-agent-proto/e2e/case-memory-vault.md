@@ -3,13 +3,13 @@ title: "E2E Case — alice-memory-vault endpoints"
 summary: "Hole test specification for alice-memory-vault module — VaultController, EpisodicVault, SemanticVault, ProceduralVault, WalStore public API boundaries."
 read_when:
   - "implementing or modifying hole tests for alice-memory-vault"
+  - "查阅《E2E Case — alice-memory-vault endpoints》相关实现/配置"
 scope:
   - "alice-agent-proto"
   - "alice-memory-vault"
 status: "active"
 updated: "2026-06-19"
 ---
-
 # E2E Case — alice-memory-vault (Hole Test)
 
 ## 1. Purpose

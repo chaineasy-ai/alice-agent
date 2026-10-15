@@ -1,3 +1,14 @@
+---
+title: "alice-agent-runtime — 会话宿主"
+summary: "把会话语义从门面/引擎里收口出来：一轮一锁、单写者、超时中止、new/resume 策略、"
+read_when:
+  - "阅读/维护《alice-agent-runtime — 会话宿主》时"
+  - "排查与《alice-agent-runtime — 会话宿主》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 # alice-agent-runtime — 会话宿主
 
 把**会话语义**从门面/引擎里收口出来：一轮一锁、单写者、超时中止、new/resume 策略、

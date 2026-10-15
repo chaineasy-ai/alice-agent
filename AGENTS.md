@@ -1,3 +1,14 @@
+---
+title: "Alice Agent — Contributor Quickstart Guide"
+summary: "Alice Agent is a modular Java agent framework designed as a multi-module Gradle project. It provides a complete agent lifecycle with core planning, memory ma..."
+read_when:
+  - "阅读/维护《Alice Agent — Contributor Quickstart Guide》时"
+  - "排查与《Alice Agent — Contributor Quickstart Guide》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 # Alice Agent — Contributor Quickstart Guide
 
 **Alice Agent** is a modular Java agent framework designed as a multi-module Gradle project. It provides a complete agent lifecycle with core planning, memory management, environment adaptation (MCP), tool execution, guardrails, and dual frontends (TUI + CLI).

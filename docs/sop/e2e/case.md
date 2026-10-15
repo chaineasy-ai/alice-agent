@@ -3,8 +3,10 @@ title: "SOP E2E — End-to-End Test Case"
 summary: "Full lifecycle test: build DAG → persist → load → match → plan"
 status: "active"
 updated: "2026-06-30"
+read_when:
+  - "阅读/维护《SOP E2E — End-to-End Test Case》时"
+  - "排查与《SOP E2E — End-to-End Test Case》相关问题"
 ---
-
 # SOP End-to-End Test Case
 
 > Tests the complete SOP lifecycle through `alice-memory-vault`'s `org.cland.alice.memory.sop` package:

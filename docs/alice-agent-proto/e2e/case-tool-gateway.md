@@ -3,13 +3,13 @@ title: "E2E Case — alice-tool-gateway endpoints"
 summary: "Hole test specification for alice-tool-gateway module — ToolRegistry, ExecutionEngine, SandboxProvider public API boundaries."
 read_when:
   - "implementing or modifying hole tests for alice-tool-gateway"
+  - "查阅《E2E Case — alice-tool-gateway endpoints》相关实现/配置"
 scope:
   - "alice-agent-proto"
   - "alice-tool-gateway"
 status: "active"
 updated: "2026-06-20"
 ---
-
 # E2E Case — alice-tool-gateway (Hole Test)
 
 ## 1. Purpose

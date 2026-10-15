@@ -3,6 +3,7 @@ title: "alice-memory-vault DESIGN"
 summary: "Memory vault design - human memory taxonomy applied to software engineering"
 read_when:
   - "implementing or modifying memory vault architecture"
+  - "查阅《alice-memory-vault DESIGN》相关实现/配置"
 scope:
   - "alice-memory-vault"
 status: "active"

@@ -1,3 +1,14 @@
+---
+title: "Prompt Structure"
+summary: "/.alice/prompts/"
+read_when:
+  - "阅读/维护《Prompt Structure》时"
+  - "排查与《Prompt Structure》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 # Prompt Structure
 
 ## File Layout

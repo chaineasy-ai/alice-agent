@@ -3,12 +3,12 @@ title: "Hole Scene — alice-memory-vault memory endpoints"
 summary: "Module-level hole tests probing VaultController, EpisodicVault, SemanticVault, ProceduralVault, WalStore public API boundaries."
 read_when:
   - "running or debugging hole tests for alice-memory-vault"
+  - "查阅《Hole Scene — alice-memory-vault memory endpoints》相关实现/配置"
 scope:
   - "alice-memory-vault"
 status: "active"
 updated: "2026-06-20"
 ---
-
 # Hole Scene — alice-memory-vault Memory Endpoints
 
 ## 1. Scene Overview

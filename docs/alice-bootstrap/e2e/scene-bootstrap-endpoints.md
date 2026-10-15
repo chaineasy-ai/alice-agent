@@ -3,12 +3,12 @@ title: "Hole Scene — alice-bootstrap launcher endpoints"
 summary: "Module-level hole tests probing FacadeSelector, AppBootstrapper, IFacadeLauncher interface contract."
 read_when:
   - "running or debugging hole tests for alice-bootstrap"
+  - "查阅《Hole Scene — alice-bootstrap launcher endpoints》相关实现/配置"
 scope:
   - "alice-bootstrap"
 status: "active"
 updated: "2026-06-19"
 ---
-
 # Hole Scene — alice-bootstrap Launcher Endpoints
 
 ## 1. Scene Overview

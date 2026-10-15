@@ -1,3 +1,14 @@
+---
+title: "Java 25 Import New Features Concise Usage Guide"
+summary: "<!-- START doctoc generated TOC please keep comment here to allow auto update -->"
+read_when:
+  - "阅读/维护《Java 25 Import New Features Concise Usage Guide》时"
+  - "排查与《Java 25 Import New Features Concise Usage Guide》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*

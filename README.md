@@ -1,3 +1,14 @@
+---
+title: "Alice Agent"
+summary: "A modular Java agent framework built with Gradle and Spock."
+read_when:
+  - "阅读/维护《Alice Agent》时"
+  - "排查与《Alice Agent》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 # Alice Agent
 
 ![GitHub Stars](https://img.shields.io/github/stars/chaineasy-ai/alice-agent.svg?style=flat-square)

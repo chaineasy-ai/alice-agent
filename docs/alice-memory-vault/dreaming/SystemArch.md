@@ -1,3 +1,14 @@
+---
+title: "Alice Agent 记忆体系 + ReAct/Dreaming 流程 结构化规整版"
+summary: "核心双平面设计：在线ReAct执行平面（高可用、崩溃恢复） + 离线Dreaming演进平面（记忆精炼、知识沉淀）"
+read_when:
+  - "阅读/维护《Alice Agent 记忆体系 + ReAct/Dreaming 流程 结构化规整版》时"
+  - "排查与《Alice Agent 记忆体系 + ReAct/Dreaming 流程 结构化规整版》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 # Alice Agent 记忆体系 + ReAct/Dreaming 流程 结构化规整版
 ## 一、整体架构总览
 核心双平面设计：**在线ReAct执行平面（高可用、崩溃恢复）** + **离线Dreaming演进平面（记忆精炼、知识沉淀）**

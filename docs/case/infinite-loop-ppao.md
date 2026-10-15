@@ -1,3 +1,14 @@
+---
+title: "Case: PPAO 循环永不终止 — AgentExecutor 无限推理故障"
+summary: "CLI 命令 alice run \"Say hello\" --model deepseek-v4-flash 进入无限循环。"
+read_when:
+  - "阅读/维护《Case: PPAO 循环永不终止 — AgentExecutor 无限推理故障》时"
+  - "排查与《Case: PPAO 循环永不终止 — AgentExecutor 无限推理故障》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 # Case: PPAO 循环永不终止 — AgentExecutor 无限推理故障
 
 ## 概述

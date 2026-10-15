@@ -1,3 +1,14 @@
+---
+title: "alice-agent-proto — 协议契约层"
+summary: "对内/对外同一份契约：命令（入方向）+ 事件（出方向）+ 分发端口 + codec + 版本纪律。"
+read_when:
+  - "阅读/维护《alice-agent-proto — 协议契约层》时"
+  - "排查与《alice-agent-proto — 协议契约层》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 # alice-agent-proto — 协议契约层
 
 **对内/对外同一份契约**：命令（入方向）+ 事件（出方向）+ 分发端口 + codec + 版本纪律。

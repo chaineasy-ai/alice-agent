@@ -1,0 +1,69 @@
+# gate.yaml — 统一门禁声明（规范 cland-pm/docs/门禁规范.md §2）
+# 顺序/命名固定：doclint/structure/format/lint/typecheck/test/coverage/rules/exposure
+# pre-commit: --stage fast --changed ；Jenkins/CI: --stage all
+# 语言: Java 25 / Gradle（命令级裁剪见下；不适用项以注释标 N/A，不换名、不跳号）
+gates:
+  # ── 1. doclint ── 文档 front-matter 合规（title/summary/read_when）
+  #     排除非 AI-doc 树：spec 模板/脚手架（.specify/specs）、GitHub 模板（.github）、
+  #     测试夹具（tests/e2e）、pi agent 配置（.pi）—— 这些不是产品文档，不应要求 front-matter。
+  doclint:
+    cmd: "python3 tools/doclint.py . --quiet --exclude .specify,specs,.github,tests,e2e,build,dist,.pi"
+    on:
+      - "**.md"
+      - "tools/**"
+    stage: fast
+
+  # ── 2. structure ── 目录契约
+  structure:
+    type: structure
+    require:
+      - "alice-bootstrap/src"
+      - "docs"
+      - "scripts"
+      - "tools"
+    forbid:
+    stage: fast
+
+  # ── 3. format ── Spotless（google-java-format）
+  format:
+    cmd: "./gradlew -q spotlessCheck"
+    on:
+      - "**/*.java"
+      - "**/*.groovy"
+      - "build.gradle"
+      - "**/build.gradle"
+      - "settings.gradle"
+    stage: fast
+
+  # ── 4. lint ── N/A：Java 无独立 linter；风格由 format(spotless) 覆盖
+  # lint: { cmd: "N/A", stage: fast }
+
+  # ── 5. typecheck ── N/A：Java 静态类型由编译期（build/test）保证
+  # typecheck: { cmd: "N/A", stage: fast }
+
+  # ── 6. test ── Gradle 单元测试（Spock）
+  test:
+    cmd: "./gradlew test"
+    on:
+      - "alice-*/src/**"
+      - "build.gradle"
+      - "settings.gradle"
+    stage: slow
+
+  # ── 7. coverage ── JaCoCo 覆盖率阈值（BUNDLE INSTRUCTION/BRANCH）
+  coverage:
+    cmd: "./gradlew jacocoTestCoverageVerification"
+    on:
+      - "alice-*/src/**"
+      - "build.gradle"
+    stage: slow
+
+  # ── 8. rules ── N/A（本项目暂无语言/领域硬约束脚本）
+  # rules: { cmd: "N/A", stage: slow }
+
+  # ── 9. exposure ── N/A：发布前启用接口暴露面扫描
+  # exposure: { cmd: "N/A", stage: slow }
+
+# 注：gate.py 只支持 **块状列表**（每项独立 `- x` 行），不支持内联 `[]`/`[a,b]`；
+#     `require:`/`forbid:` 留空表示无约束，填则每个目录一行。
+#     N/A 门禁以注释保留占位（不换名、不跳号），启用时取消注释即可。
