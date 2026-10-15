@@ -3,6 +3,7 @@ title: "alice-tool-gateway DESIGN"
 summary: "Tool gateway design - bridging Java strong-typed methods with LLM JSON calls in a sandboxed execution environment"
 read_when:
   - "implementing or modifying tool execution gateway"
+  - "查阅《alice-tool-gateway DESIGN》相关实现/配置"
 scope:
   - "alice-tool-gateway"
 status: "active"

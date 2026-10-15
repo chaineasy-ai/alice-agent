@@ -3,12 +3,12 @@ title: "Hole Scene — alice-facade-rpc HTTP endpoints"
 summary: "Module-level hole tests probing the RPC facade endpoints — health, 404, CORS, steer, interrupt."
 read_when:
   - "running or debugging hole tests for alice-facade-rpc"
+  - "查阅《Hole Scene — alice-facade-rpc HTTP endpoints》相关实现/配置"
 scope:
   - "alice-facade-rpc"
 status: "active"
 updated: "2026-09-19"
 ---
-
 # Hole Scene — alice-facade-rpc HTTP Endpoints
 
 ## 1. Scene Overview

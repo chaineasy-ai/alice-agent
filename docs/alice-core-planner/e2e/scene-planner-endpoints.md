@@ -3,12 +3,12 @@ title: "Hole Scene — alice-core-planner planner endpoints"
 summary: "Module-level hole tests probing PlannerService, StrategySelector, ThinkingTree, TokenBudget, StaticPlanner, and SopRegistry public API boundaries."
 read_when:
   - "running or debugging hole tests for alice-core-planner"
+  - "查阅《Hole Scene — alice-core-planner planner endpoints》相关实现/配置"
 scope:
   - "alice-core-planner"
 status: "active"
 updated: "2026-06-20"
 ---
-
 # Hole Scene — alice-core-planner Planner Endpoints
 
 ## 1. Scene Overview

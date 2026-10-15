@@ -1,3 +1,14 @@
+---
+title: "Alice Agent - App 模块架构设计 (Pure Bootstrapper)"
+summary: "收到，这个调整让架构的职责划分更加清晰了！"
+read_when:
+  - "阅读/维护《Alice Agent - App 模块架构设计 (Pure Bootstrapper)》时"
+  - "排查与《Alice Agent - App 模块架构设计 (Pure Bootstrapper)》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 收到，这个调整让架构的职责划分更加清晰了！
 
 `config` 下沉到 `agent` 模块，意味着 **`app` 模块彻底变成了一个纯粹的、无状态的启动外壳（Pure Bootstrapper）**。它现在甚至不需要感知具体的业务配置（如 `application.yaml` 中的 Agent 参数），只需负责最基础的命令行参数解析、选择外壳（Facade），然后把最原始的配置上下文或启动参数像管道一样传递下去，由 `agent` 模块在内核初始化时自行解析和驱动。

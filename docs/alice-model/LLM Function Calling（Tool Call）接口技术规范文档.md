@@ -1,3 +1,14 @@
+---
+title: "LLM Function Calling（Tool Call）接口技术规范文档"
+summary: "V1.0 | 适配标准：OpenAI Chat Completions 兼容协议（豆包/通义/DeepSeek/文心千帆通用）"
+read_when:
+  - "阅读/维护《LLM Function Calling（Tool Call）接口技术规范文档》时"
+  - "排查与《LLM Function Calling（Tool Call）接口技术规范文档》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 # LLM Function Calling（Tool Call）接口技术规范文档
 ## 文档版本
 V1.0 | 适配标准：OpenAI Chat Completions 兼容协议（豆包/通义/DeepSeek/文心千帆通用）

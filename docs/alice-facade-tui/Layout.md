@@ -3,12 +3,12 @@ title: "TUI Layout - v5.0 动态增长布局"
 summary: "基于 JLine 4 实现动态增长布局（Header → Main Area [0..N] → QueueMsg [0..1] → Line1 → Input → Line2 → Footer），PPAO 事件流 Observer 模式 + 输入队列 + 滚动静默"
 read_when:
   - "TUI 布局新增/改造开发"
+  - "查阅《TUI Layout - v5.0 动态增长布局》相关实现/配置"
 scope:
   - "alice-facade-tui"
 status: "active"
 updated: "2026-06-28"
 ---
-
 # 动态增长 TUI 架构 v5.0 — 工程设计文档
 
 ## 前言

@@ -3,12 +3,12 @@ title: "alice-memory-vault: implementation overview"
 summary: "Implemented vault components, WAL subsystem, and JVectorSemanticVault architecture notes"
 read_when:
   - "implementing or modifying memory vault components"
+  - "查阅《alice-memory-vault: implementation overview》相关实现/配置"
 scope:
   - "alice-memory-vault"
 status: "active"
 updated: "2026-06-14"
 ---
-
 # alice-memory-vault: 实现清单
 
 ## Vault 组件

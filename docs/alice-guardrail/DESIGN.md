@@ -3,6 +3,7 @@ title: "alice-guardrail DESIGN"
 summary: "Guardrail design - independent review committee for safety and correctness"
 read_when:
   - "implementing or modifying guardrail/validation pipeline"
+  - "查阅《alice-guardrail DESIGN》相关实现/配置"
 scope:
   - "alice-guardrail"
 status: "active"

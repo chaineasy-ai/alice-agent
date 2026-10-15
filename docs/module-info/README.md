@@ -1,3 +1,14 @@
+---
+title: "Alice Agent Framework - 模块全景架构图"
+summary: "┌─────────────────────────────────────────────────────────────────────────────────────────────┐"
+read_when:
+  - "阅读/维护《Alice Agent Framework - 模块全景架构图》时"
+  - "排查与《Alice Agent Framework - 模块全景架构图》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 # Alice Agent Framework - 模块全景架构图
 
 ## 📐 模块链路关系全景图

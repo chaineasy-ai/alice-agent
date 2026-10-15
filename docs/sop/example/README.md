@@ -1,3 +1,14 @@
+---
+title: "SOP Graph — DAG 示例与最佳实践"
+summary: "- 核心概念"
+read_when:
+  - "阅读/维护《SOP Graph — DAG 示例与最佳实践》时"
+  - "排查与《SOP Graph — DAG 示例与最佳实践》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 # SOP Graph — DAG 示例与最佳实践
 
 > SOP (Standard Operating Procedure) 图是基于 **JGrapht** 的有向无环图 (DAG)，

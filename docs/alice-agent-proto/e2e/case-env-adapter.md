@@ -3,13 +3,13 @@ title: "E2E Case — alice-env-adapter endpoints"
 summary: "Hole test specification for alice-env-adapter module — EnvManager, McpClient, SnapshotManager public API boundaries."
 read_when:
   - "implementing or modifying hole tests for alice-env-adapter"
+  - "查阅《E2E Case — alice-env-adapter endpoints》相关实现/配置"
 scope:
   - "alice-agent-proto"
   - "alice-env-adapter"
 status: "active"
 updated: "2026-06-19"
 ---
-
 # E2E Case — alice-env-adapter (Hole Test)
 
 ## 1. Purpose

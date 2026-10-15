@@ -1,3 +1,14 @@
+---
+title: "Agent 冒烟测试用例规范文档"
+summary: "为自研 Agent 设计冒烟测试（Smoke Test）用例，需遵循 PMTEV 闭环框架：规划（Plan）、模型（Model）、工具（Tool）、环境（Environment）、验证（Verification）。"
+read_when:
+  - "阅读/维护《Agent 冒烟测试用例规范文档》时"
+  - "排查与《Agent 冒烟测试用例规范文档》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 # Agent 冒烟测试用例规范文档
 ## 核心框架说明
 为自研 Agent 设计冒烟测试（Smoke Test）用例，需遵循 **PMTEV 闭环框架**：规划（Plan）、模型（Model）、工具（Tool）、环境（Environment）、验证（Verification）。

@@ -3,13 +3,13 @@ title: "E2E Case — alice-model endpoints"
 summary: "Hole test specification for alice-model module — ModelProvider dispatch, Call lifecycle, ModelSupplier adapter, config loading, multi-provider routing."
 read_when:
   - "implementing or modifying hole tests for alice-model"
+  - "查阅《E2E Case — alice-model endpoints》相关实现/配置"
 scope:
   - "alice-agent-proto"
   - "alice-model"
 status: "active"
 updated: "2026-06-19"
 ---
-
 # E2E Case — alice-model (Hole Test)
 
 ## 1. Purpose

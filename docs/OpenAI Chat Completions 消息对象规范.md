@@ -3,6 +3,7 @@ title: "OpenAI Chat Completions 消息对象规范"
 summary: "OpenAI Chat Completions message object specification"
 read_when:
   - "implementing or debugging OpenAI model adapter"
+  - "查阅《OpenAI Chat Completions 消息对象规范》相关实现/配置"
 scope:
   - "alice-model"
 status: "active"

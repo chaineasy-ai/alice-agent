@@ -1,3 +1,14 @@
+---
+title: "动态增长终端布局 v5.0（适配统一 MessageArea + 滚动查看历史）"
+summary: "┌─ Header ───────────────────────────────────────────┐"
+read_when:
+  - "阅读/维护《动态增长终端布局 v5.0（适配统一 MessageArea + 滚动查看历史）》时"
+  - "排查与《动态增长终端布局 v5.0（适配统一 MessageArea + 滚动查看历史）》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 # 动态增长终端布局 v5.0（适配统一 MessageArea + 滚动查看历史）
 
 ## 布局结构

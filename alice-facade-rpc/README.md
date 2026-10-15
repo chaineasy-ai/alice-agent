@@ -1,3 +1,14 @@
+---
+title: "alice-facade-rpc — HTTP RPC 2.0"
+summary: "协议适配层：把协议契约层（alice-agent-proto）的命令/事件以 HTTP + SSE 暴露给外部调度器、看板与其他 agent。"
+read_when:
+  - "阅读/维护《alice-facade-rpc — HTTP RPC 2.0》时"
+  - "排查与《alice-facade-rpc — HTTP RPC 2.0》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 # alice-facade-rpc — HTTP RPC 2.0
 
 **协议适配层**：把协议契约层（`alice-agent-proto`）的命令/事件以 **HTTP + SSE** 暴露给外部调度器、看板与其他 agent。

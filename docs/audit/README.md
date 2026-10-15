@@ -1,3 +1,14 @@
+---
+title: "基于 sessionId 打通 Langfuse 与 WAL 日志链路设计方案"
+summary: "利用系统原生 sessionId 作为唯一关联标识，将 Langfuse 链路追踪（Trace/Span）与底层 WAL 持久化日志打通。以轻量关联字段作为纽带，在不改造原有系统架构、不侵入底层逻辑的前提下，实现 AI 应用行为观测与底层执行日志双向溯源。"
+read_when:
+  - "阅读/维护《基于 sessionId 打通 Langfuse 与 WAL 日志链路设计方案》时"
+  - "排查与《基于 sessionId 打通 Langfuse 与 WAL 日志链路设计方案》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 # 基于 sessionId 打通 Langfuse 与 WAL 日志链路设计方案
 ## 一、方案核心思路
 利用系统原生 **sessionId** 作为唯一关联标识，将 Langfuse 链路追踪（Trace/Span）与底层 WAL 持久化日志打通。以轻量关联字段作为纽带，在不改造原有系统架构、不侵入底层逻辑的前提下，实现 AI 应用行为观测与底层执行日志双向溯源。

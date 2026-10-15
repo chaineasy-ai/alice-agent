@@ -6,15 +6,12 @@ read_when:
   - "understanding how rules are loaded, routed, and injected"
   - "configuring rule priority, enablement, and context targeting"
   - "debugging why rules aren't appearing in a specific prompt layer"
-  - "disabling a rule without deleting the file"
-  - "creating new rule files for a specific prompt context (system, micro_loop, planner, error)"
 scope:
   - "alice-core-agent/.../prompt/"
   - "~/.alice/rules/"
 status: "active"
 updated: "2026-07-14"
 ---
-
 # Rule System — Procedural Memory
 
 ## Overview

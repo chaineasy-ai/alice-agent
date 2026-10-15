@@ -1,3 +1,14 @@
+---
+title: "技术设计文档：默认记忆提炼器（DefaultMemorySummarizer）"
+summary: "在 Alice Agent 的智能体运行架构中，The Consolidation Process（记忆固化机制） 负责将短期的、碎片化的会话追踪（Session Trace）转化为长期的、可复用的结构化记忆。"
+read_when:
+  - "阅读/维护《技术设计文档：默认记忆提炼器（DefaultMemorySummarizer）》时"
+  - "排查与《技术设计文档：默认记忆提炼器（DefaultMemorySummarizer）》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 # 技术设计文档：默认记忆提炼器（DefaultMemorySummarizer）
 
 ## 1. 业务背景与定位

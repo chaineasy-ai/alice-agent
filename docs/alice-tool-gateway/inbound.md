@@ -6,14 +6,12 @@ read_when:
   - "understanding how env-adapter registers MCP tools into tool-gateway"
   - "implementing or modifying ToolRegistryHolder or inbound access patterns"
   - "debugging tool registration or execution from application layer"
-  - "module boundary rules between tool-gateway and env-adapter"
 scope:
   - "alice-tool-gateway"
   - "alice-env-adapter"
 status: "active"
 updated: "2026-06-20"
 ---
-
 # alice-tool-gateway Inbound Ports
 
 ## 1. Overview

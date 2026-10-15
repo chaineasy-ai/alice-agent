@@ -3,13 +3,13 @@ title: "E2E Case — alice-core-planner endpoints"
 summary: "Hole test specification for alice-core-planner module — PlannerService, StaticPlanner, ThinkingTree, TokenBudget, and StrategySelector public API boundaries."
 read_when:
   - "implementing or modifying hole tests for alice-core-planner"
+  - "查阅《E2E Case — alice-core-planner endpoints》相关实现/配置"
 scope:
   - "alice-agent-proto"
   - "alice-core-planner"
 status: "active"
 updated: "2026-06-20"
 ---
-
 # E2E Case — alice-core-planner (Hole Test)
 
 ## 1. Purpose

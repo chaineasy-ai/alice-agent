@@ -3,6 +3,7 @@ title: "Memory Vault - Module Structure"
 summary: "Module structure of alice-memory-vault following DDD layered architecture"
 read_when:
   - "understanding memory vault module structure"
+  - "查阅《Memory Vault - Module Structure》相关实现/配置"
 scope:
   - "alice-memory-vault"
 status: "active"

@@ -3,6 +3,7 @@ title: "Mock Testing - LLM Simulation (aimock)"
 summary: "LLM API mocking for Alice Agent tests using @copilotkit/aimock"
 read_when:
   - "setting up or running mock tests for LLM"
+  - "查阅《Mock Testing - LLM Simulation (aimock)》相关实现/配置"
 scope:
   - "docs"
   - "e2e"

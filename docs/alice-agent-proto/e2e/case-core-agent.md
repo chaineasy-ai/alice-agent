@@ -3,13 +3,13 @@ title: "E2E Case — alice-core-agent endpoints"
 summary: "Hole test specification for alice-core-agent module — AgentExecutor, StepResult, AgentContext, SubAgentManager public API boundaries."
 read_when:
   - "implementing or modifying hole tests for alice-core-agent"
+  - "查阅《E2E Case — alice-core-agent endpoints》相关实现/配置"
 scope:
   - "alice-agent-proto"
   - "alice-core-agent"
 status: "active"
 updated: "2026-06-19"
 ---
-
 # E2E Case — alice-core-agent (Hole Test)
 
 ## 1. Purpose

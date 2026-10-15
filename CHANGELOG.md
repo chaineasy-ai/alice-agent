@@ -38,6 +38,15 @@ updated: "2026-10-16"
 
 ### Features
 
+- **门禁尾巴：统一 `check.sh` + `gate.yaml` + pre-commit hook（`#173` M3-3）**: 按 `project-creator`/`commit-gate`
+  **统一形状**接入门禁——`gate.yaml`（doclint/structure/format/test/coverage，命名与顺序对齐门禁规范 §2；lint/typecheck/
+  rules/exposure 为 N/A 以注释占位）+ 同构 `scripts/check.sh`（单一入口，本地 pre-commit 与 CI/Jenkins 同调
+  `tools/gate.py`）+ `tools/{gate.py,doclint.py}` + `scripts/install-hooks.sh` + `scripts/git-hooks/pre-commit`。
+  **doclint 全量补齐**（134 篇 .md）：为历史文档补/修 front-matter（`title`/`summary`/`read_when` 2–4 条），并把
+  `spec` 模板/脚手架（`.specify`/`specs`）、GitHub 模板（`.github`）、测试夹具（`tests`/`e2e`）、pi 配置（`.pi`）排除在
+  AI-doc 门禁之外（非产品文档）。`format`=Spotless、`coverage`=JaCoCo（已配阈值）。**实测**：`./scripts/check.sh --stage fast`
+  → `doclint/structure/format` PASS（test/coverage 为 slow 由 CI 跑）。
+
 - **部署形态：单命令引导 + 打包分发（`#173` M3-1）**: 新增根目录 `bootstrap.sh`
   （`setup/build/run/run-tui/run-rpc/test/check/package/shell/clean`），单命令起服务
   （`./bootstrap.sh run-rpc` → HTTP `:8080`）；JDK 自动解析（`JAVA_HOME`/PATH/sdkman）并做 **JDK ≥ 25 自检**；

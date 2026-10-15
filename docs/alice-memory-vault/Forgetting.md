@@ -3,6 +3,7 @@ title: "Memory Vault - Forgetting Mechanism"
 summary: "Design of the forgetting mechanism for long-term memory management"
 read_when:
   - "implementing or designing memory forgetting mechanism"
+  - "查阅《Memory Vault - Forgetting Mechanism》相关实现/配置"
 scope:
   - "alice-memory-vault"
 status: "draft"

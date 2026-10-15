@@ -1,3 +1,14 @@
+---
+title: "STORY"
+summary: "在这套 PPAO (Perceive-Plan-Act-Observe) + Guardrail 架构下，如果要让 Agent 完成一个“编写前端页面”的场景，整个提示词流（Prompt Stream）将不再是简单的一问一答，而是伴随着宏观规划、微观执行和强校验的多层次提示词流转过程。"
+read_when:
+  - "阅读/维护《STORY》时"
+  - "排查与《STORY》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 在这套 **PPAO (Perceive-Plan-Act-Observe) + Guardrail** 架构下，如果要让 Agent 完成一个“编写前端页面”**的场景，整个提示词流（Prompt Stream）将不再是简单的一问一答，而是伴随着宏观规划、微观执行和强校验的**多层次提示词流转过程。
 
 由于使用了 **Vert.x**，整个过程在工程上是由事件驱动（Event-Driven）的异步 `Future` 或 `Polymer` 响应式流来承载。

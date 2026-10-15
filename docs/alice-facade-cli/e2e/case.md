@@ -1,3 +1,14 @@
+---
+title: "E2E Test Case — CLI `run` with DeepSeek (OpenAI-compatible)"
+summary: "验证 Alice Agent 的 PPAO 循环能通过 OpenAiSupplier 正确调用 DeepSeek API（OpenAI 兼容协议），并在一次迭代内完成并终止。"
+read_when:
+  - "阅读/维护《E2E Test Case — CLI `run` with DeepSeek (OpenAI-compatible)》时"
+  - "排查与《E2E Test Case — CLI `run` with DeepSeek (OpenAI-compatible)》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 # E2E Test Case — CLI `run` with DeepSeek (OpenAI-compatible)
 
 ## 测试目标

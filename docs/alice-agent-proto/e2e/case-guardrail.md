@@ -3,13 +3,13 @@ title: "E2E Case — alice-guardrail endpoints"
 summary: "Hole test specification for alice-guardrail module — GuardrailService, PolicyEngine, HallucinationDetector, PermissionSandboxValidator public API boundaries."
 read_when:
   - "implementing or modifying hole tests for alice-guardrail"
+  - "查阅《E2E Case — alice-guardrail endpoints》相关实现/配置"
 scope:
   - "alice-agent-proto"
   - "alice-guardrail"
 status: "active"
 updated: "2026-06-19"
 ---
-
 # E2E Case — alice-guardrail (Hole Test)
 
 ## 1. Purpose

@@ -3,6 +3,7 @@ title: "CHANGELOG规范"
 summary: "CHANGELOG writing conventions and standards (see CHANGELOG.md line 115 for example)"
 read_when:
   - "writing or reviewing changelog entries"
+  - "查阅《CHANGELOG规范》相关实现/配置"
 scope:
   - "docs"
 status: "active"

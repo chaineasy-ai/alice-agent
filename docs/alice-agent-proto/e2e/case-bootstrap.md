@@ -3,13 +3,13 @@ title: "E2E Case — alice-bootstrap endpoints"
 summary: "Hole test specification for alice-bootstrap module — FacadeSelector routing, AppBootstrapper lifecycle, IFacadeLauncher interface contract."
 read_when:
   - "implementing or modifying hole tests for alice-bootstrap"
+  - "查阅《E2E Case — alice-bootstrap endpoints》相关实现/配置"
 scope:
   - "alice-agent-proto"
   - "alice-bootstrap"
 status: "active"
 updated: "2026-06-19"
 ---
-
 # E2E Case — alice-bootstrap (Hole Test)
 
 ## 1. Purpose

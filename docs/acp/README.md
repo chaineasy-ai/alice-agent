@@ -3,6 +3,7 @@ title: "ACP Java SDK"
 summary: "ACP Java SDK documentation reference and usage"
 read_when:
   - "working with ACP protocol or ACP Java SDK"
+  - "查阅《ACP Java SDK》相关实现/配置"
 scope:
   - "docs"
 status: "active"

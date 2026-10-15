@@ -3,12 +3,12 @@ title: "E2E Case — alice-facade-rpc endpoints"
 summary: "Hole test specification for alice-facade-rpc module — HTTP health check, error handling, CORS."
 read_when:
   - "implementing or modifying hole tests for alice-facade-rpc"
+  - "查阅《E2E Case — alice-facade-rpc endpoints》相关实现/配置"
 scope:
   - "alice-facade-rpc"
 status: "active"
 updated: "2026-09-19"
 ---
-
 # E2E Case — alice-facade-rpc (Hole Test)
 
 ## 1. Purpose

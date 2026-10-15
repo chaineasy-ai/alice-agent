@@ -3,6 +3,7 @@ title: "alice-model README"
 summary: "Model provider layer - abstraction over LLM providers (OpenAI, Gemma4, etc.)"
 read_when:
   - "understanding model provider layer"
+  - "查阅《alice-model README》相关实现/配置"
 scope:
   - "alice-model"
 status: "active"

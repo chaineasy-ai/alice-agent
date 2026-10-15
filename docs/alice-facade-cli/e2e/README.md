@@ -1,3 +1,14 @@
+---
+title: "E2E Testing Guide — alice-facade-cli"
+summary: "cd /mnt/develop/work/agentic/alice-agent"
+read_when:
+  - "阅读/维护《E2E Testing Guide — alice-facade-cli》时"
+  - "排查与《E2E Testing Guide — alice-facade-cli》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 # E2E Testing Guide — alice-facade-cli
 
 ## 快速开始

@@ -6,10 +6,9 @@ read_when:
   - "working on CLI / TUI frontend config"
   - "understanding model/provider registration and priority order"
   - "adding new models, providers, or env var references"
-  - "copying or setting up model.json for alice-model"
 scope:
-  - alice-facade-cli
-  - alice-model
+  - "alice-facade-cli"
+  - "alice-model"
 status: "active"
 updated: "2026-06-29"
 ---

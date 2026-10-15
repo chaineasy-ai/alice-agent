@@ -1,3 +1,14 @@
+---
+title: "Test Plan — alice-facade-cli 模块"
+summary: "summary: 为 alice-facade-cli 模块编写基于 Spock 的测试用例，覆盖每个 CLI 子命令的解析、分发、渲染逻辑"
+read_when:
+  - "阅读/维护《Test Plan — alice-facade-cli 模块》时"
+  - "排查与《Test Plan — alice-facade-cli 模块》相关问题"
+scope:
+  - "alice-agent"
+status: "active"
+updated: "2026-10-16"
+---
 # Test Plan — alice-facade-cli 模块
 
 **summary**: 为 alice-facade-cli 模块编写基于 Spock 的测试用例，覆盖每个 CLI 子命令的解析、分发、渲染逻辑

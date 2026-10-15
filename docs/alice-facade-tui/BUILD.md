@@ -3,6 +3,7 @@ title: "TUI Quick Start"
 summary: "Quick start guide to run Alice Agent in TUI mode"
 read_when:
   - "running Alice Agent in TUI mode"
+  - "查阅《TUI Quick Start》相关实现/配置"
 scope:
   - "alice-facade-tui"
 status: "active"
