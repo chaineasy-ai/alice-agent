@@ -61,6 +61,19 @@ class RpcServerSpec extends Specification {
         r.body().contains("\"lastUsage\":")
     }
 
+    def "GET /metrics 返回基础指标（轮次/JVM）"() {
+        when:
+        def r = get("/metrics")
+
+        then:
+        r.statusCode() == 200
+        r.body().contains("\"sessionId\":\"sess-01\"")
+        r.body().contains("\"uptimeMs\":")
+        r.body().contains("\"rounds\":0")
+        r.body().contains("\"heapUsedBytes\":")
+        r.body().contains("\"threads\":")
+    }
+
     // ========================================================================
     // chat/stream（SSE）
     // ========================================================================

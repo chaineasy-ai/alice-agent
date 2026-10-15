@@ -38,6 +38,14 @@ updated: "2026-10-16"
 
 ### Features
 
+- **可观测：JSON Lines 日志 + 基础指标端点（`#173` M3-2）**: 新增 `JsonLogEncoder`（`alice-bootstrap`，logback
+  `EncoderBase`）把每条日志编码为**单行合法 JSON**（字段对齐 `spec` 日志规范：`timestamp`/`level`/`app`/`trace_id`
+  （MDC，无则 `-`）/`thread`/`logger`/`message`/`exception`）；`logback.xml` 改为 **`info.log`（INFO+）/`error.log`（仅 ERROR）**
+  两个 JSON Lines 滚动 appender（按天 + 50MB，保留 14 天），目录默认 `~/.alice/logs/`（`ALICE_LOG_DIR` 可覆盖），
+  控制台保留人类可读 pattern。新增 `Metrics`（`alice-agent-runtime`，`collect(HostHealth)` 汇总轮次/耗时/用量 + JVM 堆/线程/运行时长）
+  与 **`GET /api/v1/metrics`** 端点；`/health` 保持不变。新增 `JsonLogEncoderSpec`(4) · `MetricsSpec`(1) · `RpcServerSpec`
+  metrics 用例(1)。**实测**：起服务后 `GET /api/v1/metrics` 200 JSON；`info.log` 23 行全部合法 JSON 且含规范字段。
+
 - **门禁尾巴：统一 `check.sh` + `gate.yaml` + pre-commit hook（`#173` M3-3）**: 按 `project-creator`/`commit-gate`
   **统一形状**接入门禁——`gate.yaml`（doclint/structure/format/test/coverage，命名与顺序对齐门禁规范 §2；lint/typecheck/
   rules/exposure 为 N/A 以注释占位）+ 同构 `scripts/check.sh`（单一入口，本地 pre-commit 与 CI/Jenkins 同调
