@@ -38,6 +38,11 @@ updated: "2026-10-16"
 
 ### Features
 
+- **暴露面门禁启用（`#173` M3-3 收尾）**: 引入 `scripts/scan-exposure.sh`（vendored；只读、不联网的接口暴露面
+  静态巡检，SEC-EXP-01..13），并在 `gate.yaml` 启用 **`exposure`** 门禁（stage=slow：
+  `scan-exposure.sh --fail-on-high .`，HIGH 未清零不得发布）。当前扫描 **HIGH=0/MED=0/INFO=0**。同步在
+  `docs/ops/observability.md` 登记 RPC 对外路由（含新增 `/metrics`）与发布前检查口径。
+
 - **可观测：JSON Lines 日志 + 基础指标端点（`#173` M3-2）**: 新增 `JsonLogEncoder`（`alice-bootstrap`，logback
   `EncoderBase`）把每条日志编码为**单行合法 JSON**（字段对齐 `spec` 日志规范：`timestamp`/`level`/`app`/`trace_id`
   （MDC，无则 `-`）/`thread`/`logger`/`message`/`exception`）；`logback.xml` 改为 **`info.log`（INFO+）/`error.log`（仅 ERROR）**
