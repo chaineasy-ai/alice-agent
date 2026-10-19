@@ -322,7 +322,7 @@ public final class ExecutionCoordinator {
           // #521 P-1 off known-issue（atlas 裁定 b）：legacy 无“任务完成”可判信号 ⇒
           // off 退出码不作门禁判据（仅信息/对照），避免“既作判据又不可靠”。
           agentConfig.graphKernelEnabled() ? "on" : "exempt(legacy:exit-not-a-gate-criterion)");
-      if (Boolean.FALSE.equals(success)) {
+      if (exitCodeFor(success) != 0) {
         renderer.renderError(
             "Session did not settle successfully (outcome=" + outcome + ")", config);
         agent.close();
@@ -371,9 +371,19 @@ public final class ExecutionCoordinator {
    *
    * <p>已知缺口：legacy 路径“未改却 FINISH”，无任务完成信号 ⇒ 返回 null（沿用旧行为），记 known-issue。
    */
-  private static Boolean resolveSuccess(AgentContext ctx) {
+  /** #317：会话终态 → 退出码。失败/未收敛非零；无终态信号沿用旧行为（0）。 */
+  static int exitCodeFor(Boolean success) {
+    return Boolean.FALSE.equals(success) ? 1 : 0;
+  }
+
+  static Boolean resolveSuccess(AgentContext ctx) {
     if (ctx == null) {
       return null;
+    }
+    // #317：显式未收敛（settled=false）一律判失败，不得因缺 success 键而回落 exit 0。
+    Boolean settled = asBoolean(ctx.get("settled"));
+    if (Boolean.FALSE.equals(settled)) {
+      return Boolean.FALSE;
     }
     Boolean direct = asBoolean(ctx.get("success"));
     if (direct != null) {
@@ -381,13 +391,9 @@ public final class ExecutionCoordinator {
     }
     Object statusObj = ctx.get("status");
     if (statusObj != null) {
-      String st = statusObj.toString();
-      if ("FINISHED".equals(st)) {
-        return Boolean.TRUE;
-      }
-      if ("FAILED".equals(st) || "CANCELLED".equals(st) || "FATAL_ERROR".equals(st)) {
-        return Boolean.FALSE;
-      }
+      // #317：有 status 时不吞错 —— 只有 FINISHED 才算成功；FAILED/CANCELLED/FATAL_ERROR
+      // 以及任何未知状态都判失败，避免旧实现“非已知失败态 → null → exit 0”。
+      return "FINISHED".equals(statusObj.toString());
     }
     if (ctx.containsKey("error")) {
       return Boolean.FALSE;
