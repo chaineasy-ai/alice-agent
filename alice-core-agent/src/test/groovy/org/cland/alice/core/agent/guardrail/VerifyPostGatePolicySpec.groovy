@@ -92,6 +92,20 @@ class VerifyPostGatePolicySpec extends Specification {
         !policy.verify(VP, ledgerWithAnswer("error: boom"), "").pass()
     }
 
+    def "VP-P02d: 裸超时标识不拦 / 真实超时短语拦（#522 去裸子串）"() {
+        given:
+        def policy = new VerifyPostGatePolicy(new GuardrailVerificatorAdapter(false))
+
+        expect: "裸 TIMEOUT_MS 文本是数据、不是错误（曾与 #520 A 夹具冲突）→ 不拦"
+        policy.verify(VP, ledgerWithAnswer("clean"), "TIMEOUT_MS remaining=20000").pass()
+
+        and: "真实超时短语 → 拦"
+        !policy.verify(VP, ledgerWithAnswer("clean"), "Connection timed out").pass()
+
+        and: "结构化错误行 → 拦（与 #524 夹具口径一致）"
+        !policy.verify(VP, ledgerWithAnswer("clean"), "Error: timeout after 30s").pass()
+    }
+
     // ── VP-P03 ───────────────────────────────────────────────────────
 
     def "VP-P03: parity with legacy audit(StepResult.Finish) across answers"() {
