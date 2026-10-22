@@ -17,10 +17,13 @@ scope:
   - "alice-agent-proto"
   - "alice-facade-cli"
   - "alice-facade-tui"
-status: "active"
-updated: "2026-06-26"
+status: "frozen"
+updated: "2026-10-23"
 ---
-# TODO-spec: Alice Agent 项目任务规范看板
+# TODO-spec: Alice Agent 项目任务规范看板（已冻结）
+
+> ⚠️ **本板自 2026-10-23 起冻结，不再更新**。唯一任务板见 [`docs/TODO.md`](../docs/TODO.md)（含本板逐项归并映射 §5.2）。
+> 本文的 42/2/39 计数与状态已过时；保留仅用于追溯历史条目。
 
 > 遵循 [GFM Markdown 任务列表规范](./docs/spec/GFM-Markdown-任务列表规范.md)
 > 格式约定：`- [ ]` 待办 | `- [x]` 已完成 | `- [/]` 执行中 | `- [-]` 已取消 | `- [!]` 失败/阻塞
