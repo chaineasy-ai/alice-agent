@@ -13,11 +13,14 @@ scope:
   - "alice-core-planner"
   - "alice-guardrail"
   - "alice-bootstrap"
-status: "active"
-updated: "2026-10-01"
+status: "frozen"
+updated: "2026-10-23"
 ---
 
-# TODO: R0 图内核换轨收口
+# TODO: R0 图内核换轨收口（已冻结）
+
+> ⚠️ **本板自 2026-10-23 起冻结，不再更新**。唯一任务板见 [`docs/TODO.md`](../docs/TODO.md)（含本板逐项归并映射 §5.1）。
+> 保留本文仅用于追溯历史条目与当时证据，状态/排期以 `docs/TODO.md` 为准。
 
 > 格式约定：`- [ ]` 待办 | `- [x]` 已完成 | `- [/]` 执行中 | `- [-]` 已取消 | `- [!]` 失败/阻塞
 > 元数据键：`[priority:: high|medium|low]` `[owner:: 模块]` `[verify:: 验收方式]`
