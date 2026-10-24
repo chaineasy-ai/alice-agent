@@ -85,7 +85,7 @@ updated: "2026-10-24"
 | ID | 事项 | 待定原因 / 谁定 | 定后判据 |
 |---|---|---|---|
 | H01 | 模块稳定性分级（稳定核心/内核/实验）与变更流程 | `#3` 议题 2；pillar 出 ADR，Owner 参与"不确定的模块" | ADR 列出 13 模块级别 + 每级变更流程（ADR/parity/可推翻） |
-| H02a | **规划器定位改为双循环**（承 ADR-0001）：内循环每步走 planner / 外循环六类事件触发 / 入口 prompt 路由作废 / MCTS 降为 L3 条件启用 | 实现方 mint；ADR 已 proposed，待 Owner 确认 | ① `TriggerPolicy` 替换 `StrategySelector` ② `precondition/effect` 规则表 ③ T1/T2/T4/T5/T6 五种触发可注入且只重分解受影响子树（K1–K6 判据见 ADR §5） |
+| H02a | **规划器定位改为双循环**（承 ADR-0001；落地单 **`base/alice-agent#4`**，assignee builder）：内循环每步走 planner / 外循环六类事件触发 / 入口 prompt 路由作废 / MCTS 降为 L3 条件启用 | 实现方 mint；ADR 已 proposed，待 Owner 确认 | ① `TriggerPolicy` 替换 `StrategySelector` ② `precondition/effect` 规则表 ③ T1/T2/T4/T5/T6 五种触发可注入且只重分解受影响子树（K1–K6 判据见 ADR §5） |
 | H02 | 图内核：冻结为 experimental 还是继续收口 | `#3` 议题 3；Owner 拍板 | ADR 明确"冻结/继续"；若继续，给下一批切片 |
 | H03 | TUI 接图内核（当前固定 legacy） | 依赖 H02；pillar/Owner | TUI 启动横幅与 CLI/RPC 一致；`graphKernelEnabled` 默认值单点定义 |
 | H04 | sub-agent 语义统一（alice 003 / pi subagent / ACP） | `#3` 议题 4；pillar | 只保留一套语义 + 权限面表（人员/数据/工具可见范围） |
