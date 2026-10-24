@@ -9,6 +9,27 @@ scope:
 status: "active"
 updated: "2026-06-13"
 ---
+# alice-core-planner 设计
+
+> **2026-10-24 设计修正（原 `WorldModel` 弃用，能力保留）**
+>
+> **弃用的是两件事**：① 把"预测观测"做成一个名叫 `WorldModel` 的**单一万能组件**；② 让它在**规划期承担"验证"职责**。
+>
+> **保留并重做的是"预测观测"本身**——MCTS 展开时需要知道"这个动作大概会得到什么观测"，否则无法给路径打分。
+> 它的实现天然分两类，**置信度不同、用途不同，不能同型混用**：
+>
+> | 实现 | 形态 | 可信度 | 允许的用途 |
+> |---|---|---|---|
+> | **规则型** `RuleBasedObservationModel` | 工具语义 / 文件系统 / DB schema / SOP 约束 | **高**（可判、可写反例） | 参与评分；**可参与前置拒绝**（如越权路径必失败） |
+> | **模型型** `ModelBasedObservationModel` | LLM / 统计预测 | **低**（会幻觉） | **只参与路径排序/评分**；**禁止作为放行依据** |
+>
+> **三条硬约束**：
+> 1. 预测观测必须带 `confidence: rule \| model` 与来源，**不得与真实观测同型混用**（否则下游分不清"预测"与"事实"）；
+> 2. **验证只发生在执行后**（真实观测 → `Post-gate`）；预测观测**不构成证据**；
+> 3. 真实观测回传后做 **predicted vs actual 偏差比对**，用于校准/降权该预测实现——这才是"验证"的合法形式：**验证模型，而不是用模型验证世界**。
+>
+> 附带事实：仓内从未有 `WorldModel.java`（`SlowPathStrategy` 实际依赖 `MctsEngine` + `PlannerModelSupplier`）。
+
 针对 **alice-core-planner** 的设计，核心挑战在于如何将"双路径决策"与 Java 的工程性（强类型、多线程、内存管理）深度结合。这个模块不只是调用 LLM，而是一个**状态化的推理机**。
 
 以下是 alice-core-planner 的深度模块化设计：
@@ -45,9 +66,17 @@ classDiagram
         +decide(AgentContext ctx) Plan
     }
 
-    class WorldModel {
-        <<deprecated 设计不成立>>
-        +predict(State s, Action a) Observation
+    class ObservationModel {
+        <<interface>>
+        +predict(State s, Action a) PredictedObservation
+    }
+
+    class RuleBasedObservationModel {
+        <<rule · 高置信>>
+    }
+
+    class ModelBasedObservationModel {
+        <<LLM · 低置信>>
     }
 
     class ThinkingTree {
@@ -68,7 +97,9 @@ classDiagram
     DecisionStrategy <|.. SlowPathStrategy
     DecisionStrategy <|.. FastPathStrategy
     SlowPathStrategy *-- ThinkingTree
-    SlowPathStrategy ..> WorldModel : 已弃用（设计不成立）
+    SlowPathStrategy o-- ObservationModel
+    ObservationModel <|.. RuleBasedObservationModel
+    ObservationModel <|.. ModelBasedObservationModel
     ThinkingTree *-- ThinkingNode
 ```
 
@@ -92,7 +123,7 @@ graph TD
     subgraph Slow["Slow Path (Deliberative · MCTS)"]
         Assess -->|High| Root[Root State Node]
         Root --> Search[MCTS Rollout]
-        Search --> Hyp["预测 Thought / Action / 期望观测<br/>★ 仅用于路径评分，不构成证据"]
+        Search --> Hyp["预测 Thought / Action / 期望观测<br/>（规则型=高置信 / 模型型=低置信）<br/>★ 仅用于路径评分，不构成证据"]
         Hyp -->|价值回传| Search
         Search --> BestPath[Extract Optimal Path]
     end
@@ -108,11 +139,12 @@ graph TD
     end
 
     Obs -.->|沉淀为经验 / SOP| Mem[(记忆与 SOP)]
+    Obs -.->|predicted vs actual 偏差| Calib[校准 / 降权该预测实现]
 ```
 
 > **为什么"预测观测"只能用于评分**：规划期没有真值，预测观测若被当作结论，就等于"用模型想象确认模型想象"。
 > 因此本图把**验证放在执行之后**（`Post-gate`），预测结果只参与 MCTS 的价值回传；真实观测才进记忆与重规划。
-> 这也是原 `WorldModel`（"规划期验证"）设计被弃用的直接原因——见本文开头的弃用声明与 `docs/TODO.md` `X12`。
+> 这也是原 `WorldModel` 被弃用的直接原因（弃用的是"单组件 + 规划期验证"，**预测观测能力本身保留**，见文首设计修正与 `docs/TODO.md` `X12`）。
 
 ---
 
@@ -127,7 +159,7 @@ graph TD
 在 Java 内存中维护 `ThinkingTree`。每个 `ThinkingNode` 包含：
 * **State (S)**：当前的 AgentContext 快照。
 * **Action (A)**：规划执行的操作。
-* **Value (V)**：模型或启发式给出的该路径得分——**是评分，不是验证结论**（真实验证在执行后的 `Post-gate`）。
+* **Value (V)**：由 `ObservationModel` 的**预测观测** + 启发式给出的路径得分——**是评分，不是验证结论**；规则型预测可参与前置拒绝，模型型只能排序（真实验证在 `Post-gate`）。
 * **工程考量**：利用 `java.util.concurrent.ForkJoinPool` 并行评估多个推理分支，加快 MCTS 的模拟（Simulation）阶段。
 
 ### **3.3 模型抽象层 (Model Supplier API)**

@@ -132,7 +132,7 @@ updated: "2026-10-24"
 | X08 | 数据库边界（JDBC/ORM/Redis） | 仓内无 DB；`#3` 判定"未来提 DB 必须先有读写场景" |
 | X09 | Lanterna TUI（旧 TODO-spec 条目） | 已被 JLine 3 TUI 取代；旧条目为陈旧记录 |
 | X10 | 任务看板 / 多 Tab 作为"近期必做" | 无用户需求证据；降为待定 H21，不占当前窗口 |
-| X12 | `WorldModel`（"心智模拟器"）设计 | **弃用——因设计不成立**：它要在**规划期**预测"动作→观测"以挑动作，但规划期无真值可校验 ⇒ "验证"= 模型自证幻想，把幻觉前移；真实验证只能在执行后（Post 校验/观测回报）或用真实轨迹（SOP/经验）。附带事实：从未实现，仓内无 `WorldModel.java`；`SlowPathStrategy` 实际依赖 `MctsEngine` + `PlannerModelSupplier`。文档曾把它当已落地（`DESIGN.md` 类图/时序图、`inbound.md` 构造签名、`TEST.md` `PLN-P04` 标 🟩 GREEN、`TODO-spec` 勾选"已完成"且指向不存在的 `WorldModel.md`）⇒ 2026-10-24 统一更正为弃用。需要世界状态推理时走 `ThinkingNode.expectedObs` |
+| X12 | `WorldModel`（"心智模拟器"）**单组件 + 规划期验证** | **弃用的只是这两件事**（能力保留为 `ObservationModel` 端口）：① 做成单一万能组件；② 让它在规划期承担"验证"。原设计的病是"预测=验证"（规划期无真值 ⇒ 用模型想象确认模型想象）。**保留**预测观测本身：`RuleBasedObservationModel`（规则型·高置信·可参与前置拒绝）/ `ModelBasedObservationModel`（LLM·低置信·**只排序不放行**），预测必带 `confidence`，且**验证只在执行后 `Post-gate`**，回传后做 predicted vs actual 偏差校准。附带事实：从未实现，仓内无 `WorldModel.java`；`SlowPathStrategy` 实际依赖 `MctsEngine` + `PlannerModelSupplier`。文档曾把它当已落地（`DESIGN.md` 类图/时序图、`inbound.md` 构造签名、`TEST.md` `PLN-P04` 标 🟩 GREEN、`TODO-spec` 勾选"已完成"且指向不存在的 `WorldModel.md`）⇒ 2026-10-24 统一更正为弃用。需要世界状态推理时走 `ThinkingNode.expectedObs` |
 | X11 | 为 `AgentExecutor` 保留兼容签名 | 若 H16 决定收敛，则旧签名不保兼容；以 parity 用例保证行为 |
 
 ---
