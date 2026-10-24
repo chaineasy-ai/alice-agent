@@ -3,6 +3,7 @@ package org.cland.alice.core.agent;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -507,11 +508,15 @@ public class Agent implements KernelDelegates {
       return true;
     }
     logger.debug("Pre-verify action: {}", action);
-    return guardrail.intercept(
-        Map.of(
-            "type", action.type().name(),
-            "target", action.target() != null ? action.target() : "",
-            "actionId", action.actionId()));
+    // #665：必须把 parameters 一起送给 validator —— 危险命令/路径藏在工具参数里，
+    // 真正的拦截点在 PermissionSandboxValidator 的参数层。
+    // 用 LinkedHashMap 而非 Map.of，因为后者不接受 null 值。
+    Map<String, Object> actionMap = new LinkedHashMap<>();
+    actionMap.put("type", action.type().name());
+    actionMap.put("target", action.target() != null ? action.target() : "");
+    actionMap.put("actionId", action.actionId());
+    actionMap.put("parameters", action.parameters() != null ? action.parameters() : Map.of());
+    return guardrail.intercept(actionMap);
   }
 
   /**
