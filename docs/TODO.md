@@ -22,7 +22,7 @@ scope:
   - "alice-facade-tui"
   - "alice-facade-rpc"
 status: "active"
-updated: "2026-10-23"
+updated: "2026-10-24"
 ---
 
 # alice-agent 唯一 TODO（v1）
@@ -71,7 +71,7 @@ updated: "2026-10-23"
 | I06 | `#173` 后续切片重排 | 按 `#3` ADR 结论产出下一批子单（有 due/验收/责任人），不再是"子单全关" | atlas / `#173` |
 | I07 | CI 升级为真门禁（`check + spotlessCheck + 覆盖率`） | GitHub Actions 跑 `scripts/check.sh --stage all`；连续 7 天绿；合并强制 | mint/steward / `#173 M3-0` |
 | I08 | 文档收口：kernel-architecture 实现注记、AGENTS 关键文件、CHANGELOG | 文档无"留待实现期"；`AGENTS.md` 增补 `kernel.graph/graph/pipeline`；CHANGELOG 随里程碑更新 | compass/mint |
-| I09 | **G1 安全缺陷：guardrail 前置不校验工具参数**（`#665`） | 修复后 `dd`/`/etc/passwd` 等真实 CLI 任务被 `REJECT`；新增端到端回归用例；`docs/功能说明书.md §3.4` 更新为"已拦截" | mint / `#665`（挂 `#173`） |
+| I09 | **G1 安全缺陷：guardrail 前置不校验工具参数**（`#665`） | **组件层已修**：`PermissionSandboxValidator` 递归扫描 `step.parameters()`；`PermissionSandboxValidatorSpec` 9 例全绿（新增 P05-a/b/c/d），改坏必红回滚验证 3 例 FAIL；`docs/功能说明书.md §3.4` 已改"已拦截"。**未完成**：真实 CLI 端到端回归用例（`dd`/`/etc/passwd` 被 `REJECT`，`/tmp/alice_guardrail_probe` 不存在）+ atlas 验收关单 | mint / `#665`（挂 `#173`） |
 | I10 | 三条入口回归纳入日常 | 每次发版前跑 CLI/TUI/RPC 三条路径并留回显；失败即阻塞发版 | mint/compass |
 
 ---
