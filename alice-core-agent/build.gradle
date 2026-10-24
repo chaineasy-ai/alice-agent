@@ -57,6 +57,10 @@ dependencies {
     // Spock：替换非稳定版为最新稳定版（2.4 正式版，适配 Groovy 4.0 + Java 21+）
     testImplementation 'org.spockframework:spock-core:2.4-groovy-4.0'
 
+    // #665：Spock 需要 byte-buddy/objenesis 才能 Mock 无默认构造器的类（ExecutionEngine）
+    testImplementation 'net.bytebuddy:byte-buddy:1.15.11'
+    testImplementation 'org.objenesis:objenesis:3.3'
+
     // Logback：升级到最新稳定版，适配 Java 25
     testImplementation 'ch.qos.logback:logback-classic:1.5.22'
 

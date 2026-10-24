@@ -66,6 +66,9 @@ public final class GraphSessionKernel implements Loop {
   private final int revisionBudget;
   private final int taoEffectBudget;
 
+  /** #665：效果执行前护栏钩子（装配方注入 Agent.verifyToolCall，与 legacy 同一口径）。 */
+  private final ToolRegistryEffectGateway.PreVerifyHook preVerifyHook;
+
   /** 取消标志（安全点语义：下个 execute 前生效）。 */
   private volatile boolean cancelled;
 
@@ -89,7 +92,8 @@ public final class GraphSessionKernel implements Loop {
       StandardSkeleton.ArbitrationBrain arbitration,
       org.cland.alice.core.agent.kernel.graph.GatePolicy verifyPost,
       int revisionBudget,
-      int taoEffectBudget) {
+      int taoEffectBudget,
+      ToolRegistryEffectGateway.PreVerifyHook preVerifyHook) {
     this.vertx = Objects.requireNonNull(vertx, "vertx");
     this.planner = Objects.requireNonNull(planner, "planner");
     this.toolRegistry = Objects.requireNonNull(toolRegistry, "toolRegistry");
@@ -104,6 +108,8 @@ public final class GraphSessionKernel implements Loop {
     this.verifyPost = verifyPost;
     this.revisionBudget = revisionBudget > 0 ? revisionBudget : 2;
     this.taoEffectBudget = taoEffectBudget > 0 ? taoEffectBudget : 10;
+    // #665：图内核副作用不走 AgentExecutor，护栏必须在此注入；不允许缺省（否则默认内核无护栏）。
+    this.preVerifyHook = Objects.requireNonNull(preVerifyHook, "preVerifyHook must not be null");
   }
 
   @Override
@@ -227,7 +233,7 @@ public final class GraphSessionKernel implements Loop {
             new LlmActorBrain(inferencer, modelId, actorSystemPrompt, toolSpecs(), input),
             arbitration,
             verifyPost,
-            new ToolRegistryEffectGateway(toolRegistry),
+            new ToolRegistryEffectGateway(toolRegistry, preVerifyHook),
             revisionBudget,
             taoEffectBudget,
             traceBridge());
