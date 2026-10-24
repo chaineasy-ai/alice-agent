@@ -56,6 +56,8 @@ updated: "2026-10-24"
 | D12 | 架构评审 / 冒烟评审 / 产品能力边界定义 | `#514`、`#515`、`#516` 均已关闭并有交付物 | `#514/#515/#516` |
 | D13 | 测试债修复（planner/guardrail 套件、bootstrap 离线化、TUI headless） | `TODO-kernel-r0` §0；`./gradlew check` 全绿 | `2026-09-10` |
 | D14 | R0 兼容层"不需要兼容"的裁定 | Owner `#3` 裁定第 3 条 | `#3` |
+| D15 | 用例图入仓（参与者×主用例 + 子代理族 7 用例） | `docs/architecture/use-cases.md`（`73f9d04`）；依据 = 功能说明书 §3 三条实跑路径 + proto 13 个命令类；2 图渲染校验 PASS | `#3` 对齐 |
+| D16 | `alice-bootstrap/DESIGN.md` 图 8 语法错误修复 | `interface IFacadeLauncher {` → `class IFacadeLauncher {`（mermaid 11 不支持 `interface` 关键字）；`c386e5e`；全量 42 图渲染 42/42 PASS | 本轮渲染校验 |
 
 ---
 
@@ -86,7 +88,7 @@ updated: "2026-10-24"
 | H02 | 图内核：冻结为 experimental 还是继续收口 | `#3` 议题 3；Owner 拍板 | ADR 明确"冻结/继续"；若继续，给下一批切片 |
 | H03 | TUI 接图内核（当前固定 legacy） | 依赖 H02；pillar/Owner | TUI 启动横幅与 CLI/RPC 一致；`graphKernelEnabled` 默认值单点定义 |
 | H04 | sub-agent 语义统一（alice 003 / pi subagent / ACP） | `#3` 议题 4；pillar | 只保留一套语义 + 权限面表（人员/数据/工具可见范围） |
-| H05 | 门禁 / 可观测口径与平台统一 | `#3` 议题 5；pillar/steward | 与 `gate.py`/`check.sh`/`#385`/`#641` 同口径；不自建；`gate.yaml` 段数口径对齐 |
+| H05 | 门禁 / 可观测口径与平台统一 | `#3` 议题 5；pillar/steward | **已收窄（2026-10-24）**：原则层（判据须有可执行反例、selftest 必须驱动而非复刻）**可借鉴**；执行层（`check.sh` 字节同构 / Jenkins / 五段退出码）**不适用**（本仓无 Jenkins 要求，CI 走自有）. 待 #3 定稿时把"不适用"写成正式边界，而非默认"还没统一" |
 | H06 | 依赖方向硬约束（4 条断言 + 豁免到期日） | `#3` 议题 6；pillar | ArchUnit/脚本进 CI；`proto` 不被实现依赖、facade 不被实现依赖、core 不依赖 facade/memory-vault、同层门面依赖集合一致 |
 | H07 | 是否拆 `core-agent` 上帝模块 | `#3` 议题 2；Owner（建议本季不拆） | 先有依赖门禁 + 分级 + parity 基线，才允许评估拆分 |
 | H08 | `memory-vault` 接线（Vault → AgentSession，持久化/摘要/遗忘） | 需产品/技术共同定；mint/pillar | 至少 1 条真实调用路径 + e2e；重启后记忆可恢复；无孤岛 |
