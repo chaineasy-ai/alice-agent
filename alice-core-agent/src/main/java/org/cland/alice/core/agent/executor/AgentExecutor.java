@@ -978,6 +978,22 @@ public class AgentExecutor implements Loop, EventStream {
                   CompletableFuture.supplyAsync(
                       () -> {
                         try {
+                          // #665：每个 tool call 先过 Pre-Verify 闸门（同一口径，参数送检）
+                          String blockedReason = preVerifyToolCall(updatedCtx, tc.name(), params);
+                          if (blockedReason != null) {
+                            return new ParallelToolResult(
+                                tc,
+                                params,
+                                ToolResult.builder()
+                                    .status(
+                                        org.cland.alice.tool.gateway.engine.ToolResult.Status
+                                            .FAILURE)
+                                    .summary(blockedReason)
+                                    .rawData("")
+                                    .metadata(Map.of("toolName", tc.name(), "blocked", "true"))
+                                    .build(),
+                                false);
+                          }
                           ToolResult r =
                               guardrailToolProxy != null
                                   ? guardrailToolProxy.invoke(tc.name(), params)
@@ -1379,6 +1395,20 @@ public class AgentExecutor implements Loop, EventStream {
     fireOnAction(action.target(), action.parameters());
 
     logger.info("[Dispatch/TOOL_CALL] target={} params={}", action.target(), action.parameters());
+
+    // #665：TOOL_CALL 必须过 Pre-Verify 闸门。
+    // Micro-ReAct 的工具执行走 GuardrailToolProxy，其默认链只覆盖 工具存在性/微循环/结果一致性，
+    // 不含 PermissionSandboxValidator；此处用 Agent 级 verifyPre 补上同一口径（参数一并送检），
+    // 否则 "危险命令藏在工具参数里" 在端到端仍然放行。
+    String blockedReason = preVerifyToolCall(ctx, action.target(), action.parameters());
+    if (blockedReason != null) {
+      return Future.succeededFuture(
+          new StepWithContext(
+              ctx,
+              new StepResult.Continue(
+                  Action.revision("Blocked by pre-verify: " + action.target()),
+                  Observation.failure(blockedReason))));
+    }
 
     if (agent.toolRegistry() == null) {
       logger.info("[Micro-ReAct/Tool] no ToolRegistry available");
@@ -2001,6 +2031,23 @@ public class AgentExecutor implements Loop, EventStream {
       java.util.Map<String, Object> params,
       ToolResult result,
       boolean cached) {}
+
+  /**
+   * #665：工具调用统一 Pre-Verify 闸门。
+   *
+   * <p>Function Calling 的并行分发、Micro-ReAct 的单个 TOOL_CALL 都必须走这里， 否则 "危险命令藏在工具参数里" 在装配层漏掉。
+   *
+   * @return null 表示通过；非 null 为拦截原因
+   */
+  private String preVerifyToolCall(
+      AgentContext ctx, String toolName, java.util.Map<String, Object> params) {
+    if (agent.verifyPre(Action.toolCall(toolName, params))) {
+      return null;
+    }
+    logger.warn("[Verify/Pre] blocked tool call: target={} params={}", toolName, params);
+    ctx.appendThought("Pre-verify blocked tool call: " + toolName);
+    return "Blocked by guardrail: forbidden command/path in tool parameters";
+  }
 
   /** 使用 Jackson 解析 LLM Function Calling 返回的 JSON arguments。 支持嵌套对象、字符串转义（\n, \t, \" 等）。 */
   private static java.util.Map<String, Object> parseToolArgsJson(String json) {
