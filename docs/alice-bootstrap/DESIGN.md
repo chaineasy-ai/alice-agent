@@ -67,7 +67,7 @@ classDiagram
         +select(String[] args) IFacadeLauncher
     }
 
-    interface IFacadeLauncher {
+    class IFacadeLauncher {
         <<Interface>>
         +launch(String[] args) void
     }
