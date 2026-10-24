@@ -105,48 +105,52 @@ classDiagram
 
 ---
 
-## **2. 双路径决策逻辑流 (Double-Path Logic)**
+## **2. 双循环决策逻辑流（内循环每步 / 外循环事件驱动）**
 
-基于"快慢系统"理论，Planner 在接收输入后首先进行 **复杂度评估 (Complexity Assessment)**。
-
-
+> **决策依据**：`docs/architecture/adr/ADR-0001-规划为执行流内的双循环.md`（2026-10-24）。
+> **原"双路径（Fast/Slow）"表述作废**：快/慢不是"入口按 prompt 长度二选一"，而是**执行流内两个不同粒度的决策点**。
 
 ```mermaid
-graph TD
-    Input[AgentContext] --> Assess{Complexity?}
+flowchart TB
+    Goal[Goal · 大目标] --> Outer
 
-    subgraph Fast["Fast Path (Reactive)"]
-        Assess -->|Low| Direct[Direct Reasoning]
-        Direct --> GenPlan[Generate Atomic Plan]
+    subgraph Outer["外循环（慢 · 事件驱动）"]
+        direction TB
+        Decomp["分解 / 局部重分解<br/>产出：目标 DAG（patch，不整树重建）"]
+        DAG[("目标 DAG<br/>节点=子目标<br/>叶=可执行步骤 + 验收条件")]
+        Decomp --> DAG
     end
 
-    subgraph Slow["Slow Path (Deliberative · MCTS)"]
-        Assess -->|High| Root[Root State Node]
-        Root --> Search[MCTS Rollout]
-        Search --> Hyp["预测 Thought / Action / 期望观测<br/>（规则型=高置信 / 模型型=低置信）<br/>★ 仅用于路径评分，不构成证据"]
-        Hyp -->|价值回传| Search
-        Search --> BestPath[Extract Optimal Path]
+    DAG --> Inner
+
+    subgraph Inner["内循环（快 · 每一步）"]
+        direction TB
+        S1["① 取下一个可执行步骤<br/>（依赖满足 + 前置条件成立）"]
+        S2["② 选工具 + 填参数<br/>规则型前置检查"]
+        S3["③ 执行 Act"]
+        S4["④ 真实观测 Observe"]
+        S5["⑤ Post-gate 校验 → 偏差判定"]
+        S1 --> S2 --> S3 --> S4 --> S5
     end
 
-    subgraph Exec["执行与真实验证（验证只能发生在这里）"]
-        GenPlan --> Run[执行动作]
-        BestPath --> Run
-        Run --> Obs[真实观测 Observation]
-        Obs --> Post[后置校验 · Post-gate]
-        Post -->|通过| Done[采纳结果]
-        Post -->|不通过| Replan[局部重规划 / 中止]
-        Replan -.->|真实轨迹作为输入| Search
-    end
+    S5 -->|通过且无偏差| S1
+    S5 -->|T1 步骤失败 / T2 前置不满足<br/>T3 Post-gate 拒绝 / T4 观测偏差超阈<br/>T5 依赖失效 / T6 新信息改目标| Decomp
 
-    Obs -.->|沉淀为经验 / SOP| Mem[(记忆与 SOP)]
-    Obs -.->|predicted vs actual 偏差| Calib[校准 / 降权该预测实现]
+    S2 -.->|precondition 推演| OM["ObservationModel（规则型优先）<br/>precondition / effect"]
+    S5 -.->|predicted vs actual| OM
+    OM -.->|偏差超阈| Decomp
+
+    L3["L3 选择器（可选 · 条件启用）<br/>MCTS / beam / rerank<br/>仅用于「同层互斥方案」"]
+    S2 -.->|同层多方案竞争时| L3
+    L3 -.->|选了哪个方案| S2
 ```
 
-> **为什么"预测观测"只能用于评分**：规划期没有真值，预测观测若被当作结论，就等于"用模型想象确认模型想象"。
-> 因此本图把**验证放在执行之后**（`Post-gate`），预测结果只参与 MCTS 的价值回传；真实观测才进记忆与重规划。
-> 这也是原 `WorldModel` 被弃用的直接原因（弃用的是"单组件 + 规划期验证"，**预测观测能力本身保留**，见文首设计修正与 `docs/TODO.md` `X12`）。
-
----
+> **三层定位（不要混）**：
+> - **L1 分解器**（必须有）：大目标 → 子目标 DAG；评"可执行 / 无环 / 有验收条件"，**不用搜索**；
+> - **L2 可判评估**（必须有）：`precondition / effect` 规则推演，判"能不能执行""偏差有没有发生"；
+> - **L3 选择器**（可选）：仅当同层存在多个互斥方案且方案本身是一串步骤时启用（MCTS 在此才有意义）。
+>
+> **硬约束**：无廉价转移模型 / 无收益定义 ⇒ **禁止启用 L3**（fail-closed，且不得输出 `bestAction/bestAvgReward` 当作结论）。
 
 ## **3. 核心设计细节 (Engineering Implementation)**
 
@@ -175,7 +179,9 @@ public interface ModelSupplier {
 
 ---
 
-## **4. 决策状态机 (ASCII Text)**
+## **4. 执行流状态机 (ASCII Text)**
+
+> 说明：本图对应 ADR-0001 的双循环——**没有"入口选快慢"这一步**；外循环只在 §2 的六个信号出现时被唤醒。
 
 描述 Planner 内部从"接收意图"到"交付路径"的过程：
 
