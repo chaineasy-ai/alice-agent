@@ -198,7 +198,7 @@ ModelSupplier modelSupplier = new OpenAiSupplier(...);
 FastPathStrategy fastPath = new FastPathStrategy(modelSupplier);
 SlowPathStrategy slowPath = SlowPathStrategy.builder()
     .modelSupplier(modelSupplier)
-    .build();   // WorldModel 已弃用（未实现），不再作为构造参数
+    .build();   // WorldModel 已弃用（设计不成立：规划期无真值可校验），不再作为构造参数
 
 StrategySelector selector = StrategySelector.builder()
     .fastPath(fastPath)
@@ -321,7 +321,7 @@ alice-core-agent ──requires──► alice-core-planner ──requires──
 ## 6. Related Documents
 
 - [DESIGN.md](./DESIGN.md) — Deep modular design for dual-path decision engine
-- ~~WorldModel.md~~ — **设计弃用（未实现）**，文件不存在；世界状态预测改由 MCTS 的 `ThinkingNode.expectedObs` + `PlannerModelSupplier` 承担
+- ~~WorldModel.md~~ — **设计弃用（设计不成立，非"没写完"）**：规划期预测无法校验；文件从未存在。需要"预测下一步"时走 MCTS 的 `ThinkingNode.expectedObs`（搜索内部假设，不作对外结论）+ `PlannerModelSupplier`
 - [e2e/scene-planner-endpoints.md](./e2e/scene-planner-endpoints.md) — E2E hole test scene
 - [../alice-core-agent/DESIGN.md](../alice-core-agent/DESIGN.md) — Core agent lifecycle design
 - [../alice-core-agent/e2e/scene-executor-endpoints.md](../alice-core-agent/e2e/scene-executor-endpoints.md) — Executor E2E scene (shows planner usage)

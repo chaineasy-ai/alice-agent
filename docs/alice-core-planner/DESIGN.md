@@ -46,7 +46,7 @@ classDiagram
     }
 
     class WorldModel {
-        <<deprecated>>
+        <<deprecated 设计不成立>>
         +predict(State s, Action a) Observation
     }
 
@@ -68,7 +68,7 @@ classDiagram
     DecisionStrategy <|.. SlowPathStrategy
     DecisionStrategy <|.. FastPathStrategy
     SlowPathStrategy *-- ThinkingTree
-    SlowPathStrategy ..> WorldModel : 设计弃用（未实现）
+    SlowPathStrategy ..> WorldModel : 已弃用（设计不成立）
     ThinkingTree *-- ThinkingNode
 ```
 
