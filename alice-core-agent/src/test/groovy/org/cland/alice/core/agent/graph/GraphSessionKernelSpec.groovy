@@ -64,7 +64,7 @@ class GraphSessionKernelSpec extends Specification {
                 new TextLlmPipeline(), modelId, "test system prompt",
                 { g, l, o -> org.cland.alice.core.agent.kernel.graph.StandardSkeleton.Arbitration.pass() }
                         as org.cland.alice.core.agent.kernel.graph.StandardSkeleton.ArbitrationBrain,
-                null, 2, 10)
+                null, 2, 10, allowAll())
     }
 
     private GraphSessionKernel kernelWithVerifyPost(PlannerService planner,
@@ -75,7 +75,12 @@ class GraphSessionKernelSpec extends Specification {
                 new TextLlmPipeline(), modelId, "test system prompt",
                 { g, l, o -> org.cland.alice.core.agent.kernel.graph.StandardSkeleton.Arbitration.pass() }
                         as org.cland.alice.core.agent.kernel.graph.StandardSkeleton.ArbitrationBrain,
-                verifyPost, 2, 10)
+                verifyPost, 2, 10, allowAll())
+    }
+
+    /** 无护栏需求的契约测试：钩子恒放行（生产一律注入 Agent.verifyToolCall）。 */
+    private static ToolRegistryEffectGateway.PreVerifyHook allowAll() {
+        { String t, Map a -> null } as ToolRegistryEffectGateway.PreVerifyHook
     }
 
     private SessionResult await(Future resultFuture) {

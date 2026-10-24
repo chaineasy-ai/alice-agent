@@ -2041,12 +2041,13 @@ public class AgentExecutor implements Loop, EventStream {
    */
   private String preVerifyToolCall(
       AgentContext ctx, String toolName, java.util.Map<String, Object> params) {
-    if (agent.verifyPre(Action.toolCall(toolName, params))) {
+    // 判据单一来源：Agent.verifyToolCall（与 graph-kernel 钩子同一口径）。
+    String blockedReason = agent.verifyToolCall(toolName, params);
+    if (blockedReason == null) {
       return null;
     }
-    logger.warn("[Verify/Pre] blocked tool call: target={} params={}", toolName, params);
     ctx.appendThought("Pre-verify blocked tool call: " + toolName);
-    return "Blocked by guardrail: forbidden command/path in tool parameters";
+    return blockedReason;
   }
 
   /** 使用 Jackson 解析 LLM Function Calling 返回的 JSON arguments。 支持嵌套对象、字符串转义（\n, \t, \" 等）。 */
