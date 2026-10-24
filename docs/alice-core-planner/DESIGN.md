@@ -40,13 +40,13 @@ classDiagram
     }
 
     class SlowPathStrategy {
-        -MCTSSearcher searcher
-        -WorldModel worldModel
+        -MctsEngine engine
+        -PlannerModelSupplier modelSupplier
         +decide(AgentContext ctx) Plan
     }
 
     class WorldModel {
-        <<interface>>
+        <<deprecated>>
         +predict(State s, Action a) Observation
     }
 
@@ -68,7 +68,7 @@ classDiagram
     DecisionStrategy <|.. SlowPathStrategy
     DecisionStrategy <|.. FastPathStrategy
     SlowPathStrategy *-- ThinkingTree
-    SlowPathStrategy o-- WorldModel
+    SlowPathStrategy ..> WorldModel : 设计弃用（未实现）
     ThinkingTree *-- ThinkingNode
 ```
 
@@ -96,7 +96,7 @@ graph TD
         subgraph "Internal Simulation (Virtual ReAct)"
             Search --> Thought[Predict Thought]
             Thought --> VAction[Predict Action]
-            VAction --> World[WorldModel: Predict Obs]
+            VAction --> World["PlannerModelSupplier: Predict Obs<br/>（原 WorldModel 设计已弃用）"]
             World --> Thought
         end
 
