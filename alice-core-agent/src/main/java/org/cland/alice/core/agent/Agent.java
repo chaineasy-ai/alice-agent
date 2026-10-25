@@ -3,6 +3,7 @@ package org.cland.alice.core.agent;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -402,7 +403,8 @@ public class Agent implements KernelDelegates {
                       ? new VerifyPostGatePolicy(guardrail)
                       : null,
                   AgentConfig.DEFAULT_MAX_ITERATIONS,
-                  config.maxMicroDepth());
+                  config.maxMicroDepth(),
+                  this::verifyToolCall);
           graphKernel = k;
           logger.info("[Agent] Graph session kernel enabled (kernel()/events() switched)");
         }
@@ -501,17 +503,39 @@ public class Agent implements KernelDelegates {
    * @param action 待验证的 Action
    * @return true 表示通过，false 表示被拦截
    */
+  /**
+   * #665：工具调用 Pre-Verify 闸门（供 legacy/Function-Calling/graph-kernel 同一口径复用）。
+   *
+   * <p>把工具名 + 参数（危险命令/路径藏在参数里）送 {@link #verifyPre(Action)}；判据实现只有一份 （{@code
+   * PermissionSandboxValidator} 经 guardrail）。
+   *
+   * @param toolName 工具名
+   * @param params 工具参数
+   * @return null 表示放行；非 null 为拦截原因
+   */
+  public String verifyToolCall(String toolName, Map<String, Object> params) {
+    if (verifyPre(Action.toolCall(toolName, params))) {
+      return null;
+    }
+    logger.warn("[Verify/Pre] blocked tool call: target={} params={}", toolName, params);
+    return "Blocked by guardrail: forbidden command/path in tool parameters";
+  }
+
   @Override
   public boolean verifyPre(Action action) {
     if (!config.preVerifyEnabled() || guardrail == null) {
       return true;
     }
     logger.debug("Pre-verify action: {}", action);
-    return guardrail.intercept(
-        Map.of(
-            "type", action.type().name(),
-            "target", action.target() != null ? action.target() : "",
-            "actionId", action.actionId()));
+    // #665：必须把 parameters 一起送给 validator —— 危险命令/路径藏在工具参数里，
+    // 真正的拦截点在 PermissionSandboxValidator 的参数层。
+    // 用 LinkedHashMap 而非 Map.of，因为后者不接受 null 值。
+    Map<String, Object> actionMap = new LinkedHashMap<>();
+    actionMap.put("type", action.type().name());
+    actionMap.put("target", action.target() != null ? action.target() : "");
+    actionMap.put("actionId", action.actionId());
+    actionMap.put("parameters", action.parameters() != null ? action.parameters() : Map.of());
+    return guardrail.intercept(actionMap);
   }
 
   /**

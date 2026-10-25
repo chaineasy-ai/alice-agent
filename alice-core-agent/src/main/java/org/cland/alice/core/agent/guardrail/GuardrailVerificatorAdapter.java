@@ -114,7 +114,16 @@ public final class GuardrailVerificatorAdapter implements Verificator {
 
     // 纠正 Plan 动作类型（Action.Type → Plan.Step 兼容字符串）
     String planTarget = targetStr != null ? targetStr : "";
-    Plan plan = Plan.fastPath("Guardrail pre-verify: " + typeStr, toIntent(typeStr), planTarget);
+
+    // #665：装配层必须把工具参数透传到 Step —— 否则 PermissionSandboxValidator 只看
+    // 到工具名（target），参数里的危险命令/路径全部漏过，端到端放行。
+    Map<String, Object> params = extractParameters(action.get("parameters"));
+    Plan plan =
+        Plan.builder()
+            .type(Plan.Type.FAST_PATH)
+            .summary("Guardrail pre-verify: " + typeStr)
+            .addStep(Plan.Step.of(toIntent(typeStr), planTarget, params))
+            .build();
 
     // 保留 metadata 用于审计跟踪
     Plan enrichedPlan =
@@ -228,6 +237,24 @@ public final class GuardrailVerificatorAdapter implements Verificator {
     }
 
     return Map.copyOf(map);
+  }
+
+  /**
+   * #665：从 action map 的 {@code parameters} 取出工具参数。
+   *
+   * <p>缺失或类型不符时按空 Map 处理（保持向后兼容），绝不抛异常、不改变 target 语义。
+   */
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> extractParameters(Object raw) {
+    if (!(raw instanceof Map<?, ?> map)) {
+      return Map.of();
+    }
+    Map<String, Object> params = new LinkedHashMap<>();
+    for (Map.Entry<?, ?> entry : map.entrySet()) {
+      if (entry.getKey() == null || entry.getValue() == null) continue;
+      params.put(String.valueOf(entry.getKey()), entry.getValue());
+    }
+    return params;
   }
 
   /** 从 Map 中安全获取字符串值。 */
