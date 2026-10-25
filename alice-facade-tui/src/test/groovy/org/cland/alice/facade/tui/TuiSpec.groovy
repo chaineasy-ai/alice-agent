@@ -494,6 +494,44 @@ class TuiSpec extends Specification {
         resetMsgs.size() == 1
     }
 
+    def "全链路 /new：真的清空 Agent 上下文（断副作用，不断消息条数）"() {
+        given: "先往会话里塞一条短期记忆（有东西可清，才能验证真的清了）"
+        def sid = "sess-748-reset"
+        def agent = new org.cland.alice.core.agent.Agent("tui-748", sid,
+            org.cland.alice.core.agent.AgentConfig.defaults())
+            .withMemory(new org.cland.alice.core.agent.memory.AgentSession())
+        agent.memory().persist(sid, "旧上下文-748")
+        assert agent.memory().getShortTerm(sid).contains("旧上下文-748")
+        def launcher = new AliceTuiLauncher(agent)
+        def chat = captureChat(launcher)
+
+        when: "用户敲 /new（经 CommandHandler，真实入口）"
+        handlerOf(launcher).execute(SlashCommand.parse("/new"))
+
+        then: "断言**副作用**：短期记忆真空 —— 只断消息条数会让「删掉 clearMemory()」照样绿"
+        agent.memory().getShortTerm(sid).isEmpty()
+
+        and: "并且回显说的是真的那一句"
+        chat.any { it.contains("上下文已清空") }
+    }
+
+    def "全链路 /new：没有短期记忆实现时不得宣称上下文已清空（no-op 也要如实说）"() {
+        given: "生产 TUI 装配（Agent.createDefault）本来就不挂 AgentSession ⇒ memory() == null"
+        def sid = "sess-748-no-memory"
+        def agent = new org.cland.alice.core.agent.Agent("tui-748b", sid,
+            org.cland.alice.core.agent.AgentConfig.defaults())
+        assert agent.memory() == null
+        def launcher = new AliceTuiLauncher(agent)
+        def chat = captureChat(launcher)
+
+        when:
+        handlerOf(launcher).execute(SlashCommand.parse("/new"))
+
+        then: "不许说「上下文已清空」（那是 no-op 撑起来的假话）；要如实说未启用短期记忆"
+        chat.every { !it.contains("上下文已清空") }
+        chat.any { it.contains("未启用短期记忆") }
+    }
+
     def "全链路 /model 未生效：不得在分发前宣称切换（两句打脸）"() {
         given:
         def agent = new org.cland.alice.core.agent.Agent(org.cland.alice.core.agent.AgentConfig.defaults())
