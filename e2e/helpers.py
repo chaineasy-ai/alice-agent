@@ -16,6 +16,7 @@ Usage (E2E suite — e2e/alice_agent_e2e.py):
     from helpers import run_cli, run_gradle, skip_if_no_gemma4
 """
 
+import json
 import os
 import subprocess
 import sys
@@ -32,6 +33,11 @@ else:
 
 GEMMA4_BASE_URL = os.environ.get("GEMMA4_BASE_URL", "http://192.168.1.14:10303/v1")
 GEMMA4_MODEL = os.environ.get("GEMMA4_MODEL", "gemma-4")
+
+#: Java 侧 supplier 注册的唯一真源（`ModelConfigLoader` 读 `~/.alice/model.json`）
+ALICE_MODEL_CONFIG = Path(
+    os.environ.get("ALICE_MODEL_CONFIG", str(Path.home() / ".alice" / "model.json"))
+)
 
 
 # ── Gradle Helpers ─────────────────────────────────────────────────────────
@@ -201,6 +207,30 @@ def run_java_class(
 
 
 # ── External Service Checks ────────────────────────────────────────────────
+
+
+def skip_if_no_local_supplier(model_id: str) -> bool:
+    """本机是否在 ``~/.alice/model.json`` 注册了某模型的 supplier；True = 应 skip。
+
+    **两个正交前置条件**：端点可达（skip_if_no_gemma4()）≠ 本机配置里声明了
+    这个 supplier。后者缺失时 ``alice run --model <id>`` 必然报
+    ``No supplier found for modelId: <id>``——那是**环境耦合**（取决于每个人
+    本机的 model.json），不是产品缺陷；断言它会把「全绿」绑在个人环境上（假绿/假红温床）。
+
+    Args:
+        model_id: 模型 id，如 ``gemma-4``（比对 available_models[].model / .name）
+    """
+    try:
+        cfg = json.loads(ALICE_MODEL_CONFIG.read_text(encoding="utf-8"))
+    except Exception:
+        return True
+    for provider in (cfg.get("providers") or {}).values():
+        for m in (provider or {}).get("available_models") or []:
+            ids = {str(m.get(k) or "") for k in ("model", "name", "id")}
+            ids = {i for i in ids if i}
+            if model_id in ids or any(i.split("/")[-1] == model_id for i in ids):
+                return False
+    return True
 
 
 def skip_if_no_gemma4() -> bool:
