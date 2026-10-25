@@ -46,21 +46,40 @@ import unittest
 SUSPICIOUS_FAST_FAIL_SECONDS = 15.0
 EXIT_UNDETERMINED = 2
 
-#: 这些模块的失败"可能只是没起服务"（分类提示用；**不改 rc**）
-GEMMA4_MODULES = ("gemma4.", "gemma_4_client")
+#: gemma4 用例的**模块名**（分类提示用；**不改 rc**）。
+#:
+#: 坑（#766 · probe 抓）：最初按 test id 的子串 `"gemma4."` 判断，但 runner 用
+#: `loader.discover(e2e/gemma4, "*_e2e_test.py")` 时真实 id 是
+#: `test_basic_chat (gemma4_e2e_test.TestGemma4E2E.test_basic_chat)`
+#: —— 含 `gemma4_` 而**不含** `gemma4.` ⇒ 提示恒为 None（功能变死代码），
+#: 而 guards 里用人工拼的假 id 反而能过，正好把死代码测绿。
+#: 现在以 `test.__class__.__module__` 为主判据，字符串子串只作兜底。
+GEMMA4_MODULE_HINTS = ("gemma4_e2e_test", "gemma_4_client", "alice_agent_e2e.gemma4")
+GEMMA4_ID_HINTS = ("gemma4_e2e_test", "gemma_4_client", "gemma4.")
 
 
-def gemma4_only_failure_hint(failed_ids: list[str]) -> str | None:
+def is_gemma4_test(test) -> bool:
+    """该失败的用例是否属于 gemma4 套件（模块为主、id 子串兜底）。"""
+    module = str(getattr(test.__class__, "__module__", "") or "")
+    tid = str(test)
+    return any(m in module for m in GEMMA4_MODULE_HINTS) or any(
+        m in tid for m in GEMMA4_ID_HINTS
+    )
+
+
+def gemma4_only_failure_hint(tests: list) -> str | None:
     """全部失败都来自 gemma4 时返回分类提示文案，否则 None（#766）。
 
     为什么需要：gemma4 契约断言在服务不可达时**默认判红**（契约未被验证 ≠ 通过），
     但"没起服务"和"服务行为不符契约"读起来都是红，得让人能分开。**只提示，不改 rc**。
+
+    :param tests: 失败的用例对象（不是字符串 id）——id 的形态随 loader 变，模块名不会。
     """
-    if not failed_ids:
+    if not tests:
         return None
-    if not all(any(m in tid for m in GEMMA4_MODULES) for tid in failed_ids):
+    if not all(is_gemma4_test(t) for t in tests):
         return None
-    n = len(failed_ids)
+    n = len(tests)
     return (
         f"  ℹ️  本轮 {n} 个失败**全部来自 gemma4** —— 先分清两种情形：\n"
         "       · 服务没起/不可达 ⇒ 契约未被验证（这不是产品缺陷）：GEMMA4_BASE_URL 指对了吗？\n"
@@ -152,9 +171,7 @@ if __name__ == "__main__":
 
     # ── 失败分类提示（#766 · 不是静音，是让"环境缺服务"和"产品坏了"能分开读）──
     if failures_total and not selectors:
-        hint = gemma4_only_failure_hint(
-            [str(tc) for tc, _ in result.failures + result.errors]
-        )
+        hint = gemma4_only_failure_hint([tc for tc, _ in result.failures + result.errors])
         if hint:
             print()
             print(hint)

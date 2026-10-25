@@ -177,35 +177,64 @@ class AgentLogPathTest(unittest.TestCase):
                 os.environ["ALICE_LOG_DIR"] = old
 
 
+def _real_gemma4_cases():
+    """用**真实 loader** 取出 gemma4 用例（不是人工拼 id —— 那正是死代码被测绿的原因）。"""
+    from helpers import PROJECT_ROOT
+
+    loader = unittest.TestLoader()
+    suite = loader.discover(
+        str(PROJECT_ROOT / "e2e" / "gemma4"), pattern="*_e2e_test.py"
+    )
+    out = []
+
+    def walk(node):
+        for t in node:
+            if isinstance(t, unittest.TestSuite):
+                walk(t)
+            else:
+                out.append(t)
+
+    walk(suite)
+    return out
+
+
 class Gemma4FailureClassificationTest(unittest.TestCase):
     """#766：gemma4 不可达与产品缺陷要能分开读 —— 分类提示的判据。
 
-    服务不可达时契约断言默认判红（契约未被验证 ≠ 通过），但提示必须**只在
-    失败全部来自 gemma4** 时出现，否则会把"混着别的红"也归因成环境问题。
+    事故（probe 抓）：`GEMMA4_MODULES = ("gemma4.", …)` 在真实 loader id
+    `test_basic_chat (gemma4_e2e_test.TestGemma4E2E.test_basic_chat)` 上**永不匹配**
+    ⇒ 提示变死代码；而 guards 用人工拼的 `"gemma4.gemma4_e2e_test.…"` 恰好能过，
+    把死代码测成绿。所以这里的锁**必须用真实 loader 取到的用例对象**。
     """
 
-    def _hint(self, ids):
-        from e2e.run_alice_e2e import gemma4_only_failure_hint
+    def test_real_loader_ids_are_matched(self):
+        from e2e.run_alice_e2e import is_gemma4_test
 
-        return gemma4_only_failure_hint(ids)
+        cases = _real_gemma4_cases()
+        self.assertTrue(cases, "应能 discover 到 gemma4 用例（否则锁失去观测对象）")
+        for tc in cases[:3]:
+            self.assertTrue(is_gemma4_test(tc), f"真实 id 未被识别为 gemma4：{tc}")
 
     def test_all_gemma4_failures_get_hint(self):
-        hint = self._hint([
-            "(gemma4.gemma4_e2e_test.TestGemma4E2E.test_basic_chat)",
-            "gemma4.gemma4_e2e_test.TestGemma4E2E.test_streaming_chat",
-        ])
+        from e2e.run_alice_e2e import gemma4_only_failure_hint
+
+        hint = gemma4_only_failure_hint(_real_gemma4_cases())
         self.assertIsNotNone(hint)
         self.assertIn("GEMMA4_E2E_SKIP_IF_DOWN=1", hint)
 
     def test_mixed_failures_get_no_hint(self):
         # 混一条非 gemma4 的红就不许提示"可能只是没起服务"（会误导归因）
-        self.assertIsNone(self._hint([
-            "gemma4.gemma4_e2e_test.TestGemma4E2E.test_basic_chat",
-            "smoke.test_smoke_case_1.TestSmokeCase1.test_divide_zero_raises_value_error",
-        ]))
+        from e2e.run_alice_e2e import gemma4_only_failure_hint
+
+        # 一个**非** gemma4 的用例对象（本类自己的某个 test）
+        non_gemma4 = Gemma4FailureClassificationTest("test_no_failures_get_no_hint")
+        mixed = _real_gemma4_cases()[:1] + [non_gemma4]
+        self.assertIsNone(gemma4_only_failure_hint(mixed))
 
     def test_no_failures_get_no_hint(self):
-        self.assertIsNone(self._hint([]))
+        from e2e.run_alice_e2e import gemma4_only_failure_hint
+
+        self.assertIsNone(gemma4_only_failure_hint([]))
 
 
 class SmokeFixtureBaselineTest(unittest.TestCase):
