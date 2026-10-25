@@ -177,5 +177,75 @@ class AgentLogPathTest(unittest.TestCase):
                 os.environ["ALICE_LOG_DIR"] = old
 
 
+class Gemma4FailureClassificationTest(unittest.TestCase):
+    """#766：gemma4 不可达与产品缺陷要能分开读 —— 分类提示的判据。
+
+    服务不可达时契约断言默认判红（契约未被验证 ≠ 通过），但提示必须**只在
+    失败全部来自 gemma4** 时出现，否则会把"混着别的红"也归因成环境问题。
+    """
+
+    def _hint(self, ids):
+        from e2e.run_alice_e2e import gemma4_only_failure_hint
+
+        return gemma4_only_failure_hint(ids)
+
+    def test_all_gemma4_failures_get_hint(self):
+        hint = self._hint([
+            "(gemma4.gemma4_e2e_test.TestGemma4E2E.test_basic_chat)",
+            "gemma4.gemma4_e2e_test.TestGemma4E2E.test_streaming_chat",
+        ])
+        self.assertIsNotNone(hint)
+        self.assertIn("GEMMA4_E2E_SKIP_IF_DOWN=1", hint)
+
+    def test_mixed_failures_get_no_hint(self):
+        # 混一条非 gemma4 的红就不许提示"可能只是没起服务"（会误导归因）
+        self.assertIsNone(self._hint([
+            "gemma4.gemma4_e2e_test.TestGemma4E2E.test_basic_chat",
+            "smoke.test_smoke_case_1.TestSmokeCase1.test_divide_zero_raises_value_error",
+        ]))
+
+    def test_no_failures_get_no_hint(self):
+        self.assertIsNone(self._hint([]))
+
+
+class SmokeFixtureBaselineTest(unittest.TestCase):
+    """smoke case3 的语义是「先红 → Agent 修 → 转绿」，**夹具必须起步是红的**。
+
+    事故（#766 · ledger 抓）：一个 `git add -A` 把 Agent 跑完留下的修复版
+    `e2e/smoke/fixtures/pytest_tdd/parser.py` 一起提交了，后果不是"多改了文件"而是
+    **语义全废**：`test_pytest_all_pass_after_fix` 一开始就绿（agent 什么都不做也过）、
+    `test_parser_handles_invalid_json` 的 `try/except` 断言恒真 ——
+    TDD 自省闭环退化成"能不能跑 pytest"。
+    """
+
+    FIXTURE_DIR = Path(__file__).resolve().parent / "smoke" / "fixtures" / "pytest_tdd"
+
+    def test_fixture_suite_starts_red(self):
+        """起步必须至少 1 个失败（否则"修好了"这件事不可观测）。"""
+        if not self.FIXTURE_DIR.exists():
+            self.skipTest(f"fixture 目录不存在：{self.FIXTURE_DIR}")
+        r = subprocess.run(
+            [sys.executable, "-m", "pytest", str(self.FIXTURE_DIR), "-q",
+             "-p", "no:cacheprovider"],
+            capture_output=True, text=True, timeout=60,
+        )
+        out = r.stdout + r.stderr
+        self.assertNotEqual(
+            r.returncode, 0,
+            f"smoke case3 的夹具必须**起步红**，现在全绿 ⇒ 「Agent 自我修复」无从验证。\n{out[-400:]}",
+        )
+
+    def test_parser_fixture_not_already_fixed(self):
+        """坏掉的 parser.py 里不该已经出现修复（`try`/`except`）—— 那会让断言恒真。"""
+        parser = self.FIXTURE_DIR / "parser.py"
+        if not parser.exists():
+            self.skipTest(f"文件不存在：{parser}")
+        content = parser.read_text(encoding="utf-8")
+        self.assertNotIn(
+            "except", content,
+            "夹具 parser.py 已被修好，smoke case3 的 try/except 断言会恒真",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

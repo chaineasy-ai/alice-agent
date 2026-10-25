@@ -46,6 +46,28 @@ import unittest
 SUSPICIOUS_FAST_FAIL_SECONDS = 15.0
 EXIT_UNDETERMINED = 2
 
+#: 这些模块的失败"可能只是没起服务"（分类提示用；**不改 rc**）
+GEMMA4_MODULES = ("gemma4.", "gemma_4_client")
+
+
+def gemma4_only_failure_hint(failed_ids: list[str]) -> str | None:
+    """全部失败都来自 gemma4 时返回分类提示文案，否则 None（#766）。
+
+    为什么需要：gemma4 契约断言在服务不可达时**默认判红**（契约未被验证 ≠ 通过），
+    但"没起服务"和"服务行为不符契约"读起来都是红，得让人能分开。**只提示，不改 rc**。
+    """
+    if not failed_ids:
+        return None
+    if not all(any(m in tid for m in GEMMA4_MODULES) for tid in failed_ids):
+        return None
+    n = len(failed_ids)
+    return (
+        f"  ℹ️  本轮 {n} 个失败**全部来自 gemma4** —— 先分清两种情形：\n"
+        "       · 服务没起/不可达 ⇒ 契约未被验证（这不是产品缺陷）：GEMMA4_BASE_URL 指对了吗？\n"
+        "       · 服务在线但行为不符契约 ⇒ 真信号，别静音（#766 起因）\n"
+        "     确需在没有该服务的环境跑分片，显式设 GEMMA4_E2E_SKIP_IF_DOWN=1（汇总行会留 skipped=N）。"
+    )
+
 if __name__ == "__main__":
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     from helpers import git_status_porcelain, worktree_guard_enabled
@@ -127,6 +149,16 @@ if __name__ == "__main__":
     # 几秒内整片全红——那不是产品红，是**没判定**。atlas 踩过：7 failed in 2.14s。
     # 判据要窄：仅「全量 + 有失败 + <15s」→ exit 2（未判定），其余照旧。
     failures_total = len(result.failures) + len(result.errors)
+
+    # ── 失败分类提示（#766 · 不是静音，是让"环境缺服务"和"产品坏了"能分开读）──
+    if failures_total and not selectors:
+        hint = gemma4_only_failure_hint(
+            [str(tc) for tc, _ in result.failures + result.errors]
+        )
+        if hint:
+            print()
+            print(hint)
+
     if failures_total and elapsed < SUSPICIOUS_FAST_FAIL_SECONDS and not selectors:
         print()
         print(f"  ⚠️  未判定（exit {EXIT_UNDETERMINED}）：{failures_total} 个失败只用了 {elapsed:.1f}s"

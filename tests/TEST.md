@@ -487,3 +487,29 @@
 - **`./gradlew spotlessCheck`** — 代码格式合规
 - 新建功能必须同步添加对应层级的测试（优先单元，再模块，最后场景）
 - 挖洞测试新增时，同步更新 `tests/TEST.md` 的统计表
+
+---
+
+## Gemma4 契约断言的运行语义（#766 · 别用"跳过"冒充"通过"）
+
+```bash
+# 正常跑（要求服务在线：默认就是这条）
+GEMMA4_BASE_URL=http://192.168.1.14:10303/v1 \
+  python3 -m unittest e2e.gemma4.gemma4_e2e_test
+
+# 环境确实没有 gemma4 服务时（**显式**放行，汇总行会显示 skipped=N）
+GEMMA4_E2E_SKIP_IF_DOWN=1 python3 -m unittest e2e.gemma4.gemma4_e2e_test
+```
+
+| 情形 | 结果 |
+|---|---|
+| 服务在线、行为符合契约 | `OK` |
+| 服务在线、行为不符契约（如未知 model 回 200） | **FAILED**（断言真咬） |
+| 服务不可达（默认） | **FAILED (failures=N)** —— 契约**未被验证 ≠ 通过** |
+| 服务不可达 + `GEMMA4_E2E_SKIP_IF_DOWN=1` | `OK (skipped=N)` —— 显式、可见 |
+
+⚠️ 见到 11 red **不要**第一反应加 `GEMMA4_E2E_SKIP_IF_DOWN=1` 静音：先确认是"服务没起"还是"服务行为不对"。
+后者才是真信号（`#766` 起因）。CI 里若确实没有该服务，应在**那个 job 的 env 里显式写**，可审计。
+
+失效判据（照抄/改松前先看）：不得把 `Timeout`/`ConnectionError` 算通过；不得硬编码规范 model id；
+不得反向断言"别名表外必须被拒"；服务不可达不得默认 skip。详见 `docs/model/gemma4/README.md`。
