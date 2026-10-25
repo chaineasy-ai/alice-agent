@@ -304,7 +304,8 @@ public class JLineChatSession implements AutoCloseable {
     }
 
     // 通过 AliceCliLauncher.dispatchCommand 分发
-    int exitCode = AliceCliLauncher.dispatchCommand(cmd);
+    // #747：带上父会话 Agent ⇒ spawn 子 Agent 继承有效模型、SwitchModelCmd 真正生效
+    int exitCode = AliceCliLauncher.dispatchCommand(cmd, agent);
 
     if (exitCode != AliceCliLauncher.EXIT_SUCCESS) {
       System.err.println("命令执行返回非零退出码: " + exitCode);

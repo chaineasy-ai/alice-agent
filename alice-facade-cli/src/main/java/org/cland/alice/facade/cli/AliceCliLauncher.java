@@ -48,6 +48,13 @@ public final class AliceCliLauncher {
 
   private static final Logger logger = LoggerFactory.getLogger(AliceCliLauncher.class);
 
+  /**
+   * 测试缝（#747）：非 null 时 spawn 分支使用该 runner 替代默认进程内 runner。
+   *
+   * <p>生产路径恒为 null（不改任何默认行为）；仅用于断言"子 Agent 收到的有效模型"。
+   */
+  static volatile org.cland.alice.agent.subagent.SubAgentRunner testSubAgentRunner;
+
   // 退出码常量
   public static final int EXIT_SUCCESS = 0;
   public static final int EXIT_RUNTIME_ERROR = 1;
@@ -175,6 +182,28 @@ public final class AliceCliLauncher {
    * @return 退出码
    */
   public static int dispatchCommand(AgentCommand cmd) {
+    return dispatchCommand(cmd, null);
+  }
+
+  /**
+   * 分发已解析的 {@link AgentCommand}，并带上**父会话 Agent**（#747）。
+   *
+   * <p>有父会话时：
+   *
+   * <ul>
+   *   <li>{@code SwitchModelCmd} 真正作用于父 Agent（否则只是打印，父实际没切）；
+   *   <li>{@code SpawnSubAgentCmd} 让子 Agent **继承父会话有效模型**（#666 D5 边界④ 的 CLI 侧）。
+   * </ul>
+   *
+   * <p>允许 {@code parentAgent == null}（命令行一次性调用没有会话）：此时行为与历史实现**逐字节一致**， 子 Agent 回落到 {@code
+   * baseAgentConfig.defaultModelId()}。
+   *
+   * @param cmd 已解析的 AgentCommand
+   * @param parentAgent 父会话 Agent，可为 null
+   * @return 退出码
+   */
+  public static int dispatchCommand(
+      AgentCommand cmd, org.cland.alice.core.agent.Agent parentAgent) {
     if (cmd == null) {
       System.err.println("Cannot dispatch null command");
       return EXIT_PARAM_ERROR;
@@ -208,7 +237,23 @@ public final class AliceCliLauncher {
         yield EXIT_SUCCESS;
       }
       case org.cland.alice.agent.proto.AlignmentCmd.SwitchModelCmd model -> {
-        System.out.println("Switching model to: " + model.modelId());
+        if (parentAgent == null) {
+          // 无会话上下文：保持历史输出（一次性命令，不影响任何运行中 Agent）
+          System.out.println("Switching model to: " + model.modelId());
+          yield EXIT_SUCCESS;
+        }
+        try {
+          parentAgent.switchModel(model.modelId());
+        } catch (RuntimeException e) {
+          System.out.println("模型切换失败: " + e.getMessage());
+          yield EXIT_RUNTIME_ERROR;
+        }
+        String effective = parentAgent.currentModelId();
+        if (model.modelId() != null && model.modelId().equals(effective)) {
+          System.out.println("模型切换至: " + effective);
+        } else {
+          System.out.println("模型切换未生效: 仍在用 " + effective + "（请求: " + model.modelId() + "）");
+        }
         yield EXIT_SUCCESS;
       }
       case ControlCmd.ResetSessionCmd reset -> {
@@ -257,9 +302,14 @@ public final class AliceCliLauncher {
         // 创建 SubAgentManager 并生成子 Agent
         String subSessionId = SnowflakeIdGenerator.generateSessionId();
         SubAgentManager mgr = new SubAgentManager(subSessionId);
-        // 说明（#666 D5 边界④）：CLI 侧的 spawn 分支没有父 Agent 实例可继承，
-        // 因此保持"未显式指定模型时用 baseAgentConfig 默认值"的既有行为；
-        // TUI 侧（有父 Agent）已注入 effectiveModelSupplier，子 Agent 会继承运行时切换后的模型。
+        if (testSubAgentRunner != null) {
+          mgr.setRunner(testSubAgentRunner); // 仅测试缝；生产恒 null
+        }
+        // #747：有父会话 ⇒ 子 Agent 继承父会话**有效模型**（含运行时切换）；
+        // 无父会话（parentAgent == null）⇒ 不注入，行为与历史实现逐字节一致。
+        if (parentAgent != null) {
+          mgr.setEffectiveModelSupplier(parentAgent::currentModelId);
+        }
         SubAgentRecord record = mgr.spawnSubAgent(spawn.goal(), spawn.model());
         System.out.println("Sub-agent " + record.id() + " spawned with goal: " + spawn.goal());
         yield EXIT_SUCCESS;
