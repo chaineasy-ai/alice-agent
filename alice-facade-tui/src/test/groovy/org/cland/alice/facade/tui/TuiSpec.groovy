@@ -532,6 +532,187 @@ class TuiSpec extends Specification {
         chat.any { it.contains("未启用短期记忆") }
     }
 
+    // ========== #752：全链路只有一个会话 id（resume 指引必须指向真实历史）==========
+
+    def "#752 launcher / agent / 命令层用同一个会话 id（三个 id 必须相等，否则 resume 指引指到不存在的历史）"() {
+        given:
+        def sid = "sess-752-single"
+        def agent = new org.cland.alice.core.agent.Agent("tui-752", sid,
+            org.cland.alice.core.agent.AgentConfig.defaults())
+        def launcher = new AliceTuiLauncher(agent)
+
+        expect: "装配后三条链路共用一个 id（launcher 不再自造、命令层不再自造）"
+        launcherSessionIdOf(launcher) == sid
+        handlerSessionIdOf(launcher) == sid
+        launcherAgentId(launcher) == sid
+    }
+
+    def "#752 /context 显示的会话 id 就是 Agent 的 id（用户照抄它能 resume 到真历史）"() {
+        given:
+        def sid = "sess-752-context"
+        def agent = new org.cland.alice.core.agent.Agent("tui-752c", sid,
+            org.cland.alice.core.agent.AgentConfig.defaults())
+        def launcher = new AliceTuiLauncher(agent)
+        def chat = captureChat(launcher)
+
+        when:
+        handlerOf(launcher).execute(SlashCommand.parse("/context"))
+
+        then: "命令层用的是 Agent 的 id（否则显示的是另一个会话的上下文）"
+        chat.any { it.contains("sess-752-context") }
+        chat.every { !(it.contains("会话 ID |") && !it.contains("sess-752-context")) }
+    }
+
+    def "#752 命令层 fail-fast：未注入 sessionId ⇒ 执行命令立刻抛错且说清「sessionId 未注入」"() {
+        given: "只构造、不注入（模拟装配遗漏）"
+        def bridge = new org.cland.alice.facade.tui.bridge.EventBridge()
+        def handler = new org.cland.alice.facade.tui.command.CommandHandler(bridge)
+
+        when:
+        handler.execute(SlashCommand.parse("/context"))
+
+        then: "不许静默退回自造 id；报错信息必须点明原因"
+        def e = thrown(IllegalStateException)
+        e.message.contains("sessionId 未注入")
+    }
+
+    def "#752 命令层 fail-fast：sessionId() 读未注入的实例也抛错（不给自造值）"() {
+        given:
+        def bridge = new org.cland.alice.facade.tui.bridge.EventBridge()
+        def handler = new org.cland.alice.facade.tui.command.CommandHandler(bridge)
+
+        when:
+        handler.sessionId()
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains("sessionId 未注入")
+    }
+
+    def "#752 启动自检：装配遗漏 ⇒ **启动时**就抛（不等用户敲命令）"() {
+        given: "只装配、不注入（模拟 ScreenManager 装配遗漏）"
+        def bridge = new org.cland.alice.facade.tui.bridge.EventBridge()
+        def sm = new org.cland.alice.facade.tui.ScreenManager(bridge)
+
+        when: "启动阶段的那一次自检"
+        sm.wiringSelfCheck()
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains("sessionId 未注入")
+        !sm.wiringChecked()
+    }
+
+    def "#752 启动自检：正常装配 ⇒ 启动无感（不抛），且自检确实执行过"() {
+        given:
+        def agent = new org.cland.alice.core.agent.Agent("tui-752-wire", "sess-752-wire",
+            org.cland.alice.core.agent.AgentConfig.defaults())
+
+        when:
+        def launcher = new AliceTuiLauncher(agent)
+
+        then: "启动不抛（无感），且命令层 id 与 Agent 一致"
+        launcher.commandSessionId() == "sess-752-wire"
+
+        and: "自检真的跑过 —— 否则「自检被删掉」这件事永远不可见"
+        screenManagerOf(launcher).wiringChecked()
+    }
+
+    def "#752 resume 真读回：把文案里那个 id 照抄去 resume，能读到真历史（行为断言，不是路径拼接巧合）"() {
+        given: "历史真的落在 Agent 的会话 id 下（这才是落盘方）"
+        def agent = new org.cland.alice.core.agent.Agent("tui-752-readback", "sess-752-readback",
+            org.cland.alice.core.agent.AgentConfig.defaults())
+        def launcher = new AliceTuiLauncher(agent)
+        def landingId = launcherAgentId(launcher)
+
+        and: "WAL 里有一条该会话的历史"
+        def store = new org.cland.alice.core.agent.wal.InMemoryWalStore()
+        new org.cland.alice.core.agent.wal.WalSession(store).user(landingId, "历史里的一句话")
+
+        and: "用户从提示里**照抄**到的 id（/new 的 resume 指引原文）"
+        def chat = captureChat(launcher)
+        handlerOf(launcher).execute(SlashCommand.parse("/new"))
+        def hint = chat.find { it.contains("alice resume --session-id") }
+        def copiedId = (hint =~ /alice resume --session-id\s+(\S+)/).with { it.find() ? it.group(1) : null }
+
+        expect: "指引里必须有 id（否则这条断言无从谈起）"
+        copiedId != null
+
+        and: "**照抄这个 id 能读到那份历史** —— 否则指引会把用户指到不存在的会话"
+        store.messageCount(copiedId) == 1
+        store.getAllMessages(copiedId).get(0).content() == "历史里的一句话"
+
+        and: "且它就是 Agent 真正落盘用的 id（不是 launcher 自造的另一个）"
+        copiedId == landingId
+    }
+
+    def "#752 resume 真读回（磁盘形态）：照抄 id 能读回 <id>.wal.jsonl，重启后仍能读"() {
+        given: "真磁盘 WAL（与生产同构：<dataDir>/<sessionId>.wal.jsonl）"
+        def dir = java.nio.file.Files.createTempDirectory("alice-752-wal")
+        def store = new org.cland.alice.core.agent.wal.FileWalStore(dir)
+        def agent = new org.cland.alice.core.agent.Agent("tui-752-disk", "sess-752-disk",
+            org.cland.alice.core.agent.AgentConfig.defaults())
+        def launcher = new AliceTuiLauncher(agent)
+        def landingId = launcherAgentId(launcher)
+        new org.cland.alice.core.agent.wal.WalSession(store).user(landingId, "磁盘上的一句话")
+
+        and: "从 /new 提示里照抄 id（用户唯一可见的入口）"
+        def chat = captureChat(launcher)
+        handlerOf(launcher).execute(SlashCommand.parse("/new"))
+        def hint = chat.find { it.contains("alice resume --session-id") }
+        def copiedId = (hint =~ /alice resume --session-id\s+(\S+)/).with { it.find() ? it.group(1) : null }
+
+        expect: "照抄的 id 就是磁盘文件名（这就是 resume 的寻址键）"
+        copiedId == landingId
+        java.nio.file.Files.exists(dir.resolve(copiedId + ".wal.jsonl"))
+
+        and: "重启后（新建 store 指向同一目录）仍能按这个 id 读回 —— 这正是 resume 干的活"
+        def reopened = new org.cland.alice.core.agent.wal.FileWalStore(dir)
+        reopened.messageCount(copiedId) == 1
+        reopened.getAllMessages(copiedId).get(0).content() == "磁盘上的一句话"
+
+        cleanup:
+        dir.toFile().deleteDir()
+    }
+
+    /** 取 launcher 内部 ScreenManager（装配核查用）。 */
+    private static Object screenManagerOf(AliceTuiLauncher launcher) {
+        def f = AliceTuiLauncher.getDeclaredField("screenManager")
+        f.setAccessible(true)
+        return f.get(launcher)
+    }
+
+    def "#752 配置构造（无外部 Agent）：launcher 与命令层都采用 Agent 生成的 id"() {
+        when:
+        def launcher = new AliceTuiLauncher(org.cland.alice.core.agent.AgentConfig.defaults())
+        def agentId = launcherAgentId(launcher)
+
+        then:
+        agentId != null && !agentId.isEmpty()
+        launcherSessionIdOf(launcher) == agentId
+        handlerSessionIdOf(launcher) == agentId
+    }
+
+    /** 取 launcher 内部 Agent 的会话 id。 */
+    private static String launcherAgentId(AliceTuiLauncher launcher) {
+        def f = AliceTuiLauncher.getDeclaredField("agent")
+        f.setAccessible(true)
+        return ((org.cland.alice.core.agent.Agent) f.get(launcher)).sessionId()
+    }
+
+    /** 取 launcher 自己持有的会话 id（装配核查用）。 */
+    private static String launcherSessionIdOf(AliceTuiLauncher launcher) {
+        def f = AliceTuiLauncher.getDeclaredField("sessionId")
+        f.setAccessible(true)
+        return (String) f.get(launcher)
+    }
+
+    /** 取命令层（CommandHandler）实际使用的会话 id。 */
+    private static String handlerSessionIdOf(AliceTuiLauncher launcher) {
+        def h = handlerOf(launcher)
+        return (String) h.sessionId()
+    }
+
     // ========== #751：短期记忆端口的现状契约（决议前护栏）==========
 
     def "#751 默认装配不含短期记忆（事实契约）：createDefault() 不挂 AgentSession"() {

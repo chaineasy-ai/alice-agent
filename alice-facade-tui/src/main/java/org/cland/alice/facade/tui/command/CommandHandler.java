@@ -12,7 +12,6 @@ import java.util.function.Consumer;
 import org.cland.alice.agent.proto.AgentCommand;
 import org.cland.alice.agent.proto.ControlCmd;
 import org.cland.alice.core.agent.prompt.PromptManager;
-import org.cland.alice.core.agent.wal.SnowflakeIdGenerator;
 import org.cland.alice.facade.tui.bridge.EventBridge;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,18 +51,38 @@ public class CommandHandler {
   /** 模型切换回调 */
   private Consumer<String> onModelSwitch;
 
-  /** 当前会话 ID（由 ScreenManager 注入） */
+  /**
+   * 当前会话 ID（**必须由装配方显式注入**）。
+   *
+   * <p>#752：这里原来在构造期自己生成一个 snowflake —— 谁忘了注入，命令层就会静默用另一个会话 （`/context`、`/new` 指到不存在的历史）。按
+   * fail-fast 修：**生产路径不留兜底**， 未注入时任何命令执行都会立刻失败，并明确说"sessionId 未注入"。
+   */
   private String sessionId;
 
   public CommandHandler(EventBridge eventBridge) {
     this.eventBridge = eventBridge;
-    this.sessionId = SnowflakeIdGenerator.generateSessionId();
+    // 故意不生成默认值：默认值就是"静默退回另一个会话"的源头（#752 同一个坑的第三次出现）
+    this.sessionId = null;
   }
 
-  /** 设置当前会话 ID */
+  /** 设置当前会话 ID（装配方必须调用；见 {@link #requireSessionId()}）。 */
   public CommandHandler sessionId(String sessionId) {
     this.sessionId = sessionId;
     return this;
+  }
+
+  /**
+   * 取已注入的会话 ID；未注入 ⇒ 立即失败。
+   *
+   * <p>fail-fast 而不是"再生成一个"：一个 id 让用户去 resume 是可执行指引，id 错比不给更差（#752）。
+   */
+  private String requireSessionId() {
+    if (sessionId == null || sessionId.isBlank()) {
+      throw new IllegalStateException(
+          "sessionId 未注入：命令层必须由装配方调用 CommandHandler.sessionId(<agent 的会话 id>)，"
+              + "禁止在命令层自行生成（否则 /context、/new 会指向另一个会话）");
+    }
+    return sessionId;
   }
 
   // ========== 回调注册 ==========
@@ -110,6 +129,7 @@ public class CommandHandler {
     if (cmd == null) {
       return false;
     }
+    requireSessionId(); // fail-fast：未注入就别等到"命令里带的 session 悄悄不对"
 
     logger.debug("Executing slash command: {}", cmd);
 
@@ -515,8 +535,9 @@ public class CommandHandler {
 
   // ========== 辅助 ==========
 
-  private String sessionId() {
-    return sessionId;
+  /** 当前会话 ID（#752：公开给装配核查；未注入时抛错，而不是返回一个自造值）。 */
+  public String sessionId() {
+    return requireSessionId();
   }
 
   private String traceId() {

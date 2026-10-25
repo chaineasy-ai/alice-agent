@@ -682,6 +682,40 @@ public class ScreenManager implements AutoCloseable {
     return this;
   }
 
+  /**
+   * 设置命令层使用的会话 ID（#752）。
+   *
+   * <p>不设置时 {@link CommandHandler} 会自己生成一个 snowflake —— 那会与 Agent/WAL 的会话 id 不一致， 于是
+   * `/context`、`/new` 里的 session 指到别的会话。装配方（TUI launcher）必须把**同一个** id 传进来。
+   */
+  public ScreenManager sessionId(String sessionId) {
+    this.commandHandler.sessionId(sessionId);
+    return this;
+  }
+
+  /** 装配自检是否执行过（见 {@link #wiringSelfCheck()}）。 */
+  private volatile boolean wiringChecked;
+
+  /**
+   * 装配自检（#752）：把"命令层会话 id"取出来，顺便验证它已被注入。
+   *
+   * <p>为什么要**启动时**自检，而不是等第一次使用：`CommandHandler` 的 fail-fast 依赖"用户真的执行那条命令"，
+   * 若某个入口长期没人用，装配遗漏就会长期潜伏。启动自检把「依赖使用」变成「依赖启动」。
+   *
+   * @return 命令层实际使用的会话 id（供 launcher 记录下来做一致性断言/排障）
+   * @throws IllegalStateException 装配遗漏（未调用 {@link #sessionId(String)}）
+   */
+  public String wiringSelfCheck() {
+    String id = this.commandHandler.sessionId();
+    this.wiringChecked = true;
+    return id;
+  }
+
+  /** 装配自检是否真的执行过（#752：让"自检被删掉/绕过去"这件事可被断言，否则自检通过是完全不可见的）。 */
+  public boolean wiringChecked() {
+    return this.wiringChecked;
+  }
+
   public ScreenManager onAgentCommand(Consumer<AgentCommand> callback) {
     this.commandHandler.onAgentCommand(callback);
     return this;

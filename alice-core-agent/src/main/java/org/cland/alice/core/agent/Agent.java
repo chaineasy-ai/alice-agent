@@ -616,7 +616,9 @@ public class Agent implements KernelDelegates {
    * @return 格式化后的上下文状态信息
    */
   public String getActiveContext() {
-    AgentContext ctx = new AgentContext();
+    // #752：必须用**本 Agent 的**会话 id —— 原来 new AgentContext() 会现生成一个 snowflake，
+    // 于是 `/context` 显示的是一个不存在的会话，用户照抄它去 resume 只会扑空。
+    AgentContext ctx = new AgentContext(this.sessionId, config.maxIterations());
     StringBuilder sb = new StringBuilder();
     sb.append("── 上下文状态 ──\n");
     sb.append("| 属性 | 值 |\n");
