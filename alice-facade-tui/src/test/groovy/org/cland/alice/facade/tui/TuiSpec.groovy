@@ -205,7 +205,38 @@ class TuiSpec extends Specification {
         (ac as ControlCmd.FeedbackCmd).message() == "做得不错"
     }
 
+    // ========== #666 D7：dispatch 分支必须断言"路由到了哪个处理器" ==========
+
+    /**
+     * 捕获 launcher 内部分发结果：`EventBridge` 是 handler 的唯一可观测出口。
+     *
+     * <p>#666 D7 前这 7 条只写 `noExceptionThrown()` —— 删掉 switch 里任意一个 case 它们仍然全绿
+     * （等于没有断言）。这里改成"拿事件当证据"：走对分支 ⇒ 该分支特有的 ChatMessage 必须出现；
+     * 不该走分支 ⇒ 必须一条都不出现。
+     */
+    private static List<String> captureChat(AliceTuiLauncher launcher) {
+        def f = AliceTuiLauncher.getDeclaredField("eventBridge")
+        f.setAccessible(true)
+        def bridge = f.get(launcher) as EventBridge
+        def captured = []
+        bridge.addListener { ev ->
+            if (ev instanceof TuiEvent.ChatMessage) {
+                captured << (((TuiEvent.ChatMessage) ev).sender() + "|" + ((TuiEvent.ChatMessage) ev).content())
+            }
+        }
+        return captured
+    }
+
+    /** 读 launcher 内部 screenManager 的 footer 模型名（WhiteBox，仅测试用）。 */
+    private static String footerModelOf(AliceTuiLauncher launcher) {
+        def f = AliceTuiLauncher.getDeclaredField("screenManager")
+        f.setAccessible(true)
+        def sm = f.get(launcher)
+        return sm.layout().footer().modelInfo()
+    }
+
     // ========== CommandHandler 命令分支测试 (§3.1) ==========
+
 
     def "CommandHandler dispatches /context to onAgentCommand"() {
         given: "a CommandHandler with a captured AgentCommand list"
@@ -308,106 +339,132 @@ class TuiSpec extends Specification {
 
     // ========== AliceTuiLauncher.dispatchAgentCommand() 测试 (§3.1) ==========
 
-    def "AliceTuiLauncher dispatchAgentCommand accepts ClearContextCmd"() {
-        given: "an AliceTuiLauncher with mocked Agent"
+    def "AliceTuiLauncher dispatchAgentCommand routes ClearContextCmd to 清上下文分支"() {
+        given:
         def launcher = new AliceTuiLauncher(
             new org.cland.alice.core.agent.Agent(org.cland.alice.core.agent.AgentConfig.defaults()))
+        def chat = captureChat(launcher)
 
-        and: "a ClearContextCmd"
-        def cmd = new ControlCmd.ClearContextCmd("sess-01", "trace-abc")
+        when:
+        launcher.dispatchAgentCommand(new ControlCmd.ClearContextCmd("sess-01", "trace-abc"))
 
-        when: "dispatching the command"
-        launcher.dispatchAgentCommand(cmd)
-
-        then: "no exception is thrown"
-        noExceptionThrown()
+        then: "走的是 handleClearContext（该分支独有的一条 ChatMessage）"
+        chat.any { it.contains("上下文已清除") }
     }
 
-    def "AliceTuiLauncher dispatchAgentCommand accepts ViewContextCmd"() {
-        given: "an AliceTuiLauncher with mocked Agent"
+    def "AliceTuiLauncher dispatchAgentCommand routes ViewContextCmd to 看上下文分支"() {
+        given:
         def launcher = new AliceTuiLauncher(
             new org.cland.alice.core.agent.Agent(org.cland.alice.core.agent.AgentConfig.defaults()))
+        def chat = captureChat(launcher)
 
-        and: "a ViewContextCmd"
-        def cmd = new ControlCmd.ViewContextCmd("sess-01", "trace-abc")
+        when:
+        launcher.dispatchAgentCommand(new ControlCmd.ViewContextCmd("sess-01", "trace-abc"))
 
-        when: "dispatching the command"
-        launcher.dispatchAgentCommand(cmd)
-
-        then: "no exception is thrown"
-        noExceptionThrown()
+        then: "该分支必有且仅有一条 System 消息（内容随 agent 实现而异，但不能是空的）"
+        chat.size() == 1
+        chat[0].startsWith("System|")
+        chat[0].startsWith("System|") && chat[0].length() > "System|".length() + 5
     }
 
-    def "AliceTuiLauncher dispatchAgentCommand accepts CompactContextCmd"() {
-        given: "an AliceTuiLauncher with mocked Agent"
+    def "AliceTuiLauncher dispatchAgentCommand routes CompactContextCmd to 压缩分支"() {
+        given:
         def launcher = new AliceTuiLauncher(
             new org.cland.alice.core.agent.Agent(org.cland.alice.core.agent.AgentConfig.defaults()))
+        def chat = captureChat(launcher)
 
-        and: "a CompactContextCmd"
-        def cmd = new ControlCmd.CompactContextCmd("sess-01", "trace-abc")
+        when:
+        launcher.dispatchAgentCommand(new ControlCmd.CompactContextCmd("sess-01", "trace-abc"))
 
-        when: "dispatching the command"
-        launcher.dispatchAgentCommand(cmd)
-
-        then: "no exception is thrown"
-        noExceptionThrown()
+        then:
+        chat.any { it.contains("压缩") }
     }
 
-    def "AliceTuiLauncher dispatchAgentCommand accepts FeedbackCmd"() {
-        given: "an AliceTuiLauncher with mocked Agent"
+    def "AliceTuiLauncher dispatchAgentCommand routes FeedbackCmd to 反馈分支并带上原始内容"() {
+        given:
         def launcher = new AliceTuiLauncher(
             new org.cland.alice.core.agent.Agent(org.cland.alice.core.agent.AgentConfig.defaults()))
+        def chat = captureChat(launcher)
 
-        and: "a FeedbackCmd"
-        def cmd = new ControlCmd.FeedbackCmd("测试反馈", "sess-01", "trace-abc")
+        when:
+        launcher.dispatchAgentCommand(new ControlCmd.FeedbackCmd("测试反馈", "sess-01", "trace-abc"))
 
-        when: "dispatching the command"
-        launcher.dispatchAgentCommand(cmd)
-
-        then: "no exception is thrown"
-        noExceptionThrown()
+        then: "消息里必须原样带出反馈内容（否则等于没把用户输入传下去）"
+        chat.any { it.contains("测试反馈") && (it.contains("反馈已注入") || it.contains("反馈已记录")) }
     }
 
-    def "AliceTuiLauncher dispatchAgentCommand accepts SwitchModelCmd"() {
-        given: "an AliceTuiLauncher with mocked Agent"
+    def "AliceTuiLauncher dispatchAgentCommand routes SwitchModelCmd 且把模型名带出去"() {
+        given:
         def launcher = new AliceTuiLauncher(
             new org.cland.alice.core.agent.Agent(org.cland.alice.core.agent.AgentConfig.defaults()))
+        def chat = captureChat(launcher)
 
-        and: "a SwitchModelCmd"
-        def cmd = new AlignmentCmd.SwitchModelCmd("gpt-4o", "sess-01", "trace-abc")
+        when:
+        launcher.dispatchAgentCommand(new AlignmentCmd.SwitchModelCmd("gpt-4o", "sess-01", "trace-abc"))
 
-        when: "dispatching the command"
-        launcher.dispatchAgentCommand(cmd)
-
-        then: "no exception is thrown"
-        noExceptionThrown()
+        then: "该分支必须有一条带请求模型名的回执（内容是生效还是未生效由 agent 决定，见下一条）"
+        chat.size() == 1
+        chat[0].contains("gpt-4o")
     }
 
-    def "AliceTuiLauncher dispatchAgentCommand accepts RegisterRoutineCmd"() {
-        given: "an AliceTuiLauncher with mocked Agent"
+    /**
+     * #666 D5：`switchModel()` 当前是空实现（只打日志），但 UI 原来无条件发「模型切换至: xxx」
+     * 并改 footer ⇒ **用户看到"已切换"，推理仍用旧模型**。
+     *
+     * <p>本用例钉住"界面不得替系统撒谎"：只要切换没真的生效，
+     * ① 不许出现「模型切换至:」；② footer 的模型名必须保持原值不变。
+     */
+    def "switchModel 未生效时 UI 不得宣称已切换（P-VACUOUS：不许拿没炸当结论）"() {
+        given:
+        def agent = new org.cland.alice.core.agent.Agent(org.cland.alice.core.agent.AgentConfig.defaults())
+        def launcher = new AliceTuiLauncher(agent)
+        def chat = captureChat(launcher)
+        def footerBefore = footerModelOf(launcher)
+        def effective = agent.currentModelId()
+
+        when: "请求切到一个和当前不同的模型"
+        def target = effective + "-not-implemented"
+        launcher.dispatchAgentCommand(new AlignmentCmd.SwitchModelCmd(target, "sess-01", "trace-abc"))
+
+        then: "没有任何一条消息宣称切换成功"
+        chat.every { !it.contains("模型切换至") }
+
+        and: "回执必须说清未生效，并带上仍在使用的模型"
+        chat.size() == 1
+        chat[0].contains("未生效")
+        chat[0].contains(effective)
+        chat[0].contains(target)
+
+        and: "footer 不得被改成未生效的目标模型"
+        footerModelOf(launcher) == footerBefore
+        footerModelOf(launcher) != target
+    }
+
+    def "AliceTuiLauncher dispatchAgentCommand 对未接线的 RegisterRoutineCmd 不得伪装成功"() {
+        given:
         def launcher = new AliceTuiLauncher(
             new org.cland.alice.core.agent.Agent(org.cland.alice.core.agent.AgentConfig.defaults()))
+        def chat = captureChat(launcher)
 
-        and: "a RegisterRoutineCmd"
-        def cmd = new RoutineTimeCmd.RegisterRoutineCmd("0 */5 * * * ?", "sess-01", "trace-abc")
+        when: "该类型当前没有对应 case，会落到 default 分支（只 warn，不回消息）"
+        launcher.dispatchAgentCommand(new RoutineTimeCmd.RegisterRoutineCmd("0 */5 * * * ?", "sess-01", "trace-abc"))
 
-        when: "dispatching the command"
-        launcher.dispatchAgentCommand(cmd)
-
-        then: "no exception is thrown (falls through to default/log)"
-        noExceptionThrown()
+        then: "没有假装成功的用户可见回执 —— 未接线就是未接线（接线后这条会红，需同步改断言）"
+        chat.isEmpty()
     }
 
     def "AliceTuiLauncher dispatchAgentCommand handles null gracefully"() {
-        given: "an AliceTuiLauncher with mocked Agent"
+        given:
         def launcher = new AliceTuiLauncher(
             new org.cland.alice.core.agent.Agent(org.cland.alice.core.agent.AgentConfig.defaults()))
+        def chat = captureChat(launcher)
 
         when: "dispatching null"
         launcher.dispatchAgentCommand(null)
 
-        then: "no exception is thrown"
+        then: "既不抛异常，也不产生任何分发副作用"
         noExceptionThrown()
+        chat.isEmpty()
     }
 
     // ========== TuiEvent 测试 ==========

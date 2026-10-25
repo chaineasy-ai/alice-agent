@@ -257,6 +257,9 @@ public final class AliceCliLauncher {
         // 创建 SubAgentManager 并生成子 Agent
         String subSessionId = SnowflakeIdGenerator.generateSessionId();
         SubAgentManager mgr = new SubAgentManager(subSessionId);
+        // 说明（#666 D5 边界④）：CLI 侧的 spawn 分支没有父 Agent 实例可继承，
+        // 因此保持"未显式指定模型时用 baseAgentConfig 默认值"的既有行为；
+        // TUI 侧（有父 Agent）已注入 effectiveModelSupplier，子 Agent 会继承运行时切换后的模型。
         SubAgentRecord record = mgr.spawnSubAgent(spawn.goal(), spawn.model());
         System.out.println("Sub-agent " + record.id() + " spawned with goal: " + spawn.goal());
         yield EXIT_SUCCESS;

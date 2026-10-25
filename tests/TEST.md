@@ -16,13 +16,15 @@
 
 | 场景 | 描述 | 文件 | 状态 |
 |------|------|------|------|
-| S-01 | 完整系统启动与基础任务 | `e2e/test_base.py` | ✅ 已实现 |
-| S-02 | 模型供应商集成（Gemma4） | `e2e/gemma4/test_gemma4_integration.py` | ✅ 已实现 |
-| S-03 | ACP 子代理通信 | `e2e/test_dispatch.py` | ✅ 已实现 |
-| S-04 | AliceAgent 生命周期 | `e2e/test_agent_lifecycle.py` | 🔜 计划 |
-| S-05 | 多轮 ReAct 循环终止验证 | `e2e/test_react_loop.py` | 🔜 计划 |
+| S-01 | 完整系统启动与基础任务 | `e2e/test_base.py`（**文件不存在**） | 🔜 计划（原标 ✅ 已实现，D-P2 更正） |
+| S-02 | 模型供应商集成（Gemma4） | `e2e/gemma4/test_gemma4_integration.py`（**文件不存在**） | 🔜 计划（原标 ✅ 已实现，D-P2 更正；真实覆盖见 `e2e/alice_agent_e2e.py` 的 gemma4 用例） |
+| S-03 | ACP 子代理通信 | `e2e/test_dispatch.py` | ⚠️ **映射清单**（非断言型：21 用例各自 `skipTest` 并指向真实覆盖；`rc=0` ≠ 通过） |
+| S-04 | AliceAgent 生命周期 | `e2e/test_agent_lifecycle.py`（**文件不存在**） | 🔜 计划 |
+| S-05 | 多轮 ReAct 循环终止验证 | `e2e/test_react_loop.py`（**文件不存在**） | 🔜 计划 |
 
 > **设计原则**：每场景对应一个真实用户使用路径（CLI/TUI），不 Mock 核心依赖。
+
+> **D10/D-P2 口径（`#666`）**：本表「状态」只认**文件存在 + 至少一条真断言**。全 `skipTest` 的文件标「映射清单」，其真实覆盖见注释里指向的 Spec/用例；**不存在**的文件一律「计划」，不得标 ✅。
 
 ---
 
@@ -172,7 +174,7 @@
 
 ---
 
-### 2.2.8 alice-facade-web — Web 端点
+### 2.2.8 alice-facade-rpc — Web 端点
 
 | 洞号 | 端点 | 依赖 | 状态 |
 |------|------|------|------|
@@ -182,8 +184,8 @@
 
 **文件**：
 - Case doc: `docs/alice-agent-proto/e2e/case-web.md`
-- Scene doc: `docs/alice-facade-web/e2e/scene-web-endpoints.md`
-- 实现: `docs/alice-facade-web/e2e/hole_test_web.py`
+- Scene doc: `docs/alice-facade-rpc/e2e/scene-web-endpoints.md`
+- 实现: `docs/alice-facade-rpc/e2e/hole_test_web.py`
 
 ---
 
@@ -221,7 +223,7 @@
 | `case-memory-vault.md` | DESIGN.md + alice-memory-vault DESIGN | `scene-memory-endpoints.md` | alice-memory-vault | hole_test + Spock | 🟩 GREEN |
 | `case-model.md` | DESIGN.md + alice-model DESIGN | `scene-model-endpoints.md` | alice-model | hole_test + Spock | 🟩 GREEN |
 | `case-guardrail.md` | DESIGN.md + alice-guardrail DESIGN | `scene-guardrail-endpoints.md` | alice-guardrail | hole_test + Spock | 🟩 GREEN |
-| `case-web.md` | alice-facade-web (HealthController) | `scene-web-endpoints.md` | alice-facade-web | hole_test HTTP | ⏭️ SKIP |
+| `case-web.md` | alice-facade-rpc (HealthController) | `scene-web-endpoints.md` | alice-facade-rpc | hole_test HTTP | ⏭️ SKIP |
 | `case-bootstrap.md` | alice-bootstrap DESIGN | `scene-bootstrap-endpoints.md` | alice-bootstrap | hole_test + Spock | 🟩 GREEN |
 
 ---
@@ -304,7 +306,7 @@
 |---------|---------|
 | `TuiSpec.groovy` | TUI 组件生命周期 |
 
-### 3.8 alice-facade-web (0 个)
+### 3.8 alice-facade-rpc (0 个)
 
 | 测试文件 | 覆盖范围 |
 |---------|---------|
@@ -388,7 +390,7 @@
 | 🟩 模块 | alice-memory-vault 洞 | 5 🟩 | — | 5 |
 | 🟩 模块 | alice-model 洞 | 5 🟩 | — | 5 |
 | 🟩 模块 | alice-guardrail 洞 | 5 🟩 | — | 5 |
-| 🟩 模块 | alice-facade-web 洞 | — | 3 ⏭️ SKIP | 3 |
+| 🟩 模块 | alice-facade-rpc 洞 | — | 3 ⏭️ SKIP | 3 |
 | 🟩 模块 | alice-bootstrap 洞 | 3 🟩 | — | 3 |
 | ⬜ 单元 | alice-agent-proto | 11 | — | 11 |
 | ⬜ 单元 | alice-bootstrap | 2 | — | 2 |
@@ -397,7 +399,7 @@
 | ⬜ 单元 | alice-env-adapter | 8 | — | 8 |
 | ⬜ 单元 | alice-facade-cli | 7 | — | 7 |
 | ⬜ 单元 | alice-facade-tui | 1 | — | 1 |
-| ⬜ 单元 | alice-facade-web | 0 | — | 0 |
+| ⬜ 单元 | alice-facade-rpc | 0 | — | 0 |
 | ⬜ 单元 | alice-memory-vault | 23 | — | 23 |
 | ⬜ 单元 | alice-model | 7 | — | 7 |
 | ⬜ 单元 | alice-tool-gateway | 8 | — | 8 |
@@ -473,7 +475,7 @@
 | `case-memory-vault.md` | DESIGN.md + alice-memory-vault DESIGN | VaultController 存取端点 | 🟩 GREEN |
 | `case-model.md` | DESIGN.md + alice-model DESIGN | ModelProvider 调度端点 | 🟩 GREEN |
 | `case-guardrail.md` | DESIGN.md + alice-guardrail DESIGN | GuardrailService 验证端点 | 🟩 GREEN |
-| `case-web.md` | alice-facade-web (HealthController) | HTTP 健康检查端点 | ⏭️ SKIP |
+| `case-web.md` | alice-facade-rpc (HealthController) | HTTP 健康检查端点 | ⏭️ SKIP |
 | `case-bootstrap.md` | alice-bootstrap DESIGN | FacadeSelector 路由端点 | 🟩 GREEN |
 
 ---

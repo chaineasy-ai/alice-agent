@@ -50,6 +50,14 @@ public class SubAgentManager implements AutoCloseable {
   private final AtomicInteger activeTaskCount = new AtomicInteger(0);
   private final String parentSessionId;
   private AgentConfig baseAgentConfig;
+
+  /**
+   * #666 D5 边界④：父会话的**有效模型**提供者（含运行时切换）。
+   *
+   * <p>子 Agent 若未显式指定模型，必须继承父会话的有效模型；否则会出现 「父切到 x、子代理仍用默认」的半生效假绿。
+   */
+  private java.util.function.Supplier<String> effectiveModelSupplier;
+
   private final List<Consumer<SubAgentResult>> completionListeners = new CopyOnWriteArrayList<>();
   private final Map<String, AcpClientWrapper> acpClients = new ConcurrentHashMap<>();
   private final Map<String, BlockingQueue<String>> messageQueues = new ConcurrentHashMap<>();
@@ -94,6 +102,32 @@ public class SubAgentManager implements AutoCloseable {
    *
    * @param config 基础 AgentConfig
    */
+  /**
+   * 注入父会话的有效模型提供者（通常是 {@code parentAgent::currentModelId}）。
+   *
+   * @param supplier 有效模型提供者；传 null 表示回落到 {@code baseAgentConfig.defaultModelId()}
+   */
+  public void setEffectiveModelSupplier(java.util.function.Supplier<String> supplier) {
+    this.effectiveModelSupplier = supplier;
+  }
+
+  /**
+   * 解析子 Agent 使用的模型：显式入参 > 父会话有效模型 > baseAgentConfig 默认值。
+   *
+   * @param requested 调用方显式指定的模型（可为 null/空白）
+   * @return 子 Agent 实际使用的 modelId
+   */
+  String effectiveModelId(String requested) {
+    if (requested != null && !requested.isBlank()) {
+      return requested;
+    }
+    String inherited = effectiveModelSupplier != null ? effectiveModelSupplier.get() : null;
+    if (inherited != null && !inherited.isBlank()) {
+      return inherited;
+    }
+    return baseAgentConfig.defaultModelId();
+  }
+
   public void setBaseAgentConfig(AgentConfig config) {
     // 不做 null 检查 — 业务层应确保非 null 传入
     this.baseAgentConfig = config;
@@ -182,7 +216,7 @@ public class SubAgentManager implements AutoCloseable {
       // 创建独立的子 Agent 配置
       AgentConfig config =
           AgentConfig.builder()
-              .defaultModelId(model != null ? model : baseAgentConfig.defaultModelId())
+              .defaultModelId(effectiveModelId(model))
               .maxIterations(baseAgentConfig.maxIterations())
               .actionTimeoutMs(baseAgentConfig.actionTimeoutMs())
               .preVerifyEnabled(baseAgentConfig.preVerifyEnabled())

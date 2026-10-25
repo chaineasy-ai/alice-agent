@@ -29,7 +29,7 @@ class AgentApiSpec extends Specification {
         ctx != null
         !ctx.isEmpty()
         ctx.contains("会话 ID")
-        ctx.contains("默认模型")
+        ctx.contains("生效模型")
         ctx.contains("gpt-4o-mini")
     }
 
@@ -58,25 +58,29 @@ class AgentApiSpec extends Specification {
     }
 
     def "switchModel accepts valid model id"() {
-        given: "a default Agent"
+        given: "#666 D5：ModelProvider 认识内置模型（真实启动路径同样会注册）"
+        org.cland.alice.model.ModelProvider.getInstance().registerBuiltinModels()
         def agent = new Agent()
 
-        when: "switching model"
+        when:
         agent.switchModel("gpt-4o")
 
-        then: "no exception is thrown"
-        noExceptionThrown()
+        then: "不再只断言没炸 —— 有效模型必须真的变成 gpt-4o"
+        agent.currentModelId() == "gpt-4o"
     }
 
     def "switchModel accepts empty model id"() {
-        given: "a default Agent"
+        given:
+        org.cland.alice.model.ModelProvider.getInstance().registerBuiltinModels()
         def agent = new Agent()
+        def original = agent.currentModelId()
 
-        when: "switching to empty model"
+        when: "传空串 = 清除覆盖（契约③），不是静默接受一个空模型"
         agent.switchModel("")
 
-        then: "no exception is thrown"
-        noExceptionThrown()
+        then: "回落到默认值，且不等于空串"
+        agent.currentModelId() == original
+        agent.currentModelId() != ""
     }
 
     def "injectFeedback stores feedback without throwing"() {

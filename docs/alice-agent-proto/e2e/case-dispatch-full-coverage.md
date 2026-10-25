@@ -46,7 +46,7 @@ CLI-accessible types (TC-DISPATCH-01, 13, 15~21) are verified via their CLI subc
 | Field | Value |
 |-------|-------|
 | **Status** | ⏭️ Skip — JLine terminal required |
-| **Unit test** | `AliceCliLauncherDispatchSpec.groovy` |
+| **Unit test** | `AliceCliLauncherSpec.groovy` |
 
 ### TC-DISPATCH-13: RegisterRoutineCmd
 
