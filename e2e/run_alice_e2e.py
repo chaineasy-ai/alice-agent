@@ -25,15 +25,30 @@ Environment variables:
     GEMMA4_BASE_URL  (default: http://192.168.1.14:10303/v1)
     GEMMA4_MODEL     (default: gemma-4)
     GEMMA4_TIMEOUT   (default: 180)
+
+Exit codes:
+    0  全绿（且工作树未被污染）
+    1  真红（有用例失败/工作树被污染）
+    2  未判定——全量跑却在 <15s 内整片失败，多半是仪表坏了（JAVA_HOME/构建产物/daemon）
 """
 
 import os
 import sys
+import time
 import unittest
+
+#: 「快得可疑」判据（#415 · atlas 口径：窄，不做「快就失败」）
+#: 只有 **全量跑** + **有失败** + **耗时 < 该秒数** 才判「未判定」(exit 2)。
+#: 单跑某个类/方法（`-k` 式选测）本来就快，不适用。
+SUSPICIOUS_FAST_FAIL_SECONDS = 15.0
+EXIT_UNDETERMINED = 2
 
 if __name__ == "__main__":
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     from helpers import git_status_porcelain, worktree_guard_enabled
+
+    # 是否只跑了部分用例（类/方法名选择器）——「快」在选测下是正常的，护栏不适用
+    selectors = [a for a in sys.argv[1:] if not a.startswith("-")]
 
     # Default verbosity
     if "-v" not in sys.argv:
@@ -80,7 +95,9 @@ if __name__ == "__main__":
         suite.addTests(loader.discover(gemma4_dir, pattern="*_e2e_test.py"))
 
     runner = unittest.TextTestRunner(verbosity=2)
+    started = time.monotonic()
     result = runner.run(suite)
+    elapsed = time.monotonic() - started
 
     # ── Post-run isolation check (#417) ────────────────────────────────
     new_dirty = [line for line in git_status_porcelain() if line not in baseline]
@@ -99,6 +116,22 @@ if __name__ == "__main__":
     print(f"  Failures:  {len(result.failures)}")
     print(f"  Errors:    {len(result.errors)}")
     print(f"  Skipped:   {len(result.skipped)}")
+    print(f"  Elapsed:   {elapsed:.1f}s")
     print("=" * 64)
+
+    # ── 「快得可疑」护栏（#415）────────────────────────────────────────
+    # 仪表坏了（JAVA_HOME 没设 / gradle daemon 挂 / 依赖缺失）时，全量套件会在
+    # 几秒内整片全红——那不是产品红，是**没判定**。atlas 踩过：7 failed in 2.14s。
+    # 判据要窄：仅「全量 + 有失败 + <15s」→ exit 2（未判定），其余照旧。
+    failures_total = len(result.failures) + len(result.errors)
+    if failures_total and elapsed < SUSPICIOUS_FAST_FAIL_SECONDS and not selectors:
+        print()
+        print(f"  ⚠️  未判定（exit {EXIT_UNDETERMINED}）：{failures_total} 个失败只用了 {elapsed:.1f}s"
+              f"（< {SUSPICIOUS_FAST_FAIL_SECONDS:.0f}s）。")
+        print("     全量套件不可能这么快——先查**仪表**，别据此判交付红：")
+        print("       · JAVA_HOME 是否设了（./gradlew --version 能过吗）")
+        print("       · ./alice-bootstrap/build/install 是否存在（--build 重建）")
+        print("       · Gradle daemon 是否异常（./gradlew --stop 后重试）")
+        sys.exit(EXIT_UNDETERMINED)
 
     sys.exit(0 if result.wasSuccessful() and not tree_polluted else 1)

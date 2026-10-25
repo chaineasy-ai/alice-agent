@@ -34,10 +34,20 @@ else:
 GEMMA4_BASE_URL = os.environ.get("GEMMA4_BASE_URL", "http://192.168.1.14:10303/v1")
 GEMMA4_MODEL = os.environ.get("GEMMA4_MODEL", "gemma-4")
 
-#: Java 侧 supplier 注册的唯一真源（`ModelConfigLoader` 读 `~/.alice/model.json`）
-ALICE_MODEL_CONFIG = Path(
-    os.environ.get("ALICE_MODEL_CONFIG", str(Path.home() / ".alice" / "model.json"))
-)
+
+def local_model_config_path() -> Path:
+    """返回 CLI 实际读的 model 配置文件路径（与 Java 侧硬路径一致）。
+
+    真源：``alice-model/…/ModelConfigLoader.java``
+    （``System.getProperty("user.home")`` + ``.alice/model.json``）。
+
+    **禁止给这里加 env 覆盖点**（曾经有过 ``ALICE_MODEL_CONFIG``，被 atlas 的负控
+    抓到：#415 的门读 env、CLI 子进程读 ``~/.alice/model.json`` ⇒ **门与被测物分家**，
+    一旦有人设这个 env，红的原因就与产品无关。要测解析逻辑，请用
+    ``skip_if_no_local_supplier(model_id, config_path=…)`` 的**函数参数**注入，
+    不要引入第二个进程级真源。
+    """
+    return Path.home() / ".alice" / "model.json"
 
 
 # ── Gradle Helpers ─────────────────────────────────────────────────────────
@@ -209,7 +219,7 @@ def run_java_class(
 # ── External Service Checks ────────────────────────────────────────────────
 
 
-def skip_if_no_local_supplier(model_id: str) -> bool:
+def skip_if_no_local_supplier(model_id: str, config_path: Path | None = None) -> bool:
     """本机是否在 ``~/.alice/model.json`` 注册了某模型的 supplier；True = 应 skip。
 
     **两个正交前置条件**：端点可达（skip_if_no_gemma4()）≠ 本机配置里声明了
@@ -217,11 +227,15 @@ def skip_if_no_local_supplier(model_id: str) -> bool:
     ``No supplier found for modelId: <id>``——那是**环境耦合**（取决于每个人
     本机的 model.json），不是产品缺陷；断言它会把「全绿」绑在个人环境上（假绿/假红温床）。
 
+    默认读的就是 **CLI 自己读的那份文件**（local_model_config_path()）——门与被测物同源。
+
     Args:
         model_id: 模型 id，如 ``gemma-4``（比对 available_models[].model / .name）
+        config_path: 仅供**单测**注入伪造配置；纯函数参数，不构成进程级覆盖点，
+            被测对象（CLI 子进程）永远读默认路径。
     """
     try:
-        cfg = json.loads(ALICE_MODEL_CONFIG.read_text(encoding="utf-8"))
+        cfg = json.loads((config_path or local_model_config_path()).read_text(encoding="utf-8"))
     except Exception:
         return True
     for provider in (cfg.get("providers") or {}).values():
