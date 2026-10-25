@@ -655,40 +655,78 @@ class MemoryVaultEdgeCaseSpec extends Specification {
     // ---------------------------------------------------------------
 
     def "VaultController.memorize should assign higher importance to errors"() {
-        given:
-        vault = new VaultController()
+        given: "#666 D6：注入 EpisodicVault，把 importance 真的读出来（原来只断言 noExceptionThrown）"
+        def episodic = new InMemoryEpisodicVault()
+        def vc = new VaultController(
+                episodic, new InMemorySemanticVault(), new InMemoryProceduralVault(),
+                new InMemoryStorageBackend(), new DefaultMemorySummarizer())
 
-        when:
-        vault.memorize(Experience.builder()
+        when: "失败经验（result 含 error），observation 短（不触发长观察加分）"
+        vc.memorize(Experience.builder()
                 .sessionId("s1")
                 .action("fail")
                 .observation("尝试操作")
-                .result("ERROR: connection timeout")
+                .result("ERROR: x")
+                .timestamp(1_000L)
                 .build())
 
-        then:
-        // 内部 EpisodicVault 可以通过构造注入来验证：
-        // 用 EpisodicVault 直接测试重要度覆盖在 EpisodicVault 测试中
-        // 这里仅验证 memorize 不抛异常
-        noExceptionThrown()
+        and: "普通经验做对照（result 短且无 error）"
+        vc.memorize(Experience.builder()
+                .sessionId("s1")
+                .action("ok")
+                .observation("尝试操作")
+                .result("ok")
+                .timestamp(2_000L)
+                .build())
+
+        and: "长 result 经验（>20 字符再加 0.1，把第三条规则也钉住）"
+        vc.memorize(Experience.builder()
+                .sessionId("s1")
+                .action("fail2")
+                .observation("尝试操作")
+                .result("ERROR: connection timeout")
+                .timestamp(3_000L)
+                .build())
+
+        then: "importance 三条规则可分别验证：0.5 基线 + 0.3(error) +0.1(result>20)"
+        def steps = episodic.getTrace("s1")
+        steps.size() == 3
+        steps[0].importance() == 0.8d   // ERROR:x（8 字符）⇒ 0.5 + 0.3
+        steps[1].importance() == 0.5d   // ok ⇒ 基线
+        steps[2].importance() == 0.9d   // ERROR + 24 字符 ⇒ 0.5 + 0.3 + 0.1
+        steps[0].importance() > steps[1].importance()
     }
 
     def "VaultController.memorize should assign higher importance to long observations"() {
-        given:
-        vault = new VaultController()
+        given: "#666 D6：长观察加分要能被断言（原来只断言 noExceptionThrown）"
+        def episodic = new InMemoryEpisodicVault()
+        def vc = new VaultController(
+                episodic, new InMemorySemanticVault(), new InMemoryProceduralVault(),
+                new InMemoryStorageBackend(), new DefaultMemorySummarizer())
 
-        when:
-        def longObs = "A" * 100
-        vault.memorize(Experience.builder()
+        when: "长观察（100 字符 > 50 阈值），result 正常"
+        vc.memorize(Experience.builder()
                 .sessionId("s1")
                 .action("analyze")
-                .observation(longObs)
+                .observation("A" * 100)
                 .result("ok")
-                .timestamp(System.currentTimeMillis())
+                .timestamp(3_000L)
                 .build())
 
-        then:
-        noExceptionThrown()
+        and: "短观察做对照（10 字符，必须真的短，否则对照无效）"
+        vc.memorize(Experience.builder()
+                .sessionId("s1")
+                .action("analyze")
+                .observation("B" * 10)
+                .result("ok")
+                .timestamp(4_000L)
+                .build())
+
+        then: "长观察 importance = 0.5 + 0.2；短观察仍是 0.5"
+        def steps = episodic.getTrace("s1")
+        steps.size() == 2
+        steps[0].importance() == 0.7d
+        steps[1].importance() == 0.5d
     }
 
     def "VaultController.recall should reject null context"() {
