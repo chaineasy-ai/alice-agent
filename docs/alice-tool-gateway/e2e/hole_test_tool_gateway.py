@@ -19,25 +19,15 @@ PROJECT_ROOT = os.path.normpath(
     os.path.join(os.path.dirname(__file__), "..", "..", "..")
 )
 
+sys.path.insert(0, os.path.join(PROJECT_ROOT, "e2e"))
+from helpers import run_gradle_task  # noqa: E402
+
 MODULE = "alice-tool-gateway"
 
 
 def run_all_holes(timeout: int = 120) -> "subprocess.CompletedProcess":
     """Run all tool-gateway hole probes in a single Gradle invocation."""
-    cmd = [
-        "cmd", "/c",
-        PROJECT_ROOT + "/gradlew.bat",
-        f":{MODULE}:runHoleTest",
-        "--args=all",
-    ]
-    result = subprocess.run(
-        cmd,
-        cwd=PROJECT_ROOT,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-    )
-    return result
+    return run_gradle_task(f":{MODULE}:runHoleTest", "--args=all", timeout=timeout)
 
 
 class TestToolGatewayHoles(unittest.TestCase):

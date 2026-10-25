@@ -21,23 +21,15 @@ PROJECT_ROOT = os.path.normpath(
     os.path.join(os.path.dirname(__file__), "..", "..", "..")
 )
 
+sys.path.insert(0, os.path.join(PROJECT_ROOT, "e2e"))
+from helpers import run_gradle_task  # noqa: E402
+
 
 def run_hole(*args, timeout=30):
     """Run a single hole test probe via Gradle."""
-    cmd = [
-        "cmd", "/c",
-        "gradlew.bat",
-        ":alice-memory-vault:runHoleTest",
-        f"--args={' '.join(args)}",
-    ]
-    result = subprocess.run(
-        cmd,
-        cwd=PROJECT_ROOT,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
+    return run_gradle_task(
+        ":alice-memory-vault:runHoleTest", f"--args={' '.join(args)}", timeout=timeout
     )
-    return result
 
 
 class TestMemoryVaultHoles(unittest.TestCase):

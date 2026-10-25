@@ -464,7 +464,7 @@ class TestDispatchOnlyCommands(unittest.TestCase):
     
     These 13 AgentCommand subtypes cannot be E2E tested via CLI subprocess because
     they require an interactive JLine terminal. They are verified by unit tests:
-      - AliceCliLauncherDispatchSpec.groovy (dispatch switch patterns)
+      - AliceCliLauncherSpec.groovy (dispatch switch patterns)
       - SubAgentCmdSpec.groovy (SubAgentCmd sealed hierarchy)
       - AgentCommandSealedHierarchySpec.groovy (all 21 subtypes)
     """
@@ -476,73 +476,73 @@ class TestDispatchOnlyCommands(unittest.TestCase):
     def test_dispatch_c2_execute_raw(self):
         """C2: ExecuteRawCmd — chat-only (/exec), JLine terminal required."""
         self.skipTest(
-            "JLine terminal required. Verified by AliceCliLauncherDispatchSpec.groovy: "
+            "JLine terminal required. Verified by AliceCliLauncherSpec.groovy: "
             "'dispatch /exec ls -la returns exit 0'"
         )
 
     def test_dispatch_c3_register_skill(self):
         """C3: RegisterSkillCmd — chat-only (/skill), JLine terminal required."""
         self.skipTest(
-            "JLine terminal required. Verified by AliceCliLauncherDispatchSpec.groovy: "
+            "JLine terminal required. Verified by AliceCliLauncherSpec.groovy: "
             "'dispatch /skill:load-dataset emits registering skill'"
         )
 
     def test_dispatch_c4_update_rules(self):
         """C4: UpdateRulesCmd — chat-only (/rules), JLine terminal required."""
         self.skipTest(
-            "JLine terminal required. Verified by AliceCliLauncherDispatchSpec.groovy: "
+            "JLine terminal required. Verified by AliceCliLauncherSpec.groovy: "
             "'dispatch /rules:load-sys-prompts emits updating rules'"
         )
 
     def test_dispatch_c5_reload_kernel(self):
         """C5: ReloadKernelCmd — chat-only (/reload), JLine terminal required."""
         self.skipTest(
-            "JLine terminal required. Verified by AliceCliLauncherDispatchSpec.groovy"
+            "JLine terminal required. Verified by AliceCliLauncherSpec.groovy"
         )
 
     def test_dispatch_c6_switch_model(self):
         """C6: SwitchModelCmd — chat-only (/model), JLine terminal required."""
         self.skipTest(
-            "JLine terminal required. Verified by AliceCliLauncherDispatchSpec.groovy: "
+            "JLine terminal required. Verified by AliceCliLauncherSpec.groovy: "
             "'dispatch /model:gpt-4o emits switching model'"
         )
 
     def test_dispatch_c7_reset_session(self):
         """C7: ResetSessionCmd — chat-only (/new), JLine terminal required."""
         self.skipTest(
-            "JLine terminal required. Verified by AliceCliLauncherDispatchSpec.groovy"
+            "JLine terminal required. Verified by AliceCliLauncherSpec.groovy"
         )
 
     def test_dispatch_c8_feedback(self):
         """C8: FeedbackCmd — chat-only (/feedback), JLine terminal required."""
         self.skipTest(
-            "JLine terminal required. Verified by AliceCliLauncherDispatchSpec.groovy"
+            "JLine terminal required. Verified by AliceCliLauncherSpec.groovy"
         )
 
     def test_dispatch_c9_interrupt(self):
         """C9: InterruptCmd — chat-only (Ctrl+C), JLine terminal required."""
         self.skipTest(
-            "JLine terminal required. Verified by AliceCliLauncherDispatchSpec.groovy"
+            "JLine terminal required. Verified by AliceCliLauncherSpec.groovy"
         )
 
     def test_dispatch_c10_clear_context(self):
         """C10: ClearContextCmd — chat-only (/clear), JLine terminal required."""
         self.skipTest(
-            "JLine terminal required. Verified by AliceCliLauncherDispatchSpec.groovy: "
+            "JLine terminal required. Verified by AliceCliLauncherSpec.groovy: "
             "'dispatch /clear emits context cleared'"
         )
 
     def test_dispatch_c11_view_context(self):
         """C11: ViewContextCmd — chat-only (/context), JLine terminal required."""
         self.skipTest(
-            "JLine terminal required. Verified by AliceCliLauncherDispatchSpec.groovy: "
+            "JLine terminal required. Verified by AliceCliLauncherSpec.groovy: "
             "'dispatch /context emits context status'"
         )
 
     def test_dispatch_c12_compact_context(self):
         """C12: CompactContextCmd — chat-only (/compact), JLine terminal required."""
         self.skipTest(
-            "JLine terminal required. Verified by AliceCliLauncherDispatchSpec.groovy: "
+            "JLine terminal required. Verified by AliceCliLauncherSpec.groovy: "
             "'dispatch /compact emits context compression submitted'"
         )
 

@@ -373,7 +373,7 @@ def _verify_dispatch(self, input_args: list[str], expected_exit_codes: list[int]
 | TC 编号 | dispatch 类型 | 实现状态 | E2E 验证方式 | 说明 |
 |---------|-------------|---------|-------------|------|
 | TC-DISPATCH-01 | AcquireGoalCmd | ✅ 通过 | `alice run <task>` | 同 scene-cli-subcommands TC-CLI-01 |
-| TC-DISPATCH-02~12 | ExecuteRawCmd ~ CompactContextCmd | ⏭️ 跳过 | chat 模式 (JLine) | 这些类型仅通过 chat 模式的 `/exec`, `/skill`, `/rules`, `/reload`, `/model`, `/new`, `/feedback`, `/exit`, `/clear`, `/context`, `/compact` 触发。JLine 终端 I/O 无法通过 Gradle 子进程捕获。dispatch 模式匹配由 `AliceCliLauncherDispatchSpec.groovy` 单元测试验证。 |
+| TC-DISPATCH-02~12 | ExecuteRawCmd ~ CompactContextCmd | ⏭️ 跳过 | chat 模式 (JLine) | 这些类型仅通过 chat 模式的 `/exec`, `/skill`, `/rules`, `/reload`, `/model`, `/new`, `/feedback`, `/exit`, `/clear`, `/context`, `/compact` 触发。JLine 终端 I/O 无法通过 Gradle 子进程捕获。dispatch 模式匹配由 `AliceCliLauncherSpec.groovy` 单元测试验证。 |
 | TC-DISPATCH-13 | RegisterRoutineCmd | ✅ 通过 | `alice routine <cron>` | 同 scene-cli-subcommands TC-CLI-14 |
 | TC-DISPATCH-14 | TimeTriggeredCmd | ⏭️ 跳过 | 内核内部 | 仅由 CronScheduler 构建，不暴露 CLI/TUI。由 RoutineTimeCmdParseSpec 单元测试验证。 |
 | TC-DISPATCH-15 | SpawnSubAgentCmd | ✅ 通过 | `alice sub-agent --spawn` | 同 scene-cli-subcommands TC-CLI-17 |

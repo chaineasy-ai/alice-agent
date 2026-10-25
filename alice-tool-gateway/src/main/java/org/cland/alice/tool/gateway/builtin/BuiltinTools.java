@@ -426,6 +426,30 @@ public final class BuiltinTools {
   /** 共享 HTTP 客户端，懒加载 */
   private static volatile HttpClient httpClient;
 
+  /**
+   * HTTP 发送端口 — 唯一出口，便于离线单测替换（生产缺省走 JDK {@link HttpClient}）。
+   *
+   * <p>不改变生产行为：未替换时与直连完全等价。
+   */
+  @FunctionalInterface
+  interface HttpSender {
+    HttpResponse<String> send(HttpRequest req) throws IOException, InterruptedException;
+  }
+
+  private static volatile HttpSender httpSender;
+
+  /** 测试缝：替换 HTTP 发送端口（离线单测注入 stub；传 null 恢复缺省）。 */
+  static void setHttpSenderForTest(HttpSender sender) {
+    httpSender = sender;
+  }
+
+  private static HttpResponse<String> send(HttpRequest req)
+      throws IOException, InterruptedException {
+    HttpSender s = httpSender;
+    if (s != null) return s.send(req);
+    return httpClient().send(req, HttpResponse.BodyHandlers.ofString());
+  }
+
   private static HttpClient httpClient() {
     HttpClient c = httpClient;
     if (c == null) {
@@ -492,7 +516,7 @@ public final class BuiltinTools {
             .GET()
             .build();
 
-    HttpResponse<String> resp = httpClient().send(req, HttpResponse.BodyHandlers.ofString());
+    HttpResponse<String> resp = send(req);
     if (resp.statusCode() != 200) {
       return "web_search failed: HTTP " + resp.statusCode();
     }
