@@ -1,11 +1,14 @@
 /*
  * WalStorePerformanceSpec — FileWalStore / InMemoryWalStore 性能基准测试
  *
- * 测试目标：
- *   - WAL 写入吞吐: ≥ 1000 msg/s (FileWalStore)
- *   - Checkpoint 生成延迟: < 50ms
- *   - 恢复耗时: 1000 条脏消息恢复 < 1s
- *   - InMemoryWalStore 写入吞吐: ≥ 100_000 msg/s（基线参照）
+ * 测试目标（**阈值唯一真源 = 本类的 `*_MIN/MAX` 常量**，见文件末尾 THRESHOLDS）：
+ *   - FileWalStore 逐条写入吞吐: ≥ FILE_WRITE_MIN msg/s
+ *       （#666 D8：原标题写 ≥1000 msg/s、断言只写 ≥100。实测逐条 append 每条都落盘，
+ *        本机 181 msg/s、批量 171 msg/s ⇒ 1000 物理上达不到。故**以实测为据改标题**，
+ *        并新增「标题数字 ↔ 常量」一致性用例，杜绝标题与断言再次各说各话。）
+ *   - FileWalStore Checkpoint 保存: < FILE_CP_SAVE_MAX_MS
+ *   - 恢复: 1000 条 < FILE_RECOVERY_MAX_MS；长会话 < FILE_RECOVERY_LARGE_MAX_MS
+ *   - InMemoryWalStore: ≥ MEM_WRITE_MIN msg/s（基线参照）
  *
  * 注意：
  *   - 这些是"警示型"测试（alerting benchmark）—— 检测回归而非精确微基准
@@ -31,6 +34,16 @@ class WalStorePerformanceSpec extends Specification {
     static final long WARMUP = 10       // 预热条数
     static final long BENCHMARK = 500    // 基准条数
 
+    // ===== 阈值唯一真源（标题里的数字必须与之逐字一致，由本文件末尾的一致性用例守护）=====
+    static final double FILE_WRITE_MIN = 100       // 逐条 append（每条落盘）实测 181 msg/s
+    static final double FILE_BATCH_MIN = 100        // 批量 append 实测 171 msg/s
+    static final double MEM_WRITE_MIN = 1_000       // 内存实现实测 60_226 msg/s
+    static final double FILE_CP_SAVE_MAX_MS = 50    // 实测 1.03 ms
+    static final double MEM_CP_SAVE_MAX_MS = 50     // 实测 0.29 ms
+    static final double FILE_CP_READ_MAX_MS = 100   // 实测 0.19 ms
+    static final double FILE_RECOVERY_MAX_MS = 1_000   // 1000 条重建实测 24 ms
+    static final double FILE_RECOVERY_LARGE_MAX_MS = 3_000 // 1000 条重建实测 35 ms
+
     def setup() {
         tempDir = Files.createTempDirectory("wal-perf-")
         fileStore = new FileWalStore(tempDir)
@@ -44,7 +57,7 @@ class WalStorePerformanceSpec extends Specification {
 
     // ========== 写入吞吐 ==========
 
-    def "FileWalStore write throughput ≥ 1000 msg/s"() {
+    def "FileWalStore write throughput ≥ 100 msg/s"() {
         given:
         // 预热
         warmup(fileStore, WARMUP)
@@ -57,7 +70,7 @@ class WalStorePerformanceSpec extends Specification {
 
         then:
         println "[FileWalStore] Write throughput: ${String.format('%.0f', throughput)} msg/s"
-        throughput >= 100
+        throughput >= FILE_WRITE_MIN
     }
 
     def "InMemoryWalStore write throughput ≥ 1_000 msg/s"() {
@@ -72,7 +85,7 @@ class WalStorePerformanceSpec extends Specification {
 
         then:
         println "[InMemoryWalStore] Write throughput: ${String.format('%.0f', throughput)} msg/s"
-        throughput >= 1_000
+        throughput >= MEM_WRITE_MIN
     }
 
     def "FileWalStore batch write throughput ≥ 100 msg/s"() {
@@ -95,7 +108,7 @@ class WalStorePerformanceSpec extends Specification {
 
         then:
         println "[FileWalStore] Batch write throughput: ${String.format('%.0f', throughput)} msg/s"
-        throughput >= 100
+        throughput >= FILE_BATCH_MIN
     }
 
     // ========== Checkpoint 延迟 ==========
@@ -115,7 +128,7 @@ class WalStorePerformanceSpec extends Specification {
 
         then:
         println "[FileWalStore] Checkpoint save: ${String.format('%.3f', elapsedMs)} ms"
-        elapsedMs < 500
+        elapsedMs < FILE_CP_SAVE_MAX_MS
     }
 
     def "InMemoryWalStore checkpoint save latency < 50ms"() {
@@ -132,7 +145,7 @@ class WalStorePerformanceSpec extends Specification {
 
         then:
         println "[InMemoryWalStore] Checkpoint save: ${String.format('%.3f', elapsedMs)} ms"
-        elapsedMs < 50
+        elapsedMs < MEM_CP_SAVE_MAX_MS
     }
 
     def "FileWalStore checkpoint read latency < 100ms"() {
@@ -148,15 +161,15 @@ class WalStorePerformanceSpec extends Specification {
 
         then:
         println "[FileWalStore] Checkpoint read: ${String.format('%.3f', elapsedMs)} ms"
-        elapsedMs < 100
+        elapsedMs < FILE_CP_READ_MAX_MS
     }
 
     // ========== 恢复耗时 ==========
 
-    def "FileWalStore 1000-message recovery < 1s"() {
+    def "FileWalStore 1000-message recovery < 1000 ms"() {
         given:
-        // 模拟崩溃前场景: 消息 + Checkpoint
-        benchWrite(fileStore, 500)
+        // 模拟崩溃前场景: 消息 + Checkpoint（标题说 1000 条，就必须真写 1000 条）
+        benchWrite(fileStore, 1_000)
         fileStore.saveCheckpoint(new Checkpoint(0, sid, 400, "ACTING",
             ["retry": 1], null, System.currentTimeMillis()))
 
@@ -165,17 +178,17 @@ class WalStorePerformanceSpec extends Specification {
         long elapsedNanos = measureNanos {
             def store2 = new FileWalStore(tempDir)
             // 验证重建正确
-            assert store2.messageCount(sid) >= 500
+            assert store2.messageCount(sid) >= 1_000
             assert store2.getLatestCheckpoint(sid).present
         }
         double elapsedMs = elapsedNanos / 1_000_000.0
 
         then:
         println "[FileWalStore] recovery (index rebuild): ${String.format('%.3f', elapsedMs)} ms"
-        elapsedMs < 5_000
+        elapsedMs < FILE_RECOVERY_MAX_MS
     }
 
-    def "FileWalStore large session recovery < 3s"() {
+    def "FileWalStore large session recovery < 3000 ms"() {
         given:
         // 模拟较长会话
         benchWrite(fileStore, 1_000)
@@ -191,7 +204,42 @@ class WalStorePerformanceSpec extends Specification {
 
         then:
         println "[FileWalStore] 1_000-message recovery: ${String.format('%.3f', elapsedMs)} ms"
-        elapsedMs < 5_000
+        elapsedMs < FILE_RECOVERY_LARGE_MAX_MS
+    }
+
+    // ========== 标题 ↔ 阈值一致性（#666 D8 的守门用例）==========
+
+    /**
+     * 标题里出现的数字必须与阈值常量**逐字相等**。
+     *
+     * 这是 #666 D8 的判据：此前标题写 `≥ 1000 msg/s` 而断言只写 `>= 100`，
+     * 标题一直在"宣称"一个从没被断言过的标准。任何人（含未来的我）想单边改标题或单边改阈值，
+     * 这条立刻红 —— 不再依赖 review 眼力。
+     */
+    def "标题里的阈值必须与常量一致（否则标题就在说谎）"() {
+        given: 'feature 名 → 期望的阈值常量（数字必须出现在标题里且相等）'
+        def expectations = [
+            "FileWalStore write throughput"            : FILE_WRITE_MIN,
+            "FileWalStore batch write throughput"      : FILE_BATCH_MIN,
+            "InMemoryWalStore write throughput"        : MEM_WRITE_MIN,
+            "FileWalStore checkpoint save latency"     : FILE_CP_SAVE_MAX_MS,
+            "InMemoryWalStore checkpoint save latency" : MEM_CP_SAVE_MAX_MS,
+            "FileWalStore checkpoint read latency"     : FILE_CP_READ_MAX_MS,
+            "FileWalStore 1000-message recovery"       : FILE_RECOVERY_MAX_MS,
+            "FileWalStore large session recovery"      : FILE_RECOVERY_LARGE_MAX_MS,
+        ]
+        // Spock 2.4：`currentSpec.features` 就是本类全部 feature（不再靠反射猜方法名）
+        def names = specificationContext.currentSpec.features*.name
+
+        expect: '每条 feature 都在，且标题中的数字 == 常量'
+        expectations.each { prefix, expected ->
+            def feature = names.find { it.startsWith(prefix) }
+            assert feature != null: "缺少用例（或前缀改了）：${prefix}"
+            def nums = (feature =~ /[0-9][0-9_]*(\.[0-9]+)?/).collect { it[0].replace("_", "") as double }
+            assert !nums.isEmpty(): "标题里没有阈值数字，标题无法自证：${feature}"
+            assert nums.any { Math.abs(it - expected) < 1e-9 }:
+                "标题阈值与常量不一致 —— 标题「${feature}」里的 ${nums} 不含断言阈值 ${expected}"
+        }
     }
 
     // ========== 辅助方法 ==========
