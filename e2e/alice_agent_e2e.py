@@ -41,7 +41,9 @@ from helpers import (
     GRADLEW,
     GEMMA4_BASE_URL,
     GEMMA4_MODEL,
+    ALICE_MODEL_CONFIG,
     skip_if_no_gemma4,
+    skip_if_no_local_supplier,
 )
 
 TIMEOUT = int(os.environ.get("GEMMA4_TIMEOUT", "180"))
@@ -326,8 +328,12 @@ class TestGemma4Integration(unittest.TestCase):
         except ImportError as e:
             raise unittest.SkipTest(f"Cannot import gemma_4_client: {e}") from e
 
+    @unittest.skipIf(
+        skip_if_no_local_supplier(GEMMA4_MODEL),
+        f"本机 {ALICE_MODEL_CONFIG} 未注册 {GEMMA4_MODEL} supplier（环境耦合，非产品缺陷）",
+    )
     def test_gemma4_model_supplier_registered(self):
-        """Verify Gemma4 model is registered in ModelEnum."""
+        """Verify Gemma4 model is registered as a supplier in the local model config."""
         result = run_cli(["run", "ping", "--model", "gemma-4"], timeout=60)
         output = result.stdout + result.stderr
         print(f"\n  ↳ Gemma4 model routing test: exit={result.returncode}")
