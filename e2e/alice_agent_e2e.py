@@ -41,7 +41,7 @@ from helpers import (
     GRADLEW,
     GEMMA4_BASE_URL,
     GEMMA4_MODEL,
-    ALICE_MODEL_CONFIG,
+    local_model_config_path,
     skip_if_no_gemma4,
     skip_if_no_local_supplier,
 )
@@ -330,7 +330,7 @@ class TestGemma4Integration(unittest.TestCase):
 
     @unittest.skipIf(
         skip_if_no_local_supplier(GEMMA4_MODEL),
-        f"本机 {ALICE_MODEL_CONFIG} 未注册 {GEMMA4_MODEL} supplier（环境耦合，非产品缺陷）",
+        f"本机 {local_model_config_path()} 未注册 {GEMMA4_MODEL} supplier（环境耦合，非产品缺陷）",
     )
     def test_gemma4_model_supplier_registered(self):
         """Verify Gemma4 model is registered as a supplier in the local model config."""
