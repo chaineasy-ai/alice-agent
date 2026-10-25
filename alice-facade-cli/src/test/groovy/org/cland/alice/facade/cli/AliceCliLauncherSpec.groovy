@@ -94,7 +94,7 @@ class AliceCliLauncherSpec extends Specification {
         exitCode == AliceCliLauncher.EXIT_PARAM_ERROR
     }
 
-    def "dispatch /exec prints executing raw"() {
+    def "dispatch /exec 未接线：不回显动作语气，改为 not wired + 入口"() {
         given:
         def origOut = System.out
         def baos = new ByteArrayOutputStream()
@@ -105,13 +105,13 @@ class AliceCliLauncherSpec extends Specification {
 
         then:
         exitCode == AliceCliLauncher.EXIT_SUCCESS
-        baos.toString().contains("Executing raw: ls -la")
+        baos.toString().contains("[not wired] ExecuteRawCmd") && baos.toString().contains("请改用")
 
         cleanup:
         System.setOut(origOut)
     }
 
-    def "dispatch /skill prints registering skill"() {
+    def "dispatch /skill 未接线：not wired + 入口"() {
         given:
         def origOut = System.out
         def baos = new ByteArrayOutputStream()
@@ -122,13 +122,13 @@ class AliceCliLauncherSpec extends Specification {
 
         then:
         exitCode == AliceCliLauncher.EXIT_SUCCESS
-        baos.toString().contains("Registering skill: filesystem")
+        baos.toString().contains("[not wired] RegisterSkillCmd") && baos.toString().contains("请改用")
 
         cleanup:
         System.setOut(origOut)
     }
 
-    def "dispatch /rules prints updating rules"() {
+    def "dispatch /rules 未接线：not wired + 入口"() {
         given:
         def origOut = System.out
         def baos = new ByteArrayOutputStream()
@@ -139,13 +139,13 @@ class AliceCliLauncherSpec extends Specification {
 
         then:
         exitCode == AliceCliLauncher.EXIT_SUCCESS
-        baos.toString().contains("Updating rules: security-policy")
+        baos.toString().contains("[not wired] UpdateRulesCmd") && baos.toString().contains("请改用")
 
         cleanup:
         System.setOut(origOut)
     }
 
-    def "dispatch /reload prints reloading"() {
+    def "dispatch /reload 未接线：not wired + 入口"() {
         given:
         def origOut = System.out
         def baos = new ByteArrayOutputStream()
@@ -156,7 +156,7 @@ class AliceCliLauncherSpec extends Specification {
 
         then:
         exitCode == AliceCliLauncher.EXIT_SUCCESS
-        baos.toString().contains("Reloading kernel")
+        baos.toString().contains("[not wired] ReloadKernelCmd") && baos.toString().contains("请改用")
 
         cleanup:
         System.setOut(origOut)
@@ -179,7 +179,7 @@ class AliceCliLauncherSpec extends Specification {
         System.setOut(origOut)
     }
 
-    def "dispatch /new prints resetting session"() {
+    def "dispatch /new 未接线：not wired + 入口"() {
         given:
         def origOut = System.out
         def baos = new ByteArrayOutputStream()
@@ -190,13 +190,13 @@ class AliceCliLauncherSpec extends Specification {
 
         then:
         exitCode == AliceCliLauncher.EXIT_SUCCESS
-        baos.toString().contains("Resetting session")
+        baos.toString().contains("[not wired] ResetSessionCmd") && baos.toString().contains("请改用")
 
         cleanup:
         System.setOut(origOut)
     }
 
-    def "dispatch /clear prints context cleared"() {
+    def "dispatch /clear 未接线：not wired + 入口"() {
         given:
         def origOut = System.out
         def baos = new ByteArrayOutputStream()
@@ -207,7 +207,7 @@ class AliceCliLauncherSpec extends Specification {
 
         then:
         exitCode == AliceCliLauncher.EXIT_SUCCESS
-        baos.toString().contains("上下文已清除")
+        baos.toString().contains("[not wired] ClearContextCmd") && baos.toString().contains("请改用")
 
         cleanup:
         System.setOut(origOut)
@@ -281,7 +281,7 @@ class AliceCliLauncherSpec extends Specification {
         System.setOut(origOut)
     }
 
-    def "dispatch /routine prints registering routine"() {
+    def "dispatch /routine 未接线：not wired + 入口"() {
         given:
         def origOut = System.out
         def baos = new ByteArrayOutputStream()
@@ -292,7 +292,7 @@ class AliceCliLauncherSpec extends Specification {
 
         then:
         exitCode == AliceCliLauncher.EXIT_SUCCESS
-        baos.toString().contains("Registering routine: 0 */5 * * * ?")
+        baos.toString().contains("[not wired] RegisterRoutineCmd") && baos.toString().contains("请改用")
 
         cleanup:
         System.setOut(origOut)

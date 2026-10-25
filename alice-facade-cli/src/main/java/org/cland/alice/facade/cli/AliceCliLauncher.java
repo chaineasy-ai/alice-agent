@@ -55,6 +55,19 @@ public final class AliceCliLauncher {
    */
   static volatile org.cland.alice.agent.subagent.SubAgentRunner testSubAgentRunner;
 
+  /**
+   * 未接线命令的**统一回显**（#748 / P-VACUOUS 兄弟口径）。
+   *
+   * <p>不许用动作语气（`Executing` / `Registering` / `Reloading` …）：那是"界面说做了、实际没做"。 必须同时给出 ①未接线事实 ②零副作用
+   * ③**正确入口**（只写"未接线"会把用户卡在原地）。
+   *
+   * @param command 命令名（如 {@code AcquireGoalCmd}）
+   * @param instead 正确的使用入口
+   */
+  static void printNotWired(String command, String instead) {
+    System.out.println("[not wired] " + command + " 在当前构建未接线，未产生任何副作用 —— 请改用：" + instead);
+  }
+
   // 退出码常量
   public static final int EXIT_SUCCESS = 0;
   public static final int EXIT_RUNTIME_ERROR = 1;
@@ -217,23 +230,27 @@ public final class AliceCliLauncher {
 
     return switch (cmd) {
       case org.cland.alice.agent.proto.ExecutionCmd.AcquireGoalCmd run -> {
-        System.out.println("Executing goal: " + run.goal());
+        printNotWired("AcquireGoalCmd（/run）", "alice run \"" + run.goal() + "\"");
         yield EXIT_SUCCESS;
       }
       case org.cland.alice.agent.proto.ExecutionCmd.ExecuteRawCmd exec -> {
-        System.out.println("Executing raw: " + exec.command());
+        printNotWired("ExecuteRawCmd（/exec）", "alice run \"" + exec.command() + "\"");
         yield EXIT_SUCCESS;
       }
       case CapabilityCmd.RegisterSkillCmd skill -> {
-        System.out.println("Registering skill: " + skill.skillRef());
+        printNotWired(
+            "RegisterSkillCmd（/skill）",
+            "技能仓库安装（cland skill hub / bootstrap.sh），见 " + skill.skillRef());
         yield EXIT_SUCCESS;
       }
       case CapabilityCmd.UpdateRulesCmd rules -> {
-        System.out.println("Updating rules: " + rules.rulesRef());
+        printNotWired(
+            "UpdateRulesCmd（/rules）",
+            "把规则文件放进 ~/.alice/rules/ 后重开会话（alice chat），见 " + rules.rulesRef());
         yield EXIT_SUCCESS;
       }
       case CapabilityCmd.ReloadKernelCmd reload -> {
-        System.out.println("Reloading kernel...");
+        printNotWired("ReloadKernelCmd（/reload）", "重开会话（alice chat）");
         yield EXIT_SUCCESS;
       }
       case org.cland.alice.agent.proto.AlignmentCmd.SwitchModelCmd model -> {
@@ -257,12 +274,15 @@ public final class AliceCliLauncher {
         yield EXIT_SUCCESS;
       }
       case ControlCmd.ResetSessionCmd reset -> {
-        System.out.println("Resetting session: " + reset.sessionId());
+        printNotWired(
+            "ResetSessionCmd（/new）", "新开一个会话（alice chat）；" + reset.sessionId() + " 的上下文无法在本进程内重置");
         yield EXIT_SUCCESS;
       }
       case org.cland.alice.agent.proto.ControlCmd.ClearContextCmd clear -> {
-        System.out.println("Clearing context (session=" + clear.sessionId() + ")");
-        System.out.println("上下文已清除");
+        // #748：这里原来直接打印"上下文已清除"却没有清任何东西 —— 同一族"界面说做了、实际没做"。
+        // CLI 分发器不持有可清上下文的 Agent（只有交互会话才有），故如实说未接线并给去处。
+        printNotWired(
+            "ClearContextCmd（/clear）", "在交互式会话中执行 /clear（alice chat），或用 alice run 重新发起任务");
         yield EXIT_SUCCESS;
       }
       case org.cland.alice.agent.proto.ControlCmd.ViewContextCmd view -> {
@@ -287,14 +307,18 @@ public final class AliceCliLauncher {
         yield EXIT_SUCCESS;
       }
       case org.cland.alice.agent.proto.RoutineTimeCmd.RegisterRoutineCmd routine -> {
-        System.out.println("Registering routine: " + routine.cronExpression());
+        printNotWired(
+            "RegisterRoutineCmd（/routine）",
+            "把任务写进 config/schedule.yaml 后执行 ./bootstrap.sh cron install，见 "
+                + routine.cronExpression());
         yield EXIT_SUCCESS;
       }
       case org.cland.alice.agent.proto.ControlCmd.ResumeSessionCmd resume -> {
-        System.out.println("Resuming session: " + resume.sessionId());
-        if (resume.snapshotId() != null) {
-          System.out.println("  Snapshot: " + resume.snapshotId());
-        }
+        printNotWired(
+            "ResumeSessionCmd（/resume）",
+            "alice resume --session-id "
+                + resume.sessionId()
+                + (resume.snapshotId() != null ? " --snapshot " + resume.snapshotId() : ""));
         yield EXIT_SUCCESS;
       }
       case org.cland.alice.agent.proto.SpawnSubAgentCmd spawn -> {
