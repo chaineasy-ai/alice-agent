@@ -12,13 +12,30 @@ status: "active"
 updated: "2026-06-30"
 ---
 
-# MCTS Planner — Monte Carlo Tree Search
+# MCTS Planner — 可选排序器（L3 · 条件启用）
 
-## Overview
+## ⚠️ 2026-10-24 定位变更（承 `docs/architecture/adr/ADR-0001`）
 
-The MCTS (Monte Carlo Tree Search) planner is the core of the **SlowPath** (System 2) strategy. It
-decomposes complex user requests into sub-objectives through iterative tree search, selecting the
-optimal next action based on UCB1 confidence bounds.
+**MCTS 不是规划的核心算法，也不再负责"分解"。**
+
+- **分解**（大目标 → 子目标 → 可执行步骤）由**外循环的分解器（L1）**承担，不用搜索；
+- **可判评估**（precondition / effect 推演）由 **L2 `ObservationModel`** 承担；
+- **MCTS 只占 L3**：仅当"同一子目标存在多个互斥方案、且每个方案本身是一串步骤"时启用，用于**方案竞争**。
+
+**启用前提（缺一即禁止启用，fail-closed）**：
+
+| # | 前提 | 判据 |
+|---|---|---|
+| P1 | 候选可枚举/可采样 | 同层候选数 ≥ 10² 才有探索收益；≤ 20 时用穷举/beam 更快更准 |
+| P2 | **廉价转移模型**存在 | 单次模拟成本 ≪ 真实执行成本；**禁止用 LLM 当 simulator**（否则慢路径比快路径贵 N 倍且幻觉放大） |
+| P3 | 收益信号可机判 | 必须给出 reward 的**构成与量纲**；无定义 ⇒ 不得运行 |
+
+**禁止行为**：模拟器为占位/启发式（如按 `prompt.length()` 打分）时仍输出 `bestAction` / `bestAvgReward` 当作结论。
+
+## Overview（历史表述，仅说明原意图）
+
+原文：MCTS 作为 SlowPath(System 2) 的核心，把复杂请求"分解为子目标"并选出最优下一步。
+**该表述与 L1/L3 定位冲突**（分解 ≠ 搜索），保留于此供对照，不再作为实现依据。
 
 ```
  Role: MCTS-based Intelligent Planning Agent

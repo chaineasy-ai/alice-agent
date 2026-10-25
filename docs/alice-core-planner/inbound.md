@@ -39,7 +39,8 @@ Consumer (Agent / AgentExecutor)
 │  └──────────────────────────────────────────────────┘   │
 │                                                          │
 │  ┌──────────────────────────────────────────────────┐   │
-│  │  StrategySelector  (复杂度评估 + 策略路由)        │   │
+│  │  StrategySelector (过渡) → TriggerPolicy           │   │
+│  │    (触发源: 结果事件 + DAG 状态；不读 prompt 特征)   │   │
 │  │  ┌─────────────────┐   ┌──────────────────┐    │   │
 │  │  │ FastPathStrategy  │   │ SlowPathStrategy  │    │   │
 │  │  │ (System 1)        │   │ (System 2, MCTS)  │    │   │
@@ -196,7 +197,9 @@ StaticPlanner staticPlanner = new StaticPlanner(sopRegistry);
 
 ModelSupplier modelSupplier = new OpenAiSupplier(...);
 FastPathStrategy fastPath = new FastPathStrategy(modelSupplier);
-SlowPathStrategy slowPath = new SlowPathStrategy(modelSupplier, worldModel);
+SlowPathStrategy slowPath = SlowPathStrategy.builder()
+    .modelSupplier(modelSupplier)
+    .build();   // WorldModel 已弃用（设计不成立：规划期无真值可校验），不再作为构造参数
 
 StrategySelector selector = StrategySelector.builder()
     .fastPath(fastPath)
@@ -235,10 +238,11 @@ plan(Map<String, Object> context)
   │       ├── Match → return Plan (STATIC type)
   │       └── No match → continue
   │
-  └── 3. StrategySelector.select(context)
-            ├── Complexity low → FastPathStrategy.decide()
-            └── Complexity high → SlowPathStrategy.decide()
-                                    └── ThinkingTree.search() (MCTS)
+  └── 3. TriggerPolicy.should_plan(events, dagState)      ← 2026-10-24 口径（ADR-0001）
+            ├── 无触发信号（内循环继续执行即可）→ FastPathStrategy（即时下一步）
+            └── 命中 T1–T6（失败/前置不满足/Post-gate 拒绝/观测偏差超阈/依赖失效/目标变更）
+                                    → SlowPathStrategy（**局部重分解**，产出 DAG patch）
+                                       └── 仅当同层存在互斥多方案 ⇒ L3 MCTS（条件启用，见 mcts.md）
 ```
 
 ### 3.2 `Plan` — output value object
@@ -264,7 +268,14 @@ plan(Map<String, Object> context)
 - `Plan.fastPath(summary, actionType, target)` — quick single-step FAST_PATH
 - `Plan.staticPlan(summary, steps)` — STATIC plan with explicit step list
 
-### 3.3 `StrategySelector` — complexity router
+### 3.3 `StrategySelector` → `TriggerPolicy`（2026-10-24 定位变更）
+
+> **原表述作废**：`StrategySelector` 曾以 `prompt.length() > 200` / 关键词 / 有 feedback 做"复杂度路由"。
+> 按 `docs/architecture/adr/ADR-0001`，**入口按输入特征选快慢不成立**；该类将被 `TriggerPolicy` 取代：
+> 输入 = **结果事件 + 目标 DAG 状态**，输出 = 是否需要一次**局部重分解**。
+> 现状实现仍是 `StrategySelector`，列为过渡（见 `docs/TODO.md` `H02a`）。
+
+### 3.3.1 `StrategySelector`（历史）— complexity router
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
@@ -319,7 +330,7 @@ alice-core-agent ──requires──► alice-core-planner ──requires──
 ## 6. Related Documents
 
 - [DESIGN.md](./DESIGN.md) — Deep modular design for dual-path decision engine
-- [WorldModel.md](./WorldModel.md) — WorldModel as mental simulator for Slow Path
+- ~~WorldModel.md~~ — **设计弃用（设计不成立，非"没写完"）**：规划期预测无法校验；文件从未存在。需要"预测下一步"时走 MCTS 的 `ThinkingNode.expectedObs`（搜索内部假设，不作对外结论）+ `PlannerModelSupplier`
 - [e2e/scene-planner-endpoints.md](./e2e/scene-planner-endpoints.md) — E2E hole test scene
 - [../alice-core-agent/DESIGN.md](../alice-core-agent/DESIGN.md) — Core agent lifecycle design
 - [../alice-core-agent/e2e/scene-executor-endpoints.md](../alice-core-agent/e2e/scene-executor-endpoints.md) — Executor E2E scene (shows planner usage)

@@ -56,6 +56,8 @@ updated: "2026-10-24"
 | D12 | 架构评审 / 冒烟评审 / 产品能力边界定义 | `#514`、`#515`、`#516` 均已关闭并有交付物 | `#514/#515/#516` |
 | D13 | 测试债修复（planner/guardrail 套件、bootstrap 离线化、TUI headless） | `TODO-kernel-r0` §0；`./gradlew check` 全绿 | `2026-09-10` |
 | D14 | R0 兼容层"不需要兼容"的裁定 | Owner `#3` 裁定第 3 条 | `#3` |
+| D15 | 用例图入仓（参与者×主用例 + 子代理族 7 用例） | `docs/architecture/use-cases.md`（`73f9d04`）；依据 = 功能说明书 §3 三条实跑路径 + proto 13 个命令类；2 图渲染校验 PASS | `#3` 对齐 |
+| D16 | `alice-bootstrap/DESIGN.md` 图 8 语法错误修复 | `interface IFacadeLauncher {` → `class IFacadeLauncher {`（mermaid 11 不支持 `interface` 关键字）；`c386e5e`；全量 42 图渲染 42/42 PASS | 本轮渲染校验 |
 
 ---
 
@@ -83,10 +85,11 @@ updated: "2026-10-24"
 | ID | 事项 | 待定原因 / 谁定 | 定后判据 |
 |---|---|---|---|
 | H01 | 模块稳定性分级（稳定核心/内核/实验）与变更流程 | `#3` 议题 2；pillar 出 ADR，Owner 参与"不确定的模块" | ADR 列出 13 模块级别 + 每级变更流程（ADR/parity/可推翻） |
+| H02a | **规划器定位改为双循环**（承 ADR-0001；落地单 **`base/alice-agent#4`**，assignee builder）：内循环每步走 planner / 外循环六类事件触发 / 入口 prompt 路由作废 / MCTS 降为 L3 条件启用 | 实现方 mint；ADR 已 proposed，待 Owner 确认 | ① `TriggerPolicy` 替换 `StrategySelector` ② `precondition/effect` 规则表 ③ T1/T2/T4/T5/T6 五种触发可注入且只重分解受影响子树（K1–K6 判据见 ADR §5） |
 | H02 | 图内核：冻结为 experimental 还是继续收口 | `#3` 议题 3；Owner 拍板 | ADR 明确"冻结/继续"；若继续，给下一批切片 |
 | H03 | TUI 接图内核（当前固定 legacy） | 依赖 H02；pillar/Owner | TUI 启动横幅与 CLI/RPC 一致；`graphKernelEnabled` 默认值单点定义 |
 | H04 | sub-agent 语义统一（alice 003 / pi subagent / ACP） | `#3` 议题 4；pillar | 只保留一套语义 + 权限面表（人员/数据/工具可见范围） |
-| H05 | 门禁 / 可观测口径与平台统一 | `#3` 议题 5；pillar/steward | 与 `gate.py`/`check.sh`/`#385`/`#641` 同口径；不自建；`gate.yaml` 段数口径对齐 |
+| H05 | 门禁 / 可观测口径与平台统一 | `#3` 议题 5；pillar/steward | **已收窄（2026-10-24）**：原则层（判据须有可执行反例、selftest 必须驱动而非复刻）**可借鉴**；执行层（`check.sh` 字节同构 / Jenkins / 五段退出码）**不适用**（本仓无 Jenkins 要求，CI 走自有）. 待 #3 定稿时把"不适用"写成正式边界，而非默认"还没统一" |
 | H06 | 依赖方向硬约束（4 条断言 + 豁免到期日） | `#3` 议题 6；pillar | ArchUnit/脚本进 CI；`proto` 不被实现依赖、facade 不被实现依赖、core 不依赖 facade/memory-vault、同层门面依赖集合一致 |
 | H07 | 是否拆 `core-agent` 上帝模块 | `#3` 议题 2；Owner（建议本季不拆） | 先有依赖门禁 + 分级 + parity 基线，才允许评估拆分 |
 | H08 | `memory-vault` 接线（Vault → AgentSession，持久化/摘要/遗忘） | 需产品/技术共同定；mint/pillar | 至少 1 条真实调用路径 + e2e；重启后记忆可恢复；无孤岛 |
@@ -130,6 +133,7 @@ updated: "2026-10-24"
 | X08 | 数据库边界（JDBC/ORM/Redis） | 仓内无 DB；`#3` 判定"未来提 DB 必须先有读写场景" |
 | X09 | Lanterna TUI（旧 TODO-spec 条目） | 已被 JLine 3 TUI 取代；旧条目为陈旧记录 |
 | X10 | 任务看板 / 多 Tab 作为"近期必做" | 无用户需求证据；降为待定 H21，不占当前窗口 |
+| X12 | `WorldModel`（"心智模拟器"）**单组件 + 规划期验证** | **弃用的只是这两件事**（能力保留为 `ObservationModel` 端口）：① 做成单一万能组件；② 让它在规划期承担"验证"。原设计的病是"预测=验证"（规划期无真值 ⇒ 用模型想象确认模型想象）。**保留**预测观测本身：`RuleBasedObservationModel`（规则型·高置信·可参与前置拒绝）/ `ModelBasedObservationModel`（LLM·低置信·**只排序不放行**），预测必带 `confidence`，且**验证只在执行后 `Post-gate`**，回传后做 predicted vs actual 偏差校准。附带事实：从未实现，仓内无 `WorldModel.java`；`SlowPathStrategy` 实际依赖 `MctsEngine` + `PlannerModelSupplier`。文档曾把它当已落地（`DESIGN.md` 类图/时序图、`inbound.md` 构造签名、`TEST.md` `PLN-P04` 标 🟩 GREEN、`TODO-spec` 勾选"已完成"且指向不存在的 `WorldModel.md`）⇒ 2026-10-24 统一更正为弃用。需要世界状态推理时走 `ThinkingNode.expectedObs` |
 | X11 | 为 `AgentExecutor` 保留兼容签名 | 若 H16 决定收敛，则旧签名不保兼容；以 parity 用例保证行为 |
 
 ---
@@ -180,6 +184,7 @@ updated: "2026-10-24"
 | web_search provider 重构（Tavily/Bing） | H25 | 待定 |
 | 工具执行结果缓存 | H28 | 待定 |
 | 动态工具加载 Hot-Plug | X05 | 放弃 |
+| **World Model 状态推理**（原文勾"已完成"，`verify:: WorldModel.md` 指向不存在文件） | **X12** | **放弃（设计不成立）** |
 | 远程 SSH 执行、Docker 沙箱 | H18 | 待定 |
 | 命令白名单/黑名单、敏感信息过滤、审计日志持久化 | H19 | 待定 |
 | 记忆检查点自动保存间隔、记忆摘要、时间衰减/锁定 | H08 | 待定 |

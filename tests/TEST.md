@@ -80,7 +80,7 @@
 | PLN-P01 | `PlannerService.plan()` 调用 | `PlannerServiceSpec` | 🟩 GREEN |
 | PLN-P02 | `FastPathStrategy.decide()` 快速路径 | `PlannerServiceSpec` | 🟩 GREEN |
 | PLN-P03 | `SlowPathStrategy.decide()` 慢速路径 | `PlannerServiceSpec` | 🟩 GREEN |
-| PLN-P04 | `WorldModel.predict()` 世界模型预测 | `PlannerServiceSpec` | 🟩 GREEN |
+| PLN-P04 | ~~`WorldModel.predict()` 世界模型预测~~ | — | ⚪ **弃用（设计不成立）**：规划期无真值可校验，"验证"只能是模型自证幻想；真实验证在执行后（Post 校验/观测）。原 🟩 GREEN 从未有过实现 |
 
 **文件**：
 - Case doc: `docs/alice-agent-proto/e2e/case-core-planner.md`

@@ -64,42 +64,51 @@ sequenceDiagram
     participant V as Guardrail
     participant T as ToolGateway
     participant E as EnvAdapter
+    participant OM as ObservationModel<br/>(规则型优先)
 
-    Note over A: 1. Perceive (感知环境与记忆)
-    A->>M: fetchContext(sessionId) 
-    A->>E: syncState() [cite: 14]
+    Note over A: 1. Perceive（感知环境与记忆）
+    A->>M: fetchContext(sessionId)
+    A->>E: syncState()
 
-    loop Macro-Iteration (战略调整)
-        Note over A: 2. Plan (生成阶段性目标)
-        A->>P: proposeNextStep(context) [cite: 9]
-        P-->>A: TargetGoal (e.g. "读取并清理文件数据") [cite: 9]
+    loop Macro-Iteration（战略层 · 事件驱动）
+        Note over A: 2. Plan / 局部重分解（ADR-0001 外循环）
+        A->>P: plan(dagState, events)
+        P-->>A: TargetGoal + 前置条件 + 验收条件
 
         Note over A: 3. Verify (Pre)
-        A->>V: interceptPlan(TargetGoal) [cite: 31]
-        
+        A->>V: interceptPlan(TargetGoal)
+        A->>OM: precondition 推演（规则型）
+        alt 前置不满足（T2）
+            OM-->>A: 不可执行
+            A->>P: 局部重分解该子树
+        end
+
         rect rgb(240, 248, 255)
-        Note right of A: Micro-ReAct Loop (执行态闭环)
-        loop Micro-Iteration (直到目标达成或熔断)
-            Note over A: 4. Act (Reasoning & Action) [cite: 4]
-            A->>T: dispatch(Action) [cite: 15, 45]
-            T->>E: applyEffect() [cite: 14]
-            
-            Note over A: 5. Observe [cite: 4]
-            E-->>A: RawObservation [cite: 16]
-            A->>M: updateWorkingMemory(Observation) [cite: 35]
-            Note over A: 根据 Obs 生成下一个微观 Thought/Action 
+        Note right of A: Micro ReAct Loop（执行态闭环 · 目标内自主选工具）
+        loop Micro-Iteration（直到达成验收条件或熔断）
+            A->>T: dispatch(Action)
+            T->>E: applyEffect()
+            E-->>A: RawObservation
+            A->>M: updateWorkingMemory(Observation)
+            Note over A: 依 Obs 生成下一个微观 Thought/Action
         end
         end
 
-        Note over A: 6. Verify (Post) [cite: 31]
-        A->>V: auditFinalResult(Observation) [cite: 33]
-        
-        Note over A: 7. Reflect (战略复盘) [cite: 13]
+        Note over A: 6. Verify (Post)
+        A->>V: auditFinalResult(Observation)
+        A->>OM: predicted vs actual 偏差
+        Note over A: 7. Reflect
         A->>P: evaluate(VerificationScore)
+
+        alt 触发重分解（T1 失败 / T3 Post-gate 拒绝 / T4 偏差超阈 / T5 依赖失效 / T6 目标变更）
+            A->>P: 局部重分解（只改受影响子树，已完成的节点 id 不变）
+        else 通过
+            Note over A: 取下一个可执行目标（继续 Macro 循环）
+        end
     end
 ```
 
----
+> **口径**：本图即 `docs/architecture/adr/ADR-0001` 的双循环——Macro 层 = 外循环（planner 定"目标 + 前置 + 验收"，事件驱动重分解）；Micro 层 = 内循环（ReAct 在目标内自主选工具）。**入口不存在"按 prompt 长度选快慢"**。
 
 ## **3. 数据流转化图 (Transformation Flow)**
 
