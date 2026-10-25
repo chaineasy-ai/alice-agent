@@ -29,9 +29,12 @@ read_when:
 - `AgentSession`（内存 `Map`）是**遗留端口**，生产装配不挂（`Agent.createDefault()` 不调用 `withMemory`）。
   - 想接它 = 给同一份历史造**第二份账**，除 H08 的整体接线决议外不要动。
   - 读历史（`/context` 的消息条数、`/compact`、resume）一律**读 WAL**。
-    ⚠️ 现状（2026-10-26 复核）：**`/context` 读 WAL 尚未落地**（`#753` 的验收用例
-    `AgentContextViewSpec` 在 main 上是红的）。本节是**目标契约**，不是现状；
-    在它落地前不要把 `/context` 的消息条数当可信数据。
+    ⚠️ 现状（2026-10-26 `atlas` 复核）：**`/context` 读 WAL 尚未落地，且 main 上没有任何验收覆盖**。
+    更正一条流传的说法：「`AgentContextViewSpec` 在 main 上是红的（2/3）」**不成立** ——
+    该 spec 只存在于未合分支 `fix/753-memory-policy`（`fix/754-relative-perf-threshold` 也有副本），
+    main 上 **既无该用例、也无该能力**（`git grep -l AgentContextViewSpec HEAD` → 只有本文档）。
+    ⇒ 正确的现状表述是：**能力未实现 + 无验收用例**（"红"与"不存在"是两件事，不可混用）。
+    本节是**目标契约**，不是现状；在它落地前不要把 `/context` 的消息条数当可信数据。
 - 一个会话只有一个 id：`launcher` / 命令层 / `Agent` 三者共用 `agent.sessionId()`（#752）。
 
 ## 4. 删除路径（明确写清，不含混）
