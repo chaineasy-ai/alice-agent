@@ -5,6 +5,9 @@
         Indexing it directly raised ``TypeError`` and masked the real failure.
 #417 -- e2e runs could silently dirty the working tree and break ``./gradlew check``.
 
+#765 -- smoke 用例读 `~/.alice/logs/alice-agent.log`，但 logback 只写 `info.log`
+        ⇒ 日志增量恒空 ⇒ 断言结构性永红（被误读为「LLM 概率性」）。
+
 Run:  python -m unittest e2e.test_e2e_guards -v
 """
 
@@ -126,6 +129,52 @@ class ModelConfigGateTest(unittest.TestCase):
             broken = Path(tmp) / "broken.json"
             broken.write_text("not json", encoding="utf-8")
             self.assertTrue(skip_if_no_local_supplier("gemma-4", config_path=broken))
+
+
+class AgentLogPathTest(unittest.TestCase):
+    """#765：smoke 用例读的日志文件必须 = logback 真正在写的那个。
+
+    历史坑：`agent_run.agent_log_file()` 写死 `alice-agent.log`，而 logback 早已改为
+    `info.log`（按天+50MB 滚动）⇒ 日志增量恒为空 ⇒ `test_agent_ran_the_test_suite`
+    结构性永红，却被误读成「LLM 概率性」。
+    """
+
+    LOGBACK = (
+        Path(__file__).resolve().parents[1]
+        / "alice-bootstrap" / "src" / "main" / "resources" / "logback.xml"
+    )
+
+    def test_points_at_file_logback_actually_writes(self):
+        from e2e.smoke.agent_run import agent_log_file
+
+        if not self.LOGBACK.exists():
+            self.skipTest(f"logback.xml 不存在：{self.LOGBACK}")
+        xml = self.LOGBACK.read_text(encoding="utf-8")
+        declared = [
+            line.split("<file>")[1].split("</file>")[0].strip()
+            for line in xml.splitlines() if "<file>" in line
+        ]
+        self.assertTrue(declared, "logback.xml 里没找到 <file> 声明的日志文件")
+        names = {Path(d).name for d in declared}
+        self.assertIn(
+            agent_log_file().name, names,
+            f"agent_run 读 {agent_log_file().name}，但 logback 只写 {sorted(names)}",
+        )
+
+    def test_honours_alice_log_dir_like_logback(self):
+        from e2e.smoke.agent_run import agent_log_file
+
+        old = os.environ.get("ALICE_LOG_DIR")
+        os.environ["ALICE_LOG_DIR"] = "/tmp/alice-logdir-probe"
+        try:
+            self.assertEqual(
+                agent_log_file(), Path("/tmp/alice-logdir-probe") / "info.log"
+            )
+        finally:
+            if old is None:
+                os.environ.pop("ALICE_LOG_DIR", None)
+            else:
+                os.environ["ALICE_LOG_DIR"] = old
 
 
 if __name__ == "__main__":
