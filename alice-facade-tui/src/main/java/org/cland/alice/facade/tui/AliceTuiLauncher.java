@@ -565,9 +565,19 @@ public class AliceTuiLauncher implements AutoCloseable {
     } catch (Exception e) {
       logger.warn("Agent switchModel not fully implemented", e);
     }
-    screenManager.layout().footer().setModel(model.modelId());
-    screenManager.markContentDirty();
-    eventBridge.onChatMessage("System", "模型切换至: " + model.modelId());
+
+    // #666 D5：不许再撒谎。切换是否生效以 agent 的**实际生效值**为准，不以"我调了方法"为准。
+    // 未生效时既不改 footer、也不发"模型切换至"——那会让用户以为换了、实际推理仍用旧模型。
+    String effective = agent.currentModelId();
+    if (model.modelId() != null && model.modelId().equals(effective)) {
+      screenManager.layout().footer().setModel(effective);
+      screenManager.markContentDirty();
+      eventBridge.onChatMessage("System", "模型切换至: " + effective);
+    } else {
+      screenManager.markContentDirty();
+      eventBridge.onChatMessage(
+          "System", "模型切换未生效：当前构建不支持运行时切换，仍在用 " + effective + "（请求: " + model.modelId() + "）");
+    }
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -583,6 +593,8 @@ public class AliceTuiLauncher implements AutoCloseable {
           try {
             String subSessionId = SnowflakeIdGenerator.generateSessionId();
             SubAgentManager mgr = new SubAgentManager(subSessionId);
+            // #666 D5 边界④：子 Agent 继承父会话有效模型（含运行时切换）
+            mgr.setEffectiveModelSupplier(() -> agent.currentModelId());
             SubAgentRecord record = mgr.spawnSubAgent(spawn.goal(), spawn.model());
             String msg = "子 Agent " + record.id() + " 已生成，目标: " + spawn.goal();
             eventBridge.onChatMessage("System", msg);

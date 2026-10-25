@@ -280,7 +280,7 @@ public class AgentExecutor implements Loop, EventStream {
               }
             });
     context.put("prompt", input);
-    context.put("model", request.modelId() != null ? request.modelId() : config.defaultModelId());
+    context.put("model", request.modelId() != null ? request.modelId() : agent.currentModelId());
 
     return executeLoop(input, context)
         .map(this::toSessionResult)
@@ -617,7 +617,7 @@ public class AgentExecutor implements Loop, EventStream {
     } else {
       String rawPrompt =
           context.containsKey("prompt") ? context.get("prompt").toString() : "Hello!";
-      String modelId = config.defaultModelId();
+      String modelId = agent.currentModelId(); // #666 D5：走有效模型（含运行时切换）
       // 通过 PromptManager 构建 Core Loop Prompt
       String lastObservation =
           context.containsKey("lastObservation") ? context.get("lastObservation").toString() : null;
@@ -1127,7 +1127,7 @@ public class AgentExecutor implements Loop, EventStream {
                                 actionLog, rawPrompt, readFilePaths);
                         microReActStep(
                                 updatedCtx,
-                                Action.llmInference(config.defaultModelId(), userContent),
+                                Action.llmInference(agent.currentModelId(), userContent),
                                 originalPrompt,
                                 depth + 1,
                                 maxDepth)
@@ -1600,7 +1600,7 @@ public class AgentExecutor implements Loop, EventStream {
                       PromptManager.buildMicroUserContent(
                           actionLogBuilder.toString(), rawPrompt, readFilePaths);
                   return new StepResult.Continue(
-                      Action.llmInference(config.defaultModelId(), userContent),
+                      Action.llmInference(agent.currentModelId(), userContent),
                       Observation.success(
                           "Tool "
                               + action.target()
