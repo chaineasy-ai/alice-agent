@@ -18,7 +18,9 @@ public final class DefaultSubAgentRunner implements SubAgentRunner {
     Agent subAgent = new Agent(subAgentId, config);
     try {
       // 同步阻塞 — ask() 内部使用 CountDownLatch 等待 PPAO 循环完成
-      return subAgent.ask(goal, config.defaultModelId());
+      // #666 D5：config 已由 SubAgentManager 解析出"有效模型"（含父会话运行时切换），
+      // 这里用子 Agent 的有效值，避免子代理偷偷回落到默认模型。
+      return subAgent.ask(goal, subAgent.currentModelId());
     } finally {
       try {
         subAgent.close();

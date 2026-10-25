@@ -76,6 +76,14 @@ public class Agent implements KernelDelegates {
   private final String agentId;
   private final String sessionId;
   private final AgentConfig config;
+
+  /**
+   * #666 D5：运行时切换的模型覆盖位。{@code null} = 未覆盖（回落 {@link AgentConfig#defaultModelId()}）。
+   *
+   * <p>volatile：切换只影响**后续 turn**；in-flight turn 已在局部变量里捕获了当时的 modelId，不受影响。
+   */
+  private volatile String modelOverride;
+
   private final Vertx vertx;
   private final AgentExecutor executor;
 
@@ -257,7 +265,8 @@ public class Agent implements KernelDelegates {
     String prompt = context.containsKey("prompt") ? context.get("prompt").toString() : "Hello!";
 
     String modelId =
-        context.containsKey("model") ? context.get("model").toString() : config.defaultModelId();
+        resolveModelId(context.containsKey("model") ? context.get("model").toString() : null);
+    context.put("effective_model", modelId); // 边界④：每 turn 记录实际生效模型
 
     logger.info("Agent {} running with model {}", agentId, modelId);
 
@@ -304,7 +313,7 @@ public class Agent implements KernelDelegates {
    * @return 模型返回的响应文本
    */
   public String ask(String prompt) {
-    return ask(prompt, config.defaultModelId());
+    return ask(prompt, currentModelId());
   }
 
   /**
@@ -316,12 +325,16 @@ public class Agent implements KernelDelegates {
    * @param modelId 目标模型 ID
    * @return 模型返回的响应文本
    */
-  public String ask(String prompt, String modelId) {
+  public String ask(String prompt, String perCallModelId) {
+    final String modelId = resolveModelId(perCallModelId);
     logger.info("Agent {} ask model={}", agentId, modelId);
 
     AgentContext context = new AgentContext(config.maxIterations());
     context.put("prompt", prompt);
     context.put("model", modelId);
+    // 边界④：每个 turn 记录"本 turn 实际用的模型"，事后可查（会话/日志/上下文三处一致）
+    context.put("effective_model", modelId);
+    logger.info("Agent {} turn effective_model={}", agentId, modelId);
 
     // 同步执行 PPAO 循环
     CountDownLatch latch = new CountDownLatch(1);
@@ -396,7 +409,7 @@ public class Agent implements KernelDelegates {
                   plannerService,
                   toolRegistry,
                   inferencerOverride != null ? inferencerOverride : new TextLlmPipeline(),
-                  config.defaultModelId(),
+                  resolveModelId(null),
                   org.cland.alice.core.agent.prompt.PromptManager.buildMicroLoopSystemPrompt(),
                   null,
                   config.postVerifyEnabled() && guardrail != null
@@ -465,7 +478,7 @@ public class Agent implements KernelDelegates {
         new SessionRequest(
             this.sessionId,
             prompt,
-            config.defaultModelId(),
+            resolveModelId(null),
             Map.of("maxIterations", config.maxIterations()));
     return graphKernel()
         .execute(request)
@@ -590,7 +603,7 @@ public class Agent implements KernelDelegates {
     sb.append("|---|---|\n");
     sb.append("| 会话 ID | ").append(ctx.sessionId()).append(" |\n");
     sb.append("| Agent ID | ").append(agentId).append(" |\n");
-    sb.append("| 默认模型 | ").append(config.defaultModelId()).append(" |\n");
+    sb.append("| 生效模型 | ").append(currentModelId()).append(" |\n");
     sb.append("| 最大迭代 | ").append(config.maxIterations()).append(" |\n");
 
     if (memory != null) {
@@ -694,7 +707,7 @@ public class Agent implements KernelDelegates {
     String summaryContent;
     try {
       ModelProvider provider = ModelProvider.getInstance();
-      Call result = provider.dispatch(config.defaultModelId(), dialogBuilder.toString());
+      Call result = provider.dispatch(resolveModelId(null), dialogBuilder.toString());
       if (result.status() == CallStatus.FINISHED && result.result() != null) {
         summaryContent = result.result().content();
       } else {
@@ -729,10 +742,74 @@ public class Agent implements KernelDelegates {
    * @param modelId 目标模型标识
    */
   public void switchModel(String modelId) {
+    // #666 D5（方案 A · 只做"切换原语"）：校验先做，失败不留半截状态。
+    // 契约③：null / 空白 = **清除覆盖**（回落 config 默认值），否则"切到 x 就回不去"。
+    if (modelId == null || modelId.isBlank()) {
+      String previous = currentModelId();
+      this.modelOverride = null;
+      logger.info(
+          "Model override cleared for agent {}: {} -> {} (effective={})",
+          agentId,
+          previous,
+          config.defaultModelId(),
+          currentModelId());
+      return;
+    }
+
+    var provider = org.cland.alice.model.ModelProvider.getInstance();
+    var targetModel = provider.getModel(modelId);
+    boolean known = targetModel != null || provider.getSupplier(modelId) != null;
+    if (!known) {
+      throw new IllegalArgumentException("未知模型: " + modelId + "（未在 ModelProvider 注册，拒绝静默切换）");
+    }
+
+    // 边界⑥：不做静默跨能力切换（如 text -> image），能力不同直接拒绝。
+    var currentModel = provider.getModel(currentModelId());
+    if (currentModel != null
+        && targetModel != null
+        && currentModel.capability() != targetModel.capability()) {
+      throw new IllegalArgumentException(
+          "拒绝跨能力切换: " + currentModel.capability() + " -> " + targetModel.capability());
+    }
+
+    String previous = currentModelId();
+    // 边界①：只影响后续 turn —— 覆盖位在下次 turn 解析时生效；in-flight turn 已捕获局部 modelId。
+    // 边界②：session/上下文/工具都不动（本方法只改这一个字段）。
+    this.modelOverride = modelId;
     logger.info(
-        "Switching model from {} to {} for agent {}", config.defaultModelId(), modelId, agentId);
-    // 更新配置中的默认模型
-    // TODO: 当 AgentConfig 支持动态修改时，更新 defaultModelId
+        "Model switched for agent {}: {} -> {} (effective={})",
+        agentId,
+        previous,
+        modelId,
+        currentModelId());
+  }
+
+  /**
+   * 当前**实际生效**的模型标识（未切换过时 = {@link AgentConfig#defaultModelId()}）。
+   *
+   * <p>#666 D5：调用方据此判断"切换是否真的生效"，**不得**假设 {@link #switchModel(String)} 一定成功。
+   *
+   * @return 当前生效的 modelId
+   */
+  public String currentModelId() {
+    String override = this.modelOverride;
+    return override != null ? override : config.defaultModelId();
+  }
+
+  /**
+   * 解析本 turn 实际使用的模型：**入参 > currentModelId() > defaultModelId**。
+   *
+   * <p>#666 D5 契约①：入参是"本 turn 一次性覆盖"，**不粘连**——传 y 只影响这一 turn， 下一次不传参数仍回到 {@link
+   * #currentModelId()}（= 切换后的 x）。
+   *
+   * @param perCallModelId 单次调用指定的模型（可为 null/空白）
+   * @return 本 turn 生效的 modelId
+   */
+  public String resolveModelId(String perCallModelId) {
+    if (perCallModelId != null && !perCallModelId.isBlank()) {
+      return perCallModelId;
+    }
+    return currentModelId();
   }
 
   /**
@@ -872,7 +949,7 @@ public class Agent implements KernelDelegates {
    * planner.instruction_model_id} 读取，未设置则回退默认模型。
    */
   public static PlannerService newDefaultPlannerService(AgentConfig config) {
-    String reasoningModelId = config.defaultModelId();
+    String reasoningModelId = config.defaultModelId(); // 装配期默认值：装配后由 currentModelId() 决定
     String instructionModelId = reasoningModelId;
     org.cland.alice.model.ModelConfigLoader.PlannerConfig plannerCfg = null;
     try {

@@ -227,6 +227,14 @@ class TuiSpec extends Specification {
         return captured
     }
 
+    /** 读 launcher 内部 screenManager 的 footer 模型名（WhiteBox，仅测试用）。 */
+    private static String footerModelOf(AliceTuiLauncher launcher) {
+        def f = AliceTuiLauncher.getDeclaredField("screenManager")
+        f.setAccessible(true)
+        def sm = f.get(launcher)
+        return sm.layout().footer().modelInfo()
+    }
+
     // ========== CommandHandler 命令分支测试 (§3.1) ==========
 
 
@@ -394,8 +402,42 @@ class TuiSpec extends Specification {
         when:
         launcher.dispatchAgentCommand(new AlignmentCmd.SwitchModelCmd("gpt-4o", "sess-01", "trace-abc"))
 
-        then: "必须是带了新模型名的那条消息（不是随便一条 System 消息）"
-        chat.any { it == "System|模型切换至: gpt-4o" }
+        then: "该分支必须有一条带请求模型名的回执（内容是生效还是未生效由 agent 决定，见下一条）"
+        chat.size() == 1
+        chat[0].contains("gpt-4o")
+    }
+
+    /**
+     * #666 D5：`switchModel()` 当前是空实现（只打日志），但 UI 原来无条件发「模型切换至: xxx」
+     * 并改 footer ⇒ **用户看到"已切换"，推理仍用旧模型**。
+     *
+     * <p>本用例钉住"界面不得替系统撒谎"：只要切换没真的生效，
+     * ① 不许出现「模型切换至:」；② footer 的模型名必须保持原值不变。
+     */
+    def "switchModel 未生效时 UI 不得宣称已切换（P-VACUOUS：不许拿没炸当结论）"() {
+        given:
+        def agent = new org.cland.alice.core.agent.Agent(org.cland.alice.core.agent.AgentConfig.defaults())
+        def launcher = new AliceTuiLauncher(agent)
+        def chat = captureChat(launcher)
+        def footerBefore = footerModelOf(launcher)
+        def effective = agent.currentModelId()
+
+        when: "请求切到一个和当前不同的模型"
+        def target = effective + "-not-implemented"
+        launcher.dispatchAgentCommand(new AlignmentCmd.SwitchModelCmd(target, "sess-01", "trace-abc"))
+
+        then: "没有任何一条消息宣称切换成功"
+        chat.every { !it.contains("模型切换至") }
+
+        and: "回执必须说清未生效，并带上仍在使用的模型"
+        chat.size() == 1
+        chat[0].contains("未生效")
+        chat[0].contains(effective)
+        chat[0].contains(target)
+
+        and: "footer 不得被改成未生效的目标模型"
+        footerModelOf(launcher) == footerBefore
+        footerModelOf(launcher) != target
     }
 
     def "AliceTuiLauncher dispatchAgentCommand 对未接线的 RegisterRoutineCmd 不得伪装成功"() {
