@@ -532,6 +532,30 @@ class TuiSpec extends Specification {
         chat.any { it.contains("未启用短期记忆") }
     }
 
+    // ========== #751：短期记忆端口的现状契约（决议前护栏）==========
+
+    def "#751 默认装配不含短期记忆（事实契约）：createDefault() 不挂 AgentSession"() {
+        expect: "默认装配 memory() == null —— 若有人无意识接上，这条会红，强迫同步改文案/文档并给出决议"
+        org.cland.alice.core.agent.Agent.createDefault(
+            org.cland.alice.core.agent.AgentConfig.defaults()).memory() == null
+    }
+
+    def "#751 无记忆时 /new 回显必须指明真源在磁盘、可恢复（不许只说已重置）"() {
+        given:
+        def sid = "sess-751-resume"
+        def agent = new org.cland.alice.core.agent.Agent("tui-751", sid,
+            org.cland.alice.core.agent.AgentConfig.defaults())
+        def launcher = new AliceTuiLauncher(agent)
+        def chat = captureChat(launcher)
+
+        when:
+        handlerOf(launcher).execute(SlashCommand.parse("/new"))
+
+        then: "必须告诉用户历史还在、怎么恢复（否则「已重置」读起来像把历史删了）"
+        chat.any { it.contains("alice resume --session-id") && it.contains(sid) }
+        chat.any { it.contains("无内存上下文可清") }
+    }
+
     def "全链路 /model 未生效：不得在分发前宣称切换（两句打脸）"() {
         given:
         def agent = new org.cland.alice.core.agent.Agent(org.cland.alice.core.agent.AgentConfig.defaults())

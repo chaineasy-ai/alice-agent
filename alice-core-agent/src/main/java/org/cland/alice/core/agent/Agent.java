@@ -132,7 +132,11 @@ public class Agent implements KernelDelegates {
 
   // ========== 属性 ==========
 
-  @Override
+  /** 本 Agent 的会话 ID（WAL/记忆都按它归档；#751：回显"怎么恢复历史"时用它，别用调度侧的 session）。 */
+  public String sessionId() {
+    return sessionId;
+  }
+
   public String agentId() {
     return agentId;
   }
@@ -180,6 +184,22 @@ public class Agent implements KernelDelegates {
     return this;
   }
 
+  /**
+   * 注入短期记忆端口（{@link AgentSession}）。
+   *
+   * <p><b>现状（#751 判定）</b>：这是**遗留端口，生产装配从未接线** —— `createDefault()` 不调用本方法， 全仓也没有任何生产调用点（只有历史
+   * `AgentCore` 合并时的委托）。因此：
+   *
+   * <ul>
+   *   <li>会话短期历史的**真源是 {@link org.cland.alice.core.agent.wal.WalSession}**（`compactContext()` 只读
+   *       WAL；`/context` 的消息条数分支读 memory，生产恒 null 已是公认降级态）。
+   *   <li>若在此处接上内存 Map，等于为同一份历史造**第二份真源**（P-DENOM 同族）—— 且 `docs/TODO.md` H08 的判据是把 Vault →
+   *       AgentSession 整体接线（持久化/摘要/遗忘 + e2e + 无孤岛）， 单接通内存 Map 只完成其中一小部分。
+   *   <li>故接线与否**需产品/技术共同定**（H08 / #751 决议），本方法暂只作为端口保留。
+   * </ul>
+   *
+   * <p>在决议前：`clearMemory()` 默认是 no-op，任何"上下文已清空"的回显都必须如实说明（见 TUI `handleReset`）。
+   */
   public Agent withMemory(AgentSession memory) {
     this.memory = memory;
     return this;
@@ -616,7 +636,7 @@ public class Agent implements KernelDelegates {
         sb.append("| Memory 状态 | 异常: ").append(e.getMessage()).append(" |\n");
       }
     } else {
-      sb.append("| Token 占用 | N/A (Memory 未注入) |\n");
+      sb.append("| Token 占用 | N/A (Memory 未注入；会话历史真源为 WAL，见 #751/H08) |\n");
       sb.append("| 消息滑动窗口 | N/A |\n");
     }
 
