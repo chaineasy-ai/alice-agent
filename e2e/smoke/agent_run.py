@@ -37,6 +37,17 @@ from e2e.smoke.config import DEEPSEEK_API_KEY, PROJECT_MODEL  # noqa: E402
 # ── Agent 调用 ─────────────────────────────────────────────────────────────
 
 
+def default_agent_binary() -> str:
+    """预构建分发包里的可执行文件（存在且可执行则返回路径，否则空串）。
+
+    分发包由 `./gradlew :alice-bootstrap:installDist` / `--build` 产生。
+    存在时冒烟用例直接驱动它——比 Gradle 快、且**不会被判 UP-TO-DATE**。
+    """
+    candidate = PROJECT_ROOT / "alice-bootstrap" / "build" / "install" / "alice" / "bin"
+    exe = candidate / ("alice.bat" if sys.platform.startswith("win") else "alice")
+    return str(exe) if exe.is_file() and os.access(exe, os.X_OK) else ""
+
+
 def build_agent_command(prompt: str, model: str, task_timeout: int) -> list[str]:
     """构造调用 Alice Agent 的命令行。
 
@@ -60,10 +71,16 @@ def build_agent_command(prompt: str, model: str, task_timeout: int) -> list[str]
     # P-3（#521）：工作树/并发隔离。设 ALICE_SMOKE_BIN 时直接驱动**预构建分发包**
     # （不触发 Gradle），配合 runner 的独立 git worktree + 私有 HOME，
     # 消除共享工作树并发 Gradle 互踩（#515/#521-3）。
-    isolated_bin = os.environ.get("ALICE_SMOKE_BIN", "").strip()
-    if isolated_bin:
+    #
+    # #765：分发包**存在时默认就用它**。起因：冒烟用例全部输出断言会在 1.7s 内全红——
+    # 不是产物错也不是 LLM 概率，而是 Gradle 把 `:alice-bootstrap:run` 当可缓存任务，
+    # 相同 args 第二次直接 `UP-TO-DATE`，**Agent 根本没执行**（exit 0 / 日志增量空 /
+    # fixture 未改）。不回退成"每次都 --rerun-tasks"（重跑 90+ task，几钟），
+    # 而是优先用分发包；没有分发包时才走 Gradle，并在 run_agent 里做 UP-TO-DATE 识别。
+    binary = os.environ.get("ALICE_SMOKE_BIN", "").strip() or default_agent_binary()
+    if binary:
         cmd = [
-            isolated_bin,
+            binary,
             "run",
             prompt_flat,
             "--model",
@@ -86,8 +103,18 @@ def build_agent_command(prompt: str, model: str, task_timeout: int) -> list[str]
 
 
 def agent_log_file() -> Path:
-    """Alice Agent 的文件日志路径（logback 配置在 alice-bootstrap/src/main/resources）。"""
-    return Path.home() / ".alice" / "logs" / "alice-agent.log"
+    """Alice Agent 的运行时文件日志路径。
+
+    真源 = ``alice-bootstrap/src/main/resources/logback.xml``：
+    ``${ALICE_LOG_DIR:-${user.home}/.alice/logs}/info.log``（JSON Lines，按天+50MB 滚动）。
+
+    历史坑（#765）：这里曾写死 ``alice-agent.log``（logback 早期文件名）。日志规范改成
+    ``info.log`` + 滚动后本函数没跟上 ⇒ ``_read_log_delta()`` 读的是 10-16 就停写的旧文件，
+    增量恒为空串 ⇒ ``test_agent_ran_the_test_suite`` **结构性永红**，看起来像"LLM 概率性"。
+    两边都认 ``ALICE_LOG_DIR``（logback 与本函数同一个 env），所以不会又成一个分家点。
+    """
+    log_dir = os.environ.get("ALICE_LOG_DIR") or str(Path.home() / ".alice" / "logs")
+    return Path(log_dir) / "info.log"
 
 
 def _read_log_delta(offset: int) -> str:
@@ -159,8 +186,23 @@ def run_agent(
         )
 
     output = result.stdout + result.stderr
+    delta = _read_log_delta(log_offset)
+    # #765：Gradle 把 `:alice-bootstrap:run` 当可缓存任务——相同 args 第二次直接
+    # UP-TO-DATE，**程序根本没执行**。此时 exit=0 / 日志增量空 / fixture 未变，
+    # 会让所有输出断言在 1~2s 内"全红"，被误读成 LLM 概率性失败。
+    # 返回 125（未判定），让失败信息直接指向仪表，而不是指向产品。
+    if "UP-TO-DATE" in output and "BUILD SUCCESSFUL" in output and not delta:
+        print("  ⚠️  未判定（125）：Gradle 判 :alice-bootstrap:run UP-TO-DATE，Agent 未执行")
+        return (
+            125,
+            f"{output}\n[未判定] :alice-bootstrap:run 被 Gradle 判为 UP-TO-DATE，"
+            "Agent 根本没有执行（本次输出不可用于断言）。\n"
+            "修法：先 ./gradlew :alice-bootstrap:installDist（用例会自动改用分发包），"
+            "或设 ALICE_SMOKE_BIN 指向分发包可执行文件。",
+            delta,
+        )
     print(f"  {'✅' if result.returncode == 0 else '⚠️ '} Agent exit={result.returncode}")
-    return result.returncode, output, _read_log_delta(log_offset)
+    return result.returncode, output, delta
 
 
 # ── Fixture 快照 / 恢复 ────────────────────────────────────────────────────
