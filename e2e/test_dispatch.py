@@ -2,6 +2,13 @@
 """
 E2E Dispatch Test — what the chat session (JLine) would call dispatchCommand() with.
 
+⚠️ 本文件是**映射清单**（21 个密封子类型 → 真实覆盖位置），**不是断言型 E2E**：
+   每个用例都 `skipTest(...)` 并写明"真实覆盖在哪个 Spec/用例"。
+   ⇒ 运行它 `rc=0` **不等于**通过（D10/#666：全 skip 的文件不得被当绿）。
+   真实断言覆盖见：`alice-facade-cli/src/test/groovy/.../AliceCliLauncherSpec.groovy`
+   （`dispatch /exec|/skill|/model|/new|/clear|/sub-agent …`）与
+   `docs/alice-facade-cli/e2e/test_cli_categories.py`（CLI 子命令侧）。
+
 These tests verify that AliceCliLauncher.dispatchCommand() correctly handles
 all 21 AgentCommand sealed subtypes. Most require JLine terminal — we
 document each skip with a unit test cross-reference.
@@ -43,8 +50,8 @@ class TestDispatchAllAgentCommands(unittest.TestCase):
     def test_dispatch_02_execute_raw(self):
         """ExecuteRawCmd (`/exec ls -la`) — ⏭ JLine terminal required."""
         self.skipTest(
-            "JLine terminal required. Verified by AliceCliLauncherDispatchSpec.groovy: "
-            "'dispatch /exec ls -la returns exit 0'"
+            "JLine terminal required. Verified by AliceCliLauncherSpec.groovy: "
+            "'dispatch /exec prints executing raw'"
         )
 
     # ── CapabilityCmd subtypes ──────────────────────────────
@@ -52,22 +59,22 @@ class TestDispatchAllAgentCommands(unittest.TestCase):
     def test_dispatch_03_register_skill(self):
         """RegisterSkillCmd (`/skill load-dataset`) — ⏭ JLine terminal required."""
         self.skipTest(
-            "JLine terminal required. Verified by AliceCliLauncherDispatchSpec.groovy: "
-            "'dispatch /skill:load-dataset emits registering skill'"
+            "JLine terminal required. Verified by AliceCliLauncherSpec.groovy: "
+            "'dispatch /skill prints registering skill'"
         )
 
     def test_dispatch_04_update_rules(self):
         """UpdateRulesCmd (`/rules load-sys-prompts`) — ⏭ JLine terminal required."""
         self.skipTest(
-            "JLine terminal required. Verified by AliceCliLauncherDispatchSpec.groovy: "
-            "'dispatch /rules:load-sys-prompts emits updating rules'"
+            "JLine terminal required. Verified by AliceCliLauncherSpec.groovy: "
+            "'dispatch /rules prints updating rules'"
         )
 
     def test_dispatch_05_reload_kernel(self):
         """ReloadKernelCmd (`/reload`) — ⏭ JLine terminal required."""
         self.skipTest(
-            "JLine terminal required. Verified by AliceCliLauncherDispatchSpec.groovy: "
-            "'dispatch /reload emits reloading kernel'"
+            "JLine terminal required. Verified by AliceCliLauncherSpec.groovy: "
+            "'dispatch /reload prints reloading'"
         )
 
     # ── AlignmentCmd subtypes ───────────────────────────────
@@ -75,8 +82,8 @@ class TestDispatchAllAgentCommands(unittest.TestCase):
     def test_dispatch_06_switch_model(self):
         """SwitchModelCmd (`/model gpt-4o`) — ⏭ JLine terminal required."""
         self.skipTest(
-            "JLine terminal required. Verified by AliceCliLauncherDispatchSpec.groovy: "
-            "'dispatch /model:gpt-4o emits switching model'"
+            "JLine terminal required. Verified by AliceCliLauncherSpec.groovy: "
+            "'dispatch /model prints switching model'"
         )
 
     # ── ControlCmd subtypes ─────────────────────────────────
@@ -84,42 +91,42 @@ class TestDispatchAllAgentCommands(unittest.TestCase):
     def test_dispatch_07_reset_session(self):
         """ResetSessionCmd (`/new`) — ⏭ JLine terminal required."""
         self.skipTest(
-            "JLine terminal required. Verified by AliceCliLauncherDispatchSpec.groovy: "
-            "'dispatch /new emits resetting session'"
+            "JLine terminal required. Verified by AliceCliLauncherSpec.groovy: "
+            "'dispatch /new prints resetting session'"
         )
 
     def test_dispatch_08_feedback(self):
         """FeedbackCmd (`/feedback`) — ⏭ JLine terminal required."""
         self.skipTest(
-            "JLine terminal required. Verified by AliceCliLauncherDispatchSpec.groovy: "
-            "'dispatch /feedback:message emits feedback received'"
+            "JLine terminal required. Verified by AliceCliLauncherSpec.groovy: "
+            "'dispatch /feedback prints feedback message'"
         )
 
     def test_dispatch_09_interrupt(self):
         """InterruptCmd (Ctrl+C) — ⏭ JLine terminal required."""
         self.skipTest(
-            "JLine terminal required. Verified by AliceCliLauncherDispatchSpec.groovy: "
-            "'dispatch /interrupt:cancel emits interrupted'"
+            "JLine terminal required. Verified by AliceCliLauncherSpec.groovy: "
+            "'dispatch /exit prints interrupted'"
         )
 
     def test_dispatch_10_clear_context(self):
         """ClearContextCmd (`/clear`) — ⏭ JLine terminal required."""
         self.skipTest(
-            "JLine terminal required. Verified by AliceCliLauncherDispatchSpec.groovy: "
-            "'dispatch /clear emits context cleared'"
+            "JLine terminal required. Verified by AliceCliLauncherSpec.groovy: "
+            "'dispatch /clear prints context cleared'"
         )
 
     def test_dispatch_11_view_context(self):
         """ViewContextCmd (`/context`) — ⏭ JLine terminal required."""
         self.skipTest(
-            "JLine terminal required. Verified by AliceCliLauncherDispatchSpec.groovy: "
-            "'dispatch /context emits context status'"
+            "JLine terminal required. Verified by AliceCliLauncherSpec.groovy: "
+            "'dispatch /context prints session info'"
         )
 
     def test_dispatch_12_compact_context(self):
         """CompactContextCmd (`/compact`) — ⏭ JLine terminal required."""
         self.skipTest(
-            "JLine terminal required. Verified by AliceCliLauncherDispatchSpec.groovy: "
+            "JLine terminal required. Verified by AliceCliLauncherSpec.groovy: "
             "'dispatch /compact emits context compression submitted'"
         )
 

@@ -131,16 +131,36 @@ class SubAgentManagerSpec extends Specification {
     }
 
     def "getSubAgentResult 对正在运行的子 Agent 应返回 empty"() {
-        given:
+        given: '注入会阻塞的 runner，把子 Agent 钉在 RUNNING（不依赖时序碰运气）'
+        def started = new java.util.concurrent.CountDownLatch(1)
+        def release = new java.util.concurrent.CountDownLatch(1)
+        manager.setRunner({ id, goal, cfg ->
+            started.countDown()
+            release.await(10, java.util.concurrent.TimeUnit.SECONDS)
+            ("done:" + goal) as String
+        } as SubAgentRunner)
+
+        when: 'spawn 后等到 runner 真的开跑'
         def record = manager.spawnSubAgent("test goal", null)
+        assert started.await(10, java.util.concurrent.TimeUnit.SECONDS)
+        def runningResult = manager.getSubAgentResult(record.id())
 
-        when:
-        def result = manager.getSubAgentResult(record.id())
+        then: '运行中必须 empty（删掉 isTerminal 过滤这条会红）'
+        record.status() == SubAgentStatus.RUNNING
+        !runningResult.present
 
-        then:
-        // 立即检查（可能仍在执行中）
-        // 如果我们检查得足够快，它应该还在运行
-        manager.activeCount() >= 0
+        when: '放行并等完成'
+        release.countDown()
+        def deadline = System.currentTimeMillis() + 10_000
+        while (!manager.getSubAgentResult(record.id()).present
+                && System.currentTimeMillis() < deadline) {
+            Thread.sleep(20)
+        }
+        def doneResult = manager.getSubAgentResult(record.id())
+
+        then: '完成后 present（同一条断言不能恒 empty）'
+        doneResult.present
+        doneResult.get().summary().contains("done:test goal")
     }
 
     def "getSubAgentResult 对不存在的 ID 应返回 empty"() {

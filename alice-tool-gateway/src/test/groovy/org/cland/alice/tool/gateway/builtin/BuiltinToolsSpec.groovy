@@ -3,6 +3,10 @@ package org.cland.alice.tool.gateway.builtin
 import spock.lang.IgnoreIf
 import spock.lang.Specification
 import spock.lang.TempDir
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -461,24 +465,90 @@ class BuiltinToolsSpec extends Specification {
         e.message.contains("maxResults must be an integer")
     }
 
-    @IgnoreIf({ true })
-    def "web_search should clamp maxResults to 1-10"() {
-        when:
+    // D9（#666）：原用例 @IgnoreIf({ true }) 永久跳过 + 只断言 noExceptionThrown ⇒ 永不红。
+    // 改为离线单测：注入 stub 发送端口（BuiltinTools.setHttpSenderForTest），断言**真实请求**与 clamp 结果。
+    def "web_search should clamp maxResults to 1-10 (offline)"() {
+        given: 'stub 端口返回 15 条 RelatedTopics'
+        def captured = []
+        def items = (1..15).collect { i -> "{\"Text\":\"r${i}\",\"FirstURL\":\"https://e/${i}\"}" }.join(',')
+        def payload = '{"AbstractText":"abs","RelatedTopics":[' + items + ']}'
+        BuiltinTools.setHttpSenderForTest({ req ->
+            captured << req
+            new FakeResponse(req, payload)
+        } as BuiltinTools.HttpSender)
+
+        when: 'maxResults=999（越界上沿）'
         def result = builtin.webSearch("test", "999")
 
-        then:
-        // 真实网络调用——跳过
-        noExceptionThrown()
-        result != null
+        then: '请求真的发出去了（证明不是“没调用也绿”）'
+        captured.size() == 1
+        captured[0].uri().toString().contains("q=test")
+
+        and: 'clamp 到 10：第 10 条在、第 11 条不在'
+        result.contains("10. r10")
+        !result.contains("11. r11")
+
+        cleanup:
+        BuiltinTools.setHttpSenderForTest(null)
     }
 
-    @IgnoreIf({ true })
-    def "web_search integration should return results from DuckDuckGo"() {
+    def "web_search should clamp maxResults lower bound to 1 (offline)"() {
         given:
-        // 取消 @IgnoreIf 后手动运行
-        def result = builtin.webSearch("java programming language", "3")
+        def captured = []
+        def items = (1..5).collect { i -> "{\"Text\":\"r${i}\",\"FirstURL\":\"https://e/${i}\"}" }.join(',')
+        BuiltinTools.setHttpSenderForTest({ req ->
+            captured << req
+            new FakeResponse(req, '{"RelatedTopics":[' + items + ']}')
+        } as BuiltinTools.HttpSender)
 
-        expect:
-        result != null
+        when: 'maxResults=0（越界下沿）'
+        def result = builtin.webSearch("test", "0")
+
+        then: '至少 1 条（clamp 到 1），不是 0 条'
+        captured.size() == 1
+        result.contains("1. r1")
+
+        cleanup:
+        BuiltinTools.setHttpSenderForTest(null)
+    }
+
+    def "web_search should default maxResults to 5 when omitted (offline)"() {
+        given:
+        def items = (1..8).collect { i -> "{\"Text\":\"r${i}\",\"FirstURL\":\"https://e/${i}\"}" }.join(',')
+        BuiltinTools.setHttpSenderForTest({ req ->
+            new FakeResponse(req, '{"RelatedTopics":[' + items + ']}')
+        } as BuiltinTools.HttpSender)
+
+        when:
+        def result = builtin.webSearch("test", null)
+
+        then: '默认 5 条'
+        result.contains("5. r5")
+        !result.contains("6. r6")
+
+        cleanup:
+        BuiltinTools.setHttpSenderForTest(null)
+    }
+
+    /** 离线 HttpResponse stub（不联网）。 */
+    static class FakeResponse implements HttpResponse<String> {
+        final HttpRequest req
+        final String payload
+        final int status
+
+        FakeResponse(HttpRequest req, String payload, int status = 200) {
+            this.req = req
+            this.payload = payload
+            this.status = status
+        }
+
+        @Override int statusCode() { status }
+        @Override HttpRequest request() { req }
+        @Override Optional<HttpResponse<String>> previousResponse() { Optional.empty() }
+        @Override java.net.http.HttpHeaders headers() { java.net.http.HttpHeaders.of([:], { a, b -> true }) }
+        @Override String body() { payload }
+        @Override Optional<javax.net.ssl.SSLSession> sslSession() { Optional.empty() }
+        @Override URI uri() { req.uri() }
+        @Override HttpClient.Version version() { HttpClient.Version.HTTP_1_1 }
     }
 }
