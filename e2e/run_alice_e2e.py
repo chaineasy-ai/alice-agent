@@ -25,6 +25,9 @@ Environment variables:
     GEMMA4_BASE_URL  (default: http://192.168.1.14:10303/v1)
     GEMMA4_MODEL     (default: gemma-4)
     GEMMA4_TIMEOUT   (default: 180)
+    GEMMA4_E2E_SKIP_IF_DOWN
+                     (default: 未设 = **服务不可达即判红**，因为契约未被验证 ≠ 通过)
+                     设 1 才允许 e2e/gemma4 整类 skip（汇总行会显示 skipped=N）
 
 Exit codes:
     0  全绿（且工作树未被污染）

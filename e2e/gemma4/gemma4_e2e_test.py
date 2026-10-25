@@ -101,19 +101,25 @@ class OpenAICompatibleClient:
 class TestGemma4E2E(unittest.TestCase):
     """End-to-end tests for the Gemma4 model API."""
 
+    #: 服务不可达时是否允许整类跳过。**默认不允许**（#766 复盘 · ledger 负控发现）：
+    #: 旧行为是 `_check_service()` 不可达即 `SkipTest` ⇒ 服务彻底挂掉时汇总行是
+    #: `OK (skipped=1)` —— **绿的**，只有副行提示 skipped。这正是 #766 要消灭的形状，
+    #: 只不过来源从"容忍"换成了"跳过"。**没有观测 ≠ 通过**。
+    #: 需要在不装服务的机器上跑分片时，显式设 `GEMMA4_E2E_SKIP_IF_DOWN=1` 放行。
+    ALLOW_SKIP_WHEN_DOWN = os.environ.get("GEMMA4_E2E_SKIP_IF_DOWN") == "1"
+
     @classmethod
     def setUpClass(cls):
         cls.client = OpenAICompatibleClient(BASE_URL, API_KEY)
-        # Quick health check
-        cls._check_service()
+        cls.service_error = cls._check_service()
 
     @classmethod
     def _check_service(cls):
-        """Verify the API is reachable before running tests."""
+        """探活：返回 None 表示在线，否则返回不可达原因（不再在这里 raise SkipTest）。"""
         try:
             resp = requests.get(f"{BASE_URL.rstrip('/v1')}/health", timeout=5)
             if resp.status_code < 500:
-                return
+                return None
         except requests.RequestException:
             pass
         # Fallback: try a minimal chat to verify
@@ -125,10 +131,22 @@ class TestGemma4E2E(unittest.TestCase):
                 timeout=10,
             )
         except requests.RequestException as e:
-            raise unittest.SkipTest(
-                f"Gemma4 API at {BASE_URL} is not reachable: {e}\n"
-                "Skipping E2E tests. Start the service first."
-            ) from e
+            return f"{type(e).__name__}: {e}"
+        return None
+
+    def setUp(self):
+        """服务不可达 ⇒ 默认**判红**（契约未被验证），除非显式放行跳过。"""
+        err = getattr(type(self), "service_error", None)
+        if not err:
+            return
+        msg = (
+            f"Gemma4 API at {BASE_URL} 不可达（{err}）—— 契约**未被验证**，"
+            "这不是通过。启动服务后重跑；若确需在没有服务的环境跑分片，"
+            "设 GEMMA4_E2E_SKIP_IF_DOWN=1（会在汇总行留下 skipped=N）。"
+        )
+        if self.ALLOW_SKIP_WHEN_DOWN:
+            self.skipTest(f"[显式放行 GEMMA4_E2E_SKIP_IF_DOWN=1] {msg}")
+        self.fail(msg)
 
     # ── Basic Tests ────────────────────────────────────────────────────────
 
