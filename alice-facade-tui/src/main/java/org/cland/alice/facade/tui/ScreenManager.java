@@ -682,6 +682,17 @@ public class ScreenManager implements AutoCloseable {
     return this;
   }
 
+  /**
+   * 设置命令层使用的会话 ID（#752）。
+   *
+   * <p>不设置时 {@link CommandHandler} 会自己生成一个 snowflake —— 那会与 Agent/WAL 的会话 id 不一致， 于是
+   * `/context`、`/new` 里的 session 指到别的会话。装配方（TUI launcher）必须把**同一个** id 传进来。
+   */
+  public ScreenManager sessionId(String sessionId) {
+    this.commandHandler.sessionId(sessionId);
+    return this;
+  }
+
   public ScreenManager onAgentCommand(Consumer<AgentCommand> callback) {
     this.commandHandler.onAgentCommand(callback);
     return this;

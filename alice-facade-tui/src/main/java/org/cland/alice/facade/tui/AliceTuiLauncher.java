@@ -74,17 +74,19 @@ public class AliceTuiLauncher implements AutoCloseable {
   }
 
   public AliceTuiLauncher(AgentConfig config) throws IOException {
-    this.sessionId = SnowflakeIdGenerator.generateSessionId();
+    // #752：**只有一个会话 id** —— 先建 Agent（它自己生成 sessionId），launcher 直接采用。
+    // 原来 launcher 另生成一个 snowflake，导致 WAL 目录、启动横幅、CommandHandler 里的 session
+    // 与 Agent 侧的 session 不是同一个 ⇒ /new 回显里给的 resume id 会指到不存在的历史。
+    Agent agent = Agent.createDefault(config);
+    this.sessionId = agent.sessionId();
 
-    // 1. 创建完全初始化的 Agent（通过 Agent 工厂方法，无需直接依赖子模块）
+    // 1. 按 Agent 的会话 id 建 WAL（同一份历史，不出现第二份目录）
     WalSession wal =
         new WalSession(
             new FileWalStore(
                 java.nio.file.Paths.get(
                     System.getProperty("user.home"), ".alice", "wal", sessionId)));
-    // 创建 Agent
-    Agent agent =
-        Agent.createDefault(config).withWal(wal).withGuardrail(new GuardrailVerificatorAdapter());
+    agent.withWal(wal).withGuardrail(new GuardrailVerificatorAdapter());
     // 启动横幅（七块）——走 stderr，避免与 TUI 画面/协议输出混淆 ✓
     StartupBanner.print(
         System.err, StartupBanner.collect(agent, sessionId, java.util.List.of("inprocess")));
@@ -122,7 +124,7 @@ public class AliceTuiLauncher implements AutoCloseable {
     this.eventBridge = new EventBridge();
 
     // 3. 创建 ScreenManager（基于 JLine 3）
-    this.screenManager = new ScreenManager(eventBridge);
+    this.screenManager = new ScreenManager(eventBridge).sessionId(sessionId); // #752：命令层复用同一 id
     this.running = true;
 
     // 3a. 创建 TUI Agent 事件监听器
@@ -137,10 +139,10 @@ public class AliceTuiLauncher implements AutoCloseable {
 
   /** 使用外部 Agent 实例构造 */
   public AliceTuiLauncher(Agent agent) throws IOException {
-    this.sessionId = SnowflakeIdGenerator.generateSessionId();
     this.agent = agent;
+    this.sessionId = agent.sessionId(); // #752：与 Agent 共用同一个 id
     this.eventBridge = new EventBridge();
-    this.screenManager = new ScreenManager(eventBridge);
+    this.screenManager = new ScreenManager(eventBridge).sessionId(sessionId); // #752
     this.running = true;
     this.tuiListener = new TuiAgentListener(eventBridge);
     setupCallbacks();

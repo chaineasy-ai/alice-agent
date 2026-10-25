@@ -515,7 +515,8 @@ public class CommandHandler {
 
   // ========== 辅助 ==========
 
-  private String sessionId() {
+  /** 当前会话 ID（#752：公开给装配核查，防止命令层与 Agent/WAL 用不同 id）。 */
+  public String sessionId() {
     return sessionId;
   }
 

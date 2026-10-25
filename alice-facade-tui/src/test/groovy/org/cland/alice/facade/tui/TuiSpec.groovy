@@ -532,6 +532,68 @@ class TuiSpec extends Specification {
         chat.any { it.contains("未启用短期记忆") }
     }
 
+    // ========== #752：全链路只有一个会话 id（resume 指引必须指向真实历史）==========
+
+    def "#752 launcher / agent / 命令层用同一个会话 id（三个 id 必须相等，否则 resume 指引指到不存在的历史）"() {
+        given:
+        def sid = "sess-752-single"
+        def agent = new org.cland.alice.core.agent.Agent("tui-752", sid,
+            org.cland.alice.core.agent.AgentConfig.defaults())
+        def launcher = new AliceTuiLauncher(agent)
+
+        expect: "装配后三条链路共用一个 id（launcher 不再自造、命令层不再自造）"
+        launcherSessionIdOf(launcher) == sid
+        handlerSessionIdOf(launcher) == sid
+        launcherAgentId(launcher) == sid
+    }
+
+    def "#752 /context 显示的会话 id 就是 Agent 的 id（用户照抄它能 resume 到真历史）"() {
+        given:
+        def sid = "sess-752-context"
+        def agent = new org.cland.alice.core.agent.Agent("tui-752c", sid,
+            org.cland.alice.core.agent.AgentConfig.defaults())
+        def launcher = new AliceTuiLauncher(agent)
+        def chat = captureChat(launcher)
+
+        when:
+        handlerOf(launcher).execute(SlashCommand.parse("/context"))
+
+        then: "命令层用的是 Agent 的 id（否则显示的是另一个会话的上下文）"
+        chat.any { it.contains("sess-752-context") }
+        chat.every { !(it.contains("会话 ID |") && !it.contains("sess-752-context")) }
+    }
+
+    def "#752 配置构造（无外部 Agent）：launcher 与命令层都采用 Agent 生成的 id"() {
+        when:
+        def launcher = new AliceTuiLauncher(org.cland.alice.core.agent.AgentConfig.defaults())
+        def agentId = launcherAgentId(launcher)
+
+        then:
+        agentId != null && !agentId.isEmpty()
+        launcherSessionIdOf(launcher) == agentId
+        handlerSessionIdOf(launcher) == agentId
+    }
+
+    /** 取 launcher 内部 Agent 的会话 id。 */
+    private static String launcherAgentId(AliceTuiLauncher launcher) {
+        def f = AliceTuiLauncher.getDeclaredField("agent")
+        f.setAccessible(true)
+        return ((org.cland.alice.core.agent.Agent) f.get(launcher)).sessionId()
+    }
+
+    /** 取 launcher 自己持有的会话 id（装配核查用）。 */
+    private static String launcherSessionIdOf(AliceTuiLauncher launcher) {
+        def f = AliceTuiLauncher.getDeclaredField("sessionId")
+        f.setAccessible(true)
+        return (String) f.get(launcher)
+    }
+
+    /** 取命令层（CommandHandler）实际使用的会话 id。 */
+    private static String handlerSessionIdOf(AliceTuiLauncher launcher) {
+        def h = handlerOf(launcher)
+        return (String) h.sessionId()
+    }
+
     // ========== #751：短期记忆端口的现状契约（决议前护栏）==========
 
     def "#751 默认装配不含短期记忆（事实契约）：createDefault() 不挂 AgentSession"() {
