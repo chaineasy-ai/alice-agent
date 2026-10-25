@@ -152,7 +152,12 @@ def build_cli_command(args: list[str], module: str = ':alice-facade-cli:run') ->
         return [GRADLEW, module, "--args", args_str]
 
 
-def run_cli(args: list[str], timeout: int = 60, module: str = ':alice-facade-cli:run') -> subprocess.CompletedProcess:
+def run_cli(
+    args: list[str],
+    timeout: int = 60,
+    module: str = ':alice-facade-cli:run',
+    rerun: bool = False,
+) -> subprocess.CompletedProcess:
     """Run the Alice Agent CLI via Gradle and return the result.
 
     Args:
@@ -160,8 +165,14 @@ def run_cli(args: list[str], timeout: int = 60, module: str = ':alice-facade-cli
         timeout: Timeout in seconds
         module: Gradle task to run (default: :alice-facade-cli:run for direct CLI;
                 use ':alice-bootstrap:run' for SPI-based facade selection)
+        rerun: Force ``--rerun-tasks``. Gradle 把 ``:alice-bootstrap:run`` 当作
+            可缓存任务：**相同 args 重复调用会 UP-TO-DATE 而根本不执行程序**
+            （stdout 只有任务清单、无横幅/无结果面）。断言输出内容的用例必须
+            传 ``rerun=True``，否则拿到的不是本次运行的真实输出（#415 新增）。
     """
     cmd = build_cli_command(args, module=module)
+    if rerun:
+        cmd.append("--rerun-tasks")
     args_preview = " ".join(cmd[3:]) if len(cmd) > 3 else "(none)"
     print(f"  ⚙️  CLI: ./gradlew {module} --args {args_preview[:80]}")
     result = subprocess.run(
