@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gemma4 服务端「契约探针」—— 只读、可复现，用来回答「这 3 个红该谁负责」(#765)。
+"""Gemma4 服务端「契约探针」—— 只读、可复现，用来核对服务侧契约（#765 → #766）。
 
 背景：#765 里的 3 个预存红不是被测产品的问题，而是**用例对 gemma4 服务侧的假设**
 与**服务侧实际实现**不一致。判定归属需要三件东西（缺一不可）：
@@ -52,7 +52,7 @@ def _get(path: str):
 
 
 def probe_models():
-    """A. GET /v1/models —— `cland-llm-text` 文档明说未实现（404），此处取证。"""
+    """A. GET /v1/models —— 现状：未实现（404），客户端据 `cland-llm-text` §8 不要用它探活。"""
     status, body = _get("/models")
     print(f"[A] GET /v1/models -> {status}  {body[:120]}")
     return {"probe": "/v1/models", "status": status}
@@ -120,9 +120,18 @@ def main() -> int:
     print("-" * 66)
     results = [probe_models(), probe_invalid_model(), probe_stream_chunks()]
     print("-" * 66)
-    print("结论（对照 #765 的两个红，契约归属见工单）：")
-    print("  · 服务是单模型 FastAPI/uvicorn 垫片（`gemma4.py`），`model` 字段被忽略、chunk 无 `id`")
-    print("  · 客户端侧的强校验已存在：alice run --model <未知> ⇒ No supplier found（另有负控用例）")
+    # 结论按**实测**生成，不写死（服务侧可能随时补契约；写死等于造滞后真源）
+    invalid = next(r for r in results if r["probe"] == "invalid_model")
+    stream = next(r for r in results if r["probe"] == "stream")
+    print("判据（契约真源：`cland-llm-text` SKILL §8「HERE BE NOT · 单模型垫片」/ #766）：")
+    ok_model = invalid.get("status") in (400, 404)
+    print(f"  · 未知 model ⇒ 4xx：{invalid.get('status')} "
+          f"{'✅ 符合契约（404 model_not_found）' if ok_model else '❌ 不符合：服务静默忽略 model（单模型垫片旧行为）'}")
+    ok_stream = bool(stream.get("has_id"))
+    print(f"  · SSE chunk 带 id/object/created：{'✅' if ok_stream else '❌ 缺字段（旧行为）'} "
+          f"keys={stream.get('chunk_keys')}")
+    print("  · 客户端侧强校验独立存在：`alice run --model <未知>` ⇒ No supplier found"
+          "（e2e 负控 test_model_flag_reaches_model_resolution）")
     out = os.environ.get("GEMMA4_PROBE_JSON")
     if out:
         with open(out, "w", encoding="utf-8") as fh:

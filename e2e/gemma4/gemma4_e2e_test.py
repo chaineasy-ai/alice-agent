@@ -180,7 +180,12 @@ class TestGemma4E2E(unittest.TestCase):
     # ── Streaming Tests ────────────────────────────────────────────────────
 
     def test_streaming_chat(self):
-        """Verify streaming responses yield multiple chunks with content."""
+        """流式每帧必须是规范 chunk（#766 契约）：有 id / object=chat.completion.chunk / 同一 id 恒定。
+
+        改前：垫片只发 `{"choices":…}`（无 id/object/created），用例 `assertIn("id")` 红。
+        改后：每帧带 `id`/`object`/`created`/`model`，且**同一请求所有帧共享一个 id**
+        （工具调用帧、stop 帧、usage 尾包全覆盖）。
+        """
         chunks = []
         for chunk in self.client.chat_completions_stream(
             model=MODEL,
@@ -192,11 +197,18 @@ class TestGemma4E2E(unittest.TestCase):
 
         self.assertGreater(len(chunks), 0, "Should receive at least one streaming chunk")
 
-        # Verify the structure of the first chunk
+        # 每个 delta 帧的规范形状
         first = chunks[0]
         self.assertIn("choices", first)
-        self.assertIn("id", first)
-        self.assertIn("object", first)
+        self.assertIn("id", first, "SSE chunk 必须带 id（OpenAI chat.completion.chunk）")
+        self.assertEqual(first.get("object"), "chat.completion.chunk",
+                         f"object 必须是 chat.completion.chunk，实际 {first.get('object')!r}")
+        self.assertIn("created", first)
+        self.assertIn("model", first)
+
+        # 同一请求的所有帧共享一个 id（帧间 id 漂移 = 客户端无法拼接同一次补全）
+        ids = {c.get("id") for c in chunks if c.get("id")}
+        self.assertEqual(len(ids), 1, f"同一请求的所有帧必须共享一个 id，实际看到 {ids}")
 
         # Extract full content
         full_content = ""
@@ -296,32 +308,53 @@ class TestGemma4E2E(unittest.TestCase):
         print(f"  ↳ Error detail: {detail}")
 
     def test_invalid_model_returns_error(self):
-        """Verify that an invalid model ID is handled gracefully.
+        """未知 model ⇒ HTTP 404 + code=model_not_found（契约：#766 · cland-llm f5d38e7）。
 
-        Note: The Gemma4 server may hang on invalid models instead of
-        immediately rejecting. We test that the request either:
-        - Raises an HTTP error, or
-        - Raises a connection/read timeout
+        改前：单模型垫片**静默忽略** `model`，任何 id 都 200 ⇒ 用例只能退化成"有错就行"，
+        甚至把超时/连接错误也当通过 —— 那不是宽容，是**假容忍**（服务坏了也算绿）。
+        改后契约（`cland-llm-text` SKILL §8「HERE BE NOT · 单模型垫片」）：
+          · 别名表命中（gemma-4 / gemma4 / gemma-4-26b-a4b / gguf 名）⇒ 放行
+          · 未知 ⇒ **404**，错误体 `code=model_not_found`、`param=model`
+        超时/连接错误**不算通过**（说明服务坏，不是契约满足）。
         """
         import requests.exceptions as req_exc
 
-        try:
+        with self.assertRaises(req_exc.HTTPError) as ctx:
             self.client.chat_completions(
                 model="non-existent-model-xyz",
                 messages=[{"role": "user", "content": "hi"}],
                 max_tokens=10,
-                timeout=10,  # short timeout for this test
+                timeout=20,
             )
-            # If it somehow succeeds, that's unexpected
-            self.fail("Expected an error for invalid model")
-        except req_exc.HTTPError as e:
-            status = e.response.status_code
-            self.assertGreaterEqual(status, 400)
-            print(f"\n  ↳ Invalid model correctly rejected with HTTP {status}")
-        except req_exc.Timeout:
-            print("\n  ↳ Invalid model: server timed out (expected behavior for Gemma4)")
-        except req_exc.ConnectionError:
-            print("\n  ↳ Invalid model: connection error (server may have crashed)")
+        resp = ctx.exception.response
+        self.assertEqual(resp.status_code, 404, f"未知 model 必须 404，实际 {resp.status_code}: {resp.text[:200]}")
+        try:
+            body = resp.json()
+        except Exception:  # noqa: BLE001 - 兜底：至少状态码对
+            body = {}
+        self.assertEqual(body.get("error", {}).get("code"), "model_not_found",
+                         f"错误体应带 code=model_not_found: {resp.text[:200]}")
+        self.assertIn("gemma", resp.text.lower(), "错误体应说明服务只服务哪一个模型")
+        print(f"\n  ↳ Invalid model correctly rejected: HTTP 404 model_not_found")
+
+    def test_model_aliases_accepted(self):
+        """别名表命中即放行（#766 契约的另一半）：legacy id / 裸名都必须 200。
+
+        这条是上一条的**正控** —— 否则"404"可以靠"什么都拒"来满足。
+        """
+        for alias in ("gemma-4", "gemma4", "gemma-4-26b-a4b"):
+            with self.subTest(alias=alias):
+                resp = self.client.chat_completions(
+                    model=alias,
+                    messages=[{"role": "user", "content": "Say OK in one word."}],
+                    max_tokens=5,
+                    timeout=60,
+                )
+                self.assertIn("choices", resp)
+                # 非流式响应回写**规范 id**（改前是 gguf 绝对路径，客户端无法据此判断）
+                served = resp.get("model", "")
+                self.assertFalse(served.endswith(".gguf"), f"model 应回写规范 id 而非 gguf 路径：{served}")
+                print(f"\n  ↳ alias {alias!r} accepted, served model={served!r}")
 
     # ── Performance Tests ──────────────────────────────────────────────────
 
