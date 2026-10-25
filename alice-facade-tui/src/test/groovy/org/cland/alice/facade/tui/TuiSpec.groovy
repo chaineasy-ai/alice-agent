@@ -467,6 +467,49 @@ class TuiSpec extends Specification {
         chat.isEmpty()
     }
 
+    // ========== #748 TUI 批：/new 与 /model 不得在分发前预声明成功 ==========
+
+    /** 取 launcher 里的 CommandHandler（用户敲 `/` 命令的真实入口）。 */
+    private static Object handlerOf(AliceTuiLauncher launcher) {
+        def smField = AliceTuiLauncher.getDeclaredField("screenManager")
+        smField.setAccessible(true)
+        def sm = smField.get(launcher)
+        def chField = sm.class.getDeclaredField("commandHandler")
+        chField.setAccessible(true)
+        return chField.get(sm)
+    }
+
+    def "全链路 /new：不再分发前宣称已重置；结论由执行方按真实结果给出"() {
+        given:
+        def agent = new org.cland.alice.core.agent.Agent(org.cland.alice.core.agent.AgentConfig.defaults())
+        def launcher = new AliceTuiLauncher(agent)
+        def chat = captureChat(launcher)
+
+        when:
+        def handler = handlerOf(launcher)
+        handler.execute(SlashCommand.parse("/new"))
+
+        then: "重置类消息只能有一条（原来会打两条：CommandHandler 预声明 + handleReset），且不得自相矛盾"
+        def resetMsgs = chat.findAll { it.contains("会话已重置") || it.contains("会话重置未生效") }
+        resetMsgs.size() == 1
+    }
+
+    def "全链路 /model 未生效：不得在分发前宣称切换（两句打脸）"() {
+        given:
+        def agent = new org.cland.alice.core.agent.Agent(org.cland.alice.core.agent.AgentConfig.defaults())
+        def launcher = new AliceTuiLauncher(agent)
+        def chat = captureChat(launcher)
+        def target = agent.currentModelId() + "-not-registered"
+
+        when:
+        def handler = handlerOf(launcher)
+        handler.execute(SlashCommand.parse("/model " + target))
+
+        then: "不许出现预声明；必须出现未生效"
+        chat.every { !it.contains("切换模型至") }
+        chat.any { it.contains("未生效") && it.contains(target) }
+    }
+
     // ========== TuiEvent 测试 ==========
 
     def "TuiEvent StartThinking has correct prompt"() {

@@ -124,10 +124,10 @@ public class CommandHandler {
   /** 处理内部命令 */
   private boolean handleInternal(SlashCommand cmd) {
     if (cmd.is("/new")) {
-      // 转化为 AgentCommand 并派发
+      // #748：这里原在分发**之前**就发「会话已重置」—— 而 ResetSessionCmd 当时什么都没做。
+      // 现在不预声明：结论由真正执行方（AliceTuiLauncher.handleReset）如实回显。
       AgentCommand ac = cmd.toAgentCommand(sessionId(), traceId());
       dispatchToAgent(ac);
-      eventBridge.onChatMessage("System", "会话已重置");
       if (onReset != null) {
         onReset.accept(cmd.args());
       }
@@ -299,7 +299,8 @@ public class CommandHandler {
       }
 
       String modelId = cmd.args();
-      eventBridge.onChatMessage("System", "切换模型至: " + modelId);
+      // #748：分发前不再宣称「切换模型至」—— 结果由 handleModelSwitch 按真实生效值回显
+      // （否则未生效时会出现「切换模型至 x」紧跟「模型切换未生效」两句互相打脸）。
 
       // 转化为 SwitchModelCmd 并派发
       AgentCommand ac = cmd.toAgentCommand(sessionId(), traceId());
