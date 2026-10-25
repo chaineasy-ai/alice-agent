@@ -64,6 +64,9 @@ public class AliceTuiLauncher implements AutoCloseable {
   /** 当前会话 ID */
   private final String sessionId;
 
+  /** 命令层实际使用的会话 id（装配自检的产物；#752：启动即验证，不等用户敲命令）。 */
+  private final String commandSessionId;
+
   /** TUI Agent 事件监听器（用于新 trace 通知） */
   private final TuiAgentListener tuiListener;
 
@@ -125,6 +128,8 @@ public class AliceTuiLauncher implements AutoCloseable {
 
     // 3. 创建 ScreenManager（基于 JLine 3）
     this.screenManager = new ScreenManager(eventBridge).sessionId(sessionId); // #752：命令层复用同一 id
+    // #752：装配完成后**立刻**自检一次 —— 装配遗漏在启动阶段就炸，不等"第一次使用"
+    this.commandSessionId = this.screenManager.wiringSelfCheck();
     this.running = true;
 
     // 3a. 创建 TUI Agent 事件监听器
@@ -143,10 +148,16 @@ public class AliceTuiLauncher implements AutoCloseable {
     this.sessionId = agent.sessionId(); // #752：与 Agent 共用同一个 id
     this.eventBridge = new EventBridge();
     this.screenManager = new ScreenManager(eventBridge).sessionId(sessionId); // #752
+    this.commandSessionId = this.screenManager.wiringSelfCheck(); // #752：启动即自检
     this.running = true;
     this.tuiListener = new TuiAgentListener(eventBridge);
     setupCallbacks();
     this.screenManager.layout().footer().setModel(agent.config().defaultModelId());
+  }
+
+  /** 命令层实际使用的会话 id（启动自检时取得；用于一致性断言与排障）。 */
+  public String commandSessionId() {
+    return commandSessionId;
   }
 
   // ========== 设置回调 ==========

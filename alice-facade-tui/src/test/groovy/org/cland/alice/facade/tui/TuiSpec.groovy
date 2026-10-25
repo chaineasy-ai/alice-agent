@@ -589,6 +589,42 @@ class TuiSpec extends Specification {
         e.message.contains("sessionId 未注入")
     }
 
+    def "#752 启动自检：装配遗漏 ⇒ **启动时**就抛（不等用户敲命令）"() {
+        given: "只装配、不注入（模拟 ScreenManager 装配遗漏）"
+        def bridge = new org.cland.alice.facade.tui.bridge.EventBridge()
+        def sm = new org.cland.alice.facade.tui.ScreenManager(bridge)
+
+        when: "启动阶段的那一次自检"
+        sm.wiringSelfCheck()
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains("sessionId 未注入")
+        !sm.wiringChecked()
+    }
+
+    def "#752 启动自检：正常装配 ⇒ 启动无感（不抛），且自检确实执行过"() {
+        given:
+        def agent = new org.cland.alice.core.agent.Agent("tui-752-wire", "sess-752-wire",
+            org.cland.alice.core.agent.AgentConfig.defaults())
+
+        when:
+        def launcher = new AliceTuiLauncher(agent)
+
+        then: "启动不抛（无感），且命令层 id 与 Agent 一致"
+        launcher.commandSessionId() == "sess-752-wire"
+
+        and: "自检真的跑过 —— 否则「自检被删掉」这件事永远不可见"
+        screenManagerOf(launcher).wiringChecked()
+    }
+
+    /** 取 launcher 内部 ScreenManager（装配核查用）。 */
+    private static Object screenManagerOf(AliceTuiLauncher launcher) {
+        def f = AliceTuiLauncher.getDeclaredField("screenManager")
+        f.setAccessible(true)
+        return f.get(launcher)
+    }
+
     def "#752 配置构造（无外部 Agent）：launcher 与命令层都采用 Agent 生成的 id"() {
         when:
         def launcher = new AliceTuiLauncher(org.cland.alice.core.agent.AgentConfig.defaults())
