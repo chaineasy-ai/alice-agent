@@ -374,7 +374,12 @@ public class AliceTuiLauncher implements AutoCloseable {
     } catch (Exception e) {
       logger.warn("Agent clearMemory not fully implemented, clearing UI only", e);
     }
-    eventBridge.onChatMessage("System", "上下文已清除");
+    // #748（并入 #753）：本分支在 TUI 里**没有调用者**（用户 `/clear` 走 CommandHandler 只清屏）；
+    // 且生产装配 memory()==null ⇒ clearMemory() 是 no-op。无条件发「上下文已清除」是没有调用者撑着的谎言。
+    eventBridge.onChatMessage(
+        "System",
+        "[not wired] ClearContextCmd（/clear 清上下文）未接线：本入口无调用者（TUI 的 /clear 只清屏）。"
+            + "承诺：只清当前上下文、不删 WAL 历史（可 resume <id> 恢复）");
     screenManager.layout().messageArea().clear();
     screenManager.markContentDirty();
     if (screenManager.state().isRunning()) {

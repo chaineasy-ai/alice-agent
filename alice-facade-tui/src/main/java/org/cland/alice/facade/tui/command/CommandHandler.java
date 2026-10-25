@@ -158,7 +158,8 @@ public class CommandHandler {
       if (onClear != null) {
         onClear.run();
       }
-      eventBridge.onChatMessage("System", "屏幕已清空");
+      // #748：`/clear` 在 TUI 里**只清屏**，不碰上下文。原话术「屏幕已清空」会被读成"上下文也清了"。
+      eventBridge.onChatMessage("System", "屏幕已清空（上下文未清 —— /clear 只清屏，不删 WAL 历史）");
       return true;
     }
 

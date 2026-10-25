@@ -227,6 +227,17 @@ class TuiSpec extends Specification {
         return captured
     }
 
+    /** 直接捕获某个 EventBridge 发出的 ChatMessage（CommandHandler 用例没有 launcher）。 */
+    private static List<String> captureChatOf(EventBridge bridge) {
+        def captured = []
+        bridge.addListener { ev ->
+            if (ev instanceof TuiEvent.ChatMessage) {
+                captured << (((TuiEvent.ChatMessage) ev).sender() + "|" + ((TuiEvent.ChatMessage) ev).content())
+            }
+        }
+        return captured
+    }
+
     /** 读 launcher 内部 screenManager 的 footer 模型名（WhiteBox，仅测试用）。 */
     private static String footerModelOf(AliceTuiLauncher launcher) {
         def f = AliceTuiLauncher.getDeclaredField("screenManager")
@@ -279,6 +290,7 @@ class TuiSpec extends Specification {
     def "CommandHandler dispatches /clear internally (no AgentCommand)"() {
         given: "a CommandHandler with callbacks"
         def bridge = new EventBridge()
+        def msgs = captureChatOf(bridge)   // 监听必须在 execute 之前挂上，否则捕获为空（本用例第一版就踩了这个）
         def handler = new CommandHandler(bridge).sessionId("sess-01")
         def clearCalled = false
         handler.onClear({ clearCalled = true })
@@ -292,6 +304,10 @@ class TuiSpec extends Specification {
         then: "command is handled and onClear is called, no AgentCommand dispatch"
         handled
         clearCalled
+
+        and: "/clear 只清屏 —— 话术必须点明「上下文未清」，不得让人读成上下文也被清了（#748）"
+        msgs.any { it.contains("屏幕已清空") }
+        msgs.any { it.contains("上下文未清") }
     }
 
     def "CommandHandler dispatches /model to onAgentCommand"() {
@@ -348,8 +364,12 @@ class TuiSpec extends Specification {
         when:
         launcher.dispatchAgentCommand(new ControlCmd.ClearContextCmd("sess-01", "trace-abc"))
 
-        then: "走的是 handleClearContext（该分支独有的一条 ChatMessage）"
-        chat.any { it.contains("上下文已清除") }
+        then: "不许宣称上下文已清除（该分支无调用者、memory 装配为 null ⇒ clearMemory 是 no-op）"
+        !chat.any { it.contains("上下文已清除") }
+
+        and: "必须如实说明接线状态与承诺边界（#748 并入 #753 的口径：断言承诺一致，不钉文本）"
+        chat.any { it.contains("not wired") }
+        chat.any { it.contains("不删 WAL 历史") }
     }
 
     def "AliceTuiLauncher dispatchAgentCommand routes ViewContextCmd to 看上下文分支"() {
