@@ -618,6 +618,63 @@ class TuiSpec extends Specification {
         screenManagerOf(launcher).wiringChecked()
     }
 
+    def "#752 resume 真读回：把文案里那个 id 照抄去 resume，能读到真历史（行为断言，不是路径拼接巧合）"() {
+        given: "历史真的落在 Agent 的会话 id 下（这才是落盘方）"
+        def agent = new org.cland.alice.core.agent.Agent("tui-752-readback", "sess-752-readback",
+            org.cland.alice.core.agent.AgentConfig.defaults())
+        def launcher = new AliceTuiLauncher(agent)
+        def landingId = launcherAgentId(launcher)
+
+        and: "WAL 里有一条该会话的历史"
+        def store = new org.cland.alice.core.agent.wal.InMemoryWalStore()
+        new org.cland.alice.core.agent.wal.WalSession(store).user(landingId, "历史里的一句话")
+
+        and: "用户从提示里**照抄**到的 id（/new 的 resume 指引原文）"
+        def chat = captureChat(launcher)
+        handlerOf(launcher).execute(SlashCommand.parse("/new"))
+        def hint = chat.find { it.contains("alice resume --session-id") }
+        def copiedId = (hint =~ /alice resume --session-id\s+(\S+)/).with { it.find() ? it.group(1) : null }
+
+        expect: "指引里必须有 id（否则这条断言无从谈起）"
+        copiedId != null
+
+        and: "**照抄这个 id 能读到那份历史** —— 否则指引会把用户指到不存在的会话"
+        store.messageCount(copiedId) == 1
+        store.getAllMessages(copiedId).get(0).content() == "历史里的一句话"
+
+        and: "且它就是 Agent 真正落盘用的 id（不是 launcher 自造的另一个）"
+        copiedId == landingId
+    }
+
+    def "#752 resume 真读回（磁盘形态）：照抄 id 能读回 <id>.wal.jsonl，重启后仍能读"() {
+        given: "真磁盘 WAL（与生产同构：<dataDir>/<sessionId>.wal.jsonl）"
+        def dir = java.nio.file.Files.createTempDirectory("alice-752-wal")
+        def store = new org.cland.alice.core.agent.wal.FileWalStore(dir)
+        def agent = new org.cland.alice.core.agent.Agent("tui-752-disk", "sess-752-disk",
+            org.cland.alice.core.agent.AgentConfig.defaults())
+        def launcher = new AliceTuiLauncher(agent)
+        def landingId = launcherAgentId(launcher)
+        new org.cland.alice.core.agent.wal.WalSession(store).user(landingId, "磁盘上的一句话")
+
+        and: "从 /new 提示里照抄 id（用户唯一可见的入口）"
+        def chat = captureChat(launcher)
+        handlerOf(launcher).execute(SlashCommand.parse("/new"))
+        def hint = chat.find { it.contains("alice resume --session-id") }
+        def copiedId = (hint =~ /alice resume --session-id\s+(\S+)/).with { it.find() ? it.group(1) : null }
+
+        expect: "照抄的 id 就是磁盘文件名（这就是 resume 的寻址键）"
+        copiedId == landingId
+        java.nio.file.Files.exists(dir.resolve(copiedId + ".wal.jsonl"))
+
+        and: "重启后（新建 store 指向同一目录）仍能按这个 id 读回 —— 这正是 resume 干的活"
+        def reopened = new org.cland.alice.core.agent.wal.FileWalStore(dir)
+        reopened.messageCount(copiedId) == 1
+        reopened.getAllMessages(copiedId).get(0).content() == "磁盘上的一句话"
+
+        cleanup:
+        dir.toFile().deleteDir()
+    }
+
     /** 取 launcher 内部 ScreenManager（装配核查用）。 */
     private static Object screenManagerOf(AliceTuiLauncher launcher) {
         def f = AliceTuiLauncher.getDeclaredField("screenManager")
