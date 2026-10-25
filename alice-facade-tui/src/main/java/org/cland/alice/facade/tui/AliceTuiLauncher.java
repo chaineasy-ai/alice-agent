@@ -379,7 +379,7 @@ public class AliceTuiLauncher implements AutoCloseable {
     eventBridge.onChatMessage(
         "System",
         "[not wired] ClearContextCmd（/clear 清上下文）未接线：本入口无调用者（TUI 的 /clear 只清屏）。"
-            + "承诺：只清当前上下文、不删 WAL 历史（可 resume <id> 恢复）");
+            + "清上下文**未实现**（本入口即使被调用也是 no-op，见 #751）；不删 WAL 历史（可 resume <id> 恢复）");
     screenManager.layout().messageArea().clear();
     screenManager.markContentDirty();
     if (screenManager.state().isRunning()) {

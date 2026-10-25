@@ -370,6 +370,10 @@ class TuiSpec extends Specification {
         and: "必须如实说明接线状态与承诺边界（#748 并入 #753 的口径：断言承诺一致，不钉文本）"
         chat.any { it.contains("not wired") }
         chat.any { it.contains("不删 WAL 历史") }
+
+        and: "不许把「只清当前上下文」当承诺——该能力在任何入口都不存在（memory-policy.md §4/#751）"
+        chat.every { !it.contains("承诺：只清当前上下文") }
+        chat.any { it.contains("未实现") || it.contains("no-op") }
     }
 
     def "AliceTuiLauncher dispatchAgentCommand routes ViewContextCmd to 看上下文分支"() {
