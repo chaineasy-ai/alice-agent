@@ -117,6 +117,26 @@ class AliceCliNotWiredSpec extends Specification {
         }
     }
 
+    def "未接线的 ExecutionCmd 不得先制造正在做事的印象（#748 行为形态扫描补漏）"() {
+        given: "交互式会话的渲染入口（此前会先打「Agent 思考中…」再交给分发器）"
+        def session = new org.cland.alice.facade.cli.chat.JLineChatSession()
+        def dispatch = session.class.getDeclaredMethod("dispatchAndRender", AgentCommand)
+        dispatch.setAccessible(true)
+
+        when:
+        def out = captureOut {
+            dispatch.invoke(session, new ExecutionCmd.AcquireGoalCmd("写一个冒泡排序", SESSION, TRACE))
+        }
+
+        then: "只有一条诚实回显：不许出现思考中这类进度假信号，也不许出现动作语气"
+        out.contains("[not wired]")
+        !out.contains("思考中")
+        ACTION_WORDS.every { !out.contains(it) }
+
+        cleanup:
+        session.close()
+    }
+
     def "对照组：SwitchModelCmd 是真做，必须有副作用（否则改话会退化成全都标未接线）"() {
         given:
         def provider = ModelProvider.getInstance()
