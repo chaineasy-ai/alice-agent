@@ -563,6 +563,32 @@ class TuiSpec extends Specification {
         chat.every { !(it.contains("会话 ID |") && !it.contains("sess-752-context")) }
     }
 
+    def "#752 命令层 fail-fast：未注入 sessionId ⇒ 执行命令立刻抛错且说清「sessionId 未注入」"() {
+        given: "只构造、不注入（模拟装配遗漏）"
+        def bridge = new org.cland.alice.facade.tui.bridge.EventBridge()
+        def handler = new org.cland.alice.facade.tui.command.CommandHandler(bridge)
+
+        when:
+        handler.execute(SlashCommand.parse("/context"))
+
+        then: "不许静默退回自造 id；报错信息必须点明原因"
+        def e = thrown(IllegalStateException)
+        e.message.contains("sessionId 未注入")
+    }
+
+    def "#752 命令层 fail-fast：sessionId() 读未注入的实例也抛错（不给自造值）"() {
+        given:
+        def bridge = new org.cland.alice.facade.tui.bridge.EventBridge()
+        def handler = new org.cland.alice.facade.tui.command.CommandHandler(bridge)
+
+        when:
+        handler.sessionId()
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains("sessionId 未注入")
+    }
+
     def "#752 配置构造（无外部 Agent）：launcher 与命令层都采用 Agent 生成的 id"() {
         when:
         def launcher = new AliceTuiLauncher(org.cland.alice.core.agent.AgentConfig.defaults())
