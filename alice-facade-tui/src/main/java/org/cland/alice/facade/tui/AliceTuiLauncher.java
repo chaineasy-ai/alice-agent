@@ -327,7 +327,12 @@ public class AliceTuiLauncher implements AutoCloseable {
     try {
       if (agent.memory() == null) {
         // #748：没有短期记忆实现时，clearMemory() 是 no-op —— 此时说"上下文已清空"又是一句假话。
-        eventBridge.onChatMessage("System", "会话已重置：界面已重置；当前会话未启用短期记忆，无上下文可清");
+        eventBridge.onChatMessage(
+            "System",
+            "会话已重置：界面已重置；当前会话未启用短期记忆，无内存上下文可清"
+                + "（会话历史仍在磁盘，可用 alice resume --session-id "
+                + agent.sessionId()
+                + " 恢复）");
       } else {
         agent.clearMemory();
         eventBridge.onChatMessage("System", "会话已重置：上下文已清空");
