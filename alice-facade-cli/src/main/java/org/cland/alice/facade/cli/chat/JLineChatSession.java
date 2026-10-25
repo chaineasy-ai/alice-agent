@@ -292,19 +292,14 @@ public class JLineChatSession implements AutoCloseable {
 
   /** 分发 AgentCommand 并渲染输出 */
   private void dispatchAndRender(AgentCommand cmd) {
-    // 对于 ExecutionCmd，输出思考提示
-    if (cmd instanceof org.cland.alice.agent.proto.ExecutionCmd) {
-      String taskDesc =
-          switch (cmd) {
-            case org.cland.alice.agent.proto.ExecutionCmd.AcquireGoalCmd g -> g.goal();
-            case org.cland.alice.agent.proto.ExecutionCmd.ExecuteRawCmd e -> e.command();
-            default -> cmd.toString();
-          };
-      System.out.println("🤔 Agent 思考中... (" + taskDesc + ")");
-    }
+    // #748：这里原来对 ExecutionCmd 无条件打「🤔 Agent 思考中…」——
+    // 而分发器当时并不执行任务（只打印），等于**先制造"正在做事"的印象，再什么也不做**，
+    // 属同族假信号（按"行为形态"扫才发现：它不在命令分支里，在分发之前）。
+    // 现在不再预打进度：由分发器如实回显（真做时由执行方打进度，未接线时打 [not wired]）。
 
     // 通过 AliceCliLauncher.dispatchCommand 分发
-    int exitCode = AliceCliLauncher.dispatchCommand(cmd);
+    // #747：带上父会话 Agent ⇒ spawn 子 Agent 继承有效模型、SwitchModelCmd 真正生效
+    int exitCode = AliceCliLauncher.dispatchCommand(cmd, agent);
 
     if (exitCode != AliceCliLauncher.EXIT_SUCCESS) {
       System.err.println("命令执行返回非零退出码: " + exitCode);

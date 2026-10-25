@@ -48,6 +48,26 @@ public final class AliceCliLauncher {
 
   private static final Logger logger = LoggerFactory.getLogger(AliceCliLauncher.class);
 
+  /**
+   * 测试缝（#747）：非 null 时 spawn 分支使用该 runner 替代默认进程内 runner。
+   *
+   * <p>生产路径恒为 null（不改任何默认行为）；仅用于断言"子 Agent 收到的有效模型"。
+   */
+  static volatile org.cland.alice.agent.subagent.SubAgentRunner testSubAgentRunner;
+
+  /**
+   * 未接线命令的**统一回显**（#748 / P-VACUOUS 兄弟口径）。
+   *
+   * <p>不许用动作语气（`Executing` / `Registering` / `Reloading` …）：那是"界面说做了、实际没做"。 必须同时给出 ①未接线事实 ②零副作用
+   * ③**正确入口**（只写"未接线"会把用户卡在原地）。
+   *
+   * @param command 命令名（如 {@code AcquireGoalCmd}）
+   * @param instead 正确的使用入口
+   */
+  static void printNotWired(String command, String instead) {
+    System.out.println("[not wired] " + command + " 在当前构建未接线，未产生任何副作用 —— 请改用：" + instead);
+  }
+
   // 退出码常量
   public static final int EXIT_SUCCESS = 0;
   public static final int EXIT_RUNTIME_ERROR = 1;
@@ -175,6 +195,28 @@ public final class AliceCliLauncher {
    * @return 退出码
    */
   public static int dispatchCommand(AgentCommand cmd) {
+    return dispatchCommand(cmd, null);
+  }
+
+  /**
+   * 分发已解析的 {@link AgentCommand}，并带上**父会话 Agent**（#747）。
+   *
+   * <p>有父会话时：
+   *
+   * <ul>
+   *   <li>{@code SwitchModelCmd} 真正作用于父 Agent（否则只是打印，父实际没切）；
+   *   <li>{@code SpawnSubAgentCmd} 让子 Agent **继承父会话有效模型**（#666 D5 边界④ 的 CLI 侧）。
+   * </ul>
+   *
+   * <p>允许 {@code parentAgent == null}（命令行一次性调用没有会话）：此时行为与历史实现**逐字节一致**， 子 Agent 回落到 {@code
+   * baseAgentConfig.defaultModelId()}。
+   *
+   * @param cmd 已解析的 AgentCommand
+   * @param parentAgent 父会话 Agent，可为 null
+   * @return 退出码
+   */
+  public static int dispatchCommand(
+      AgentCommand cmd, org.cland.alice.core.agent.Agent parentAgent) {
     if (cmd == null) {
       System.err.println("Cannot dispatch null command");
       return EXIT_PARAM_ERROR;
@@ -188,36 +230,59 @@ public final class AliceCliLauncher {
 
     return switch (cmd) {
       case org.cland.alice.agent.proto.ExecutionCmd.AcquireGoalCmd run -> {
-        System.out.println("Executing goal: " + run.goal());
+        printNotWired("AcquireGoalCmd（/run）", "alice run \"" + run.goal() + "\"");
         yield EXIT_SUCCESS;
       }
       case org.cland.alice.agent.proto.ExecutionCmd.ExecuteRawCmd exec -> {
-        System.out.println("Executing raw: " + exec.command());
+        printNotWired("ExecuteRawCmd（/exec）", "alice run \"" + exec.command() + "\"");
         yield EXIT_SUCCESS;
       }
       case CapabilityCmd.RegisterSkillCmd skill -> {
-        System.out.println("Registering skill: " + skill.skillRef());
+        printNotWired(
+            "RegisterSkillCmd（/skill）",
+            "技能仓库安装（cland skill hub / bootstrap.sh），见 " + skill.skillRef());
         yield EXIT_SUCCESS;
       }
       case CapabilityCmd.UpdateRulesCmd rules -> {
-        System.out.println("Updating rules: " + rules.rulesRef());
+        printNotWired(
+            "UpdateRulesCmd（/rules）",
+            "把规则文件放进 ~/.alice/rules/ 后重开会话（alice chat），见 " + rules.rulesRef());
         yield EXIT_SUCCESS;
       }
       case CapabilityCmd.ReloadKernelCmd reload -> {
-        System.out.println("Reloading kernel...");
+        printNotWired("ReloadKernelCmd（/reload）", "重开会话（alice chat）");
         yield EXIT_SUCCESS;
       }
       case org.cland.alice.agent.proto.AlignmentCmd.SwitchModelCmd model -> {
-        System.out.println("Switching model to: " + model.modelId());
+        if (parentAgent == null) {
+          // 无会话上下文：保持历史输出（一次性命令，不影响任何运行中 Agent）
+          System.out.println("Switching model to: " + model.modelId());
+          yield EXIT_SUCCESS;
+        }
+        try {
+          parentAgent.switchModel(model.modelId());
+        } catch (RuntimeException e) {
+          System.out.println("模型切换失败: " + e.getMessage());
+          yield EXIT_RUNTIME_ERROR;
+        }
+        String effective = parentAgent.currentModelId();
+        if (model.modelId() != null && model.modelId().equals(effective)) {
+          System.out.println("模型切换至: " + effective);
+        } else {
+          System.out.println("模型切换未生效: 仍在用 " + effective + "（请求: " + model.modelId() + "）");
+        }
         yield EXIT_SUCCESS;
       }
       case ControlCmd.ResetSessionCmd reset -> {
-        System.out.println("Resetting session: " + reset.sessionId());
+        printNotWired(
+            "ResetSessionCmd（/new）", "新开一个会话（alice chat）；" + reset.sessionId() + " 的上下文无法在本进程内重置");
         yield EXIT_SUCCESS;
       }
       case org.cland.alice.agent.proto.ControlCmd.ClearContextCmd clear -> {
-        System.out.println("Clearing context (session=" + clear.sessionId() + ")");
-        System.out.println("上下文已清除");
+        // #748：这里原来直接打印"上下文已清除"却没有清任何东西 —— 同一族"界面说做了、实际没做"。
+        // CLI 分发器不持有可清上下文的 Agent（只有交互会话才有），故如实说未接线并给去处。
+        printNotWired(
+            "ClearContextCmd（/clear）", "在交互式会话中执行 /clear（alice chat），或用 alice run 重新发起任务");
         yield EXIT_SUCCESS;
       }
       case org.cland.alice.agent.proto.ControlCmd.ViewContextCmd view -> {
@@ -242,14 +307,18 @@ public final class AliceCliLauncher {
         yield EXIT_SUCCESS;
       }
       case org.cland.alice.agent.proto.RoutineTimeCmd.RegisterRoutineCmd routine -> {
-        System.out.println("Registering routine: " + routine.cronExpression());
+        printNotWired(
+            "RegisterRoutineCmd（/routine）",
+            "把任务写进 config/schedule.yaml 后执行 ./bootstrap.sh cron install，见 "
+                + routine.cronExpression());
         yield EXIT_SUCCESS;
       }
       case org.cland.alice.agent.proto.ControlCmd.ResumeSessionCmd resume -> {
-        System.out.println("Resuming session: " + resume.sessionId());
-        if (resume.snapshotId() != null) {
-          System.out.println("  Snapshot: " + resume.snapshotId());
-        }
+        printNotWired(
+            "ResumeSessionCmd（/resume）",
+            "alice resume --session-id "
+                + resume.sessionId()
+                + (resume.snapshotId() != null ? " --snapshot " + resume.snapshotId() : ""));
         yield EXIT_SUCCESS;
       }
       case org.cland.alice.agent.proto.SpawnSubAgentCmd spawn -> {
@@ -257,9 +326,14 @@ public final class AliceCliLauncher {
         // 创建 SubAgentManager 并生成子 Agent
         String subSessionId = SnowflakeIdGenerator.generateSessionId();
         SubAgentManager mgr = new SubAgentManager(subSessionId);
-        // 说明（#666 D5 边界④）：CLI 侧的 spawn 分支没有父 Agent 实例可继承，
-        // 因此保持"未显式指定模型时用 baseAgentConfig 默认值"的既有行为；
-        // TUI 侧（有父 Agent）已注入 effectiveModelSupplier，子 Agent 会继承运行时切换后的模型。
+        if (testSubAgentRunner != null) {
+          mgr.setRunner(testSubAgentRunner); // 仅测试缝；生产恒 null
+        }
+        // #747：有父会话 ⇒ 子 Agent 继承父会话**有效模型**（含运行时切换）；
+        // 无父会话（parentAgent == null）⇒ 不注入，行为与历史实现逐字节一致。
+        if (parentAgent != null) {
+          mgr.setEffectiveModelSupplier(parentAgent::currentModelId);
+        }
         SubAgentRecord record = mgr.spawnSubAgent(spawn.goal(), spawn.model());
         System.out.println("Sub-agent " + record.id() + " spawned with goal: " + spawn.goal());
         yield EXIT_SUCCESS;
