@@ -222,8 +222,12 @@ class SmokeFixtureBaselineTest(unittest.TestCase):
 
     def test_fixture_suite_starts_red(self):
         """起步必须至少 1 个失败（否则"修好了"这件事不可观测）。"""
-        if not self.FIXTURE_DIR.exists():
-            self.skipTest(f"fixture 目录不存在：{self.FIXTURE_DIR}")
+        # 夹具目录**必须存在**：缺了要红不要 skip —— 否则"锁"在入口被删时会静默变空
+        # （与 #766 修的是同一类形状：把"没观测"当成"通过"）。
+        self.assertTrue(
+            self.FIXTURE_DIR.is_dir(),
+            f"smoke case3 夹具目录不存在：{self.FIXTURE_DIR}（基线锁会失去观测对象）",
+        )
         r = subprocess.run(
             [sys.executable, "-m", "pytest", str(self.FIXTURE_DIR), "-q",
              "-p", "no:cacheprovider"],
@@ -238,8 +242,10 @@ class SmokeFixtureBaselineTest(unittest.TestCase):
     def test_parser_fixture_not_already_fixed(self):
         """坏掉的 parser.py 里不该已经出现修复（`try`/`except`）—— 那会让断言恒真。"""
         parser = self.FIXTURE_DIR / "parser.py"
-        if not parser.exists():
-            self.skipTest(f"文件不存在：{parser}")
+        self.assertTrue(
+            parser.is_file(),
+            f"夹具 parser.py 不存在：{parser}（基线锁会失去观测对象）",
+        )
         content = parser.read_text(encoding="utf-8")
         self.assertNotIn(
             "except", content,
